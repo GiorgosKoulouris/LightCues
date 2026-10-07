@@ -1,6 +1,14 @@
 import type { EngineCommand, EngineEvent, OflImportResult } from '../shared/protocol';
+import { findTrigger } from '../shared/show';
+import {
+  createMidiInput,
+  type MidiInputStorage,
+  type MidiPorts,
+  type NoteMessage,
+} from './midi-input';
 import { createOutputs, type SerialPorts } from './outputs';
 import { createPlayback } from './playback';
+import { createPreview } from './preview';
 import { createProfileLibrary, type ProfileLibrary } from './profile-library';
 import { createShowSession, type ShowFiles } from './show-session';
 import { createVenueSession, type VenueFiles } from './venue-session';
@@ -22,6 +30,9 @@ export interface EngineOptions {
   showFiles?: ShowFiles;
   // Without it, nothing is sent to Outputs.
   serialPorts?: SerialPorts;
+  // Without them, no Trigger fires.
+  midiPorts?: MidiPorts;
+  midiInputStorage?: MidiInputStorage;
 }
 
 export interface Engine {
@@ -35,6 +46,8 @@ export function createEngine({
   venueFiles,
   showFiles,
   serialPorts,
+  midiPorts,
+  midiInputStorage,
 }: EngineOptions): Engine {
   const startedAt = now();
   const library = openLibrary(storage);
@@ -59,6 +72,26 @@ export function createEngine({
       universes: () => venue.patch().universes,
       frames: () => playback.frames(),
     });
+
+  const preview = createPreview({ emit, lights: () => playback.lights() });
+
+  const midiInput =
+    midiPorts &&
+    createMidiInput({ ports: midiPorts, storage: midiInputStorage, emit, onNote: noteReceived });
+  // While MIDI learn waits, the next note-on is reported instead of fired.
+  // Note-offs still release held Flashes.
+  let learning = false;
+
+  function noteReceived({ on, ...note }: NoteMessage): void {
+    if (!on) return playback.noteOff(note);
+    if (learning) {
+      learning = false;
+      emit({ type: 'triggerLearned', note });
+      return;
+    }
+    const trigger = findTrigger(show.show(), note);
+    if (trigger) playback.fire(trigger);
+  }
 
   function libraryChanged(): void {
     storage?.write(library.save());
@@ -127,11 +160,32 @@ export function createEngine({
         case 'getPlayback':
         case 'goScene':
         case 'clearLayer':
+        case 'goBaseLook':
         case 'setMode':
+        case 'setGrandMaster':
+        case 'setBlackout':
           playback.handle(command);
           break;
         case 'listOutputs':
           outputs?.emitOutputs();
+          break;
+        case 'listMidiInputs':
+          midiInput?.emitStatus();
+          break;
+        case 'selectMidiInput':
+          midiInput?.select(command.name);
+          break;
+        case 'learnTrigger':
+          learning = true;
+          break;
+        case 'cancelLearn':
+          learning = false;
+          break;
+        case 'startPreview':
+          preview.start();
+          break;
+        case 'stopPreview':
+          preview.stop();
           break;
       }
     },

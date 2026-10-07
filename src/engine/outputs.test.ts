@@ -338,8 +338,14 @@ async function playbackEngine() {
     events,
     editShow,
     send: (command: EngineCommand) => engine.handle(command),
+    writes: () => serial.port('COM3')?.writes ?? [],
     // The dimmer's level in the latest frame sent.
     level: () => serial.port('COM3')?.writes.at(-1)?.[5],
+    // The dimmer's light in the latest preview the engine sent.
+    light() {
+      const event = events.findLast((e) => e.type === 'preview');
+      return event?.type === 'preview' ? event.lights.f1 : undefined;
+    },
     // The latest active Scenes and mode the engine reported.
     playback() {
       const event = events.findLast((e) => e.type === 'playback');
@@ -367,6 +373,8 @@ describe('engine Scene playback', () => {
       type: 'playback',
       active: { 'layer-1': 'wash' },
       mode: 'monitor',
+      grandMaster: 1,
+      blackout: false,
     });
   });
 
@@ -393,7 +401,7 @@ describe('engine Scene playback', () => {
     send({ type: 'clearLayer', layerId: 'layer-1' });
     await vi.advanceTimersByTimeAsync(500);
     expect(level()).toBe(255);
-    expect(playback()).toEqual({ type: 'playback', active: {}, mode: 'blind' });
+    expect(playback()).toMatchObject({ active: {}, mode: 'blind' });
 
     send({ type: 'setMode', mode: 'monitor' });
     await vi.advanceTimersByTimeAsync(100);
@@ -423,5 +431,166 @@ describe('engine Scene playback', () => {
     send({ type: 'newShow' });
 
     expect(playback()?.active).toEqual({});
+  });
+});
+
+describe('engine Fallback Panel', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  // `playbackEngine` has no MIDI input, so these also show the panel works
+  // without one.
+  async function litEngine() {
+    const engine = await playbackEngine();
+    engine.send({ type: 'startPreview' });
+    engine.send({ type: 'goScene', sceneId: 'wash' });
+    await vi.advanceTimersByTimeAsync(2000);
+    return engine;
+  }
+
+  it('scales intensity on the Outputs and in the preview by the Grand Master', async () => {
+    const { send, level, light, playback } = await litEngine();
+
+    send({ type: 'setGrandMaster', level: 0.2 });
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(level()).toBe(51);
+    expect(light()?.intensity).toBeCloseTo(0.2);
+    expect(playback()).toMatchObject({ grandMaster: 0.2, blackout: false });
+
+    send({ type: 'setGrandMaster', level: 1.5 });
+    expect(playback()?.grandMaster).toBe(1);
+    send({ type: 'setGrandMaster', level: -1 });
+    expect(playback()?.grandMaster).toBe(0);
+    send({ type: 'setGrandMaster', level: Number.NaN });
+    expect(playback()?.grandMaster).toBe(0);
+  });
+
+  it('blacks out the Outputs and the preview until released, keeping the Scenes active', async () => {
+    const { send, level, light, playback } = await litEngine();
+
+    send({ type: 'setBlackout', on: true });
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(level()).toBe(0);
+    expect(light()?.intensity).toBe(0);
+    expect(playback()).toMatchObject({ active: { 'layer-1': 'wash' }, blackout: true });
+
+    send({ type: 'setBlackout', on: false });
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(level()).toBe(255);
+    expect(light()?.intensity).toBe(1);
+  });
+
+  it('shows the Grand Master in Blind only in the preview, holding the Outputs', async () => {
+    const { send, level, light } = await litEngine();
+    send({ type: 'setMode', mode: 'blind' });
+
+    send({ type: 'setGrandMaster', level: 0.5 });
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(light()?.intensity).toBeCloseTo(0.5);
+    expect(level()).toBe(255);
+  });
+
+  it('blacks out the Outputs in Blind too, then holds them at their frame again', async () => {
+    const { send, level, light } = await litEngine();
+    send({ type: 'setMode', mode: 'blind' });
+
+    send({ type: 'setBlackout', on: true });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(level()).toBe(0);
+    expect(light()?.intensity).toBe(0);
+
+    send({ type: 'clearLayer', layerId: 'layer-1' });
+    send({ type: 'setBlackout', on: false });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(level()).toBe(255);
+  });
+
+  it('goes to the Base Look, clearing the other Layers', async () => {
+    const { send, editShow, level, playback } = await playbackEngine();
+    editShow({ type: 'putLayer', layer: { id: 'layer-2', name: 'Accents' } });
+    const base: Scene = { ...wash, id: 'base', fadeIn: 0, rules: [{ target: {}, intensity: 0.2 }] };
+    editShow({ type: 'putScene', scene: { ...wash, layer: 'layer-2' } });
+    editShow({ type: 'putScene', scene: base });
+    send({ type: 'goScene', sceneId: 'wash' });
+    send({ type: 'goBaseLook' });
+    expect(playback()?.active).toEqual({ 'layer-2': 'wash' });
+
+    editShow({ type: 'setBaseLook', sceneId: 'base' });
+    send({ type: 'goBaseLook' });
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(playback()?.active).toEqual({ 'layer-1': 'base' });
+    expect(level()).toBe(51);
+  });
+});
+
+describe('engine preview', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const white = { red: 1, green: 1, blue: 1 };
+
+  it("sends the Fixtures' lights once started, and again when they change", async () => {
+    const { send, events, light } = await playbackEngine();
+    expect(events.some((e) => e.type === 'preview')).toBe(false);
+
+    send({ type: 'startPreview' });
+    expect(light()).toEqual({ intensity: 0, ...white });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(events.filter((e) => e.type === 'preview')).toHaveLength(1);
+
+    send({ type: 'goScene', sceneId: 'wash' });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(light()?.intensity).toBeCloseTo(0.5, 1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(light()).toEqual({ intensity: 1, ...white });
+
+    send({ type: 'stopPreview' });
+    const sent = events.length;
+    send({ type: 'clearLayer', layerId: 'layer-1' });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(events.slice(sent).some((e) => e.type === 'preview')).toBe(false);
+  });
+
+  it('keeps updating while Blind freezes the Outputs at their current frame', async () => {
+    const { send, editShow, level, light } = await playbackEngine();
+    send({ type: 'startPreview' });
+    send({ type: 'goScene', sceneId: 'wash' });
+    await vi.advanceTimersByTimeAsync(2000);
+
+    send({ type: 'setMode', mode: 'blind' });
+    editShow({ type: 'putScene', scene: { ...wash, rules: [{ target: {}, intensity: 0.2 }] } });
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(level()).toBe(255);
+    expect(light()).toEqual({ intensity: 0.2, ...white });
+
+    send({ type: 'setMode', mode: 'monitor' });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(level()).toBe(51);
+  });
+
+  it('does not change the frames sent to the Outputs', async () => {
+    const watched = await playbackEngine();
+    const unwatched = await playbackEngine();
+    const engines = [watched, unwatched];
+    watched.send({ type: 'startPreview' });
+    const before = engines.map((e) => e.writes().length);
+
+    for (const e of engines) e.send({ type: 'goScene', sceneId: 'wash' });
+    await vi.advanceTimersByTimeAsync(3000);
+
+    const [a, b] = engines.map((e, i) =>
+      e
+        .writes()
+        .slice(before[i])
+        .map((w) => w.join()),
+    );
+    expect(a!.length).toBeGreaterThan(110);
+    expect(a).toEqual(b);
   });
 });

@@ -44,7 +44,6 @@ interface Drag {
 export function StagePlan({ patch, selectedId, onSelect, onMove }: StagePlanProps) {
   const svg = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag>();
-  const { width, depth } = patch.stage;
 
   // SVG coordinates are metres with y flipped: stage y = -svg y.
   function stagePoint(event: PointerEvent): { x: number; y: number } {
@@ -104,64 +103,7 @@ export function StagePlan({ patch, selectedId, onSelect, onMove }: StagePlanProp
         role="img"
         aria-label="Top-down stage plan"
       >
-        <rect
-          x={-width / 2}
-          y={-depth}
-          width={width}
-          height={depth}
-          fill="#2a2d35"
-          stroke="#aab"
-          strokeWidth={0.04}
-        />
-        <rect
-          x={-width / 2}
-          y={0}
-          width={width}
-          height={FRONT_DEPTH}
-          fill="none"
-          stroke="#667"
-          strokeWidth={0.03}
-          strokeDasharray="0.15 0.1"
-        />
-        {[1, 2].map((i) => (
-          <g key={i} stroke="#556" strokeWidth={0.02}>
-            <line
-              x1={-width / 2 + (width * i) / 3}
-              x2={-width / 2 + (width * i) / 3}
-              y1={-depth}
-              y2={FRONT_DEPTH}
-            />
-            <line x1={-width / 2} x2={width / 2} y1={(-depth * i) / 3} y2={(-depth * i) / 3} />
-          </g>
-        ))}
-        <g fill="#889" fontSize={0.3} textAnchor="middle">
-          <text x={-width / 3} y={-depth - 0.3}>
-            Stage Right
-          </text>
-          <text x={0} y={-depth - 0.3}>
-            Centre
-          </text>
-          <text x={width / 3} y={-depth - 0.3}>
-            Stage Left
-          </text>
-          <text x={0} y={FRONT_DEPTH + 0.6}>
-            Audience
-          </text>
-        </g>
-        <g fill="#889" fontSize={0.3} textAnchor="end">
-          <text x={-width / 2 - 0.1} y={(-depth * 5) / 6}>
-            Up
-          </text>
-          <text x={-width / 2 - 0.1} y={-depth / 2}>
-            Mid
-          </text>
-          <text x={-width / 2 - 0.1} y={-depth / 6}>
-            Down
-          </text>
-          <text x={-width / 2 - 0.1} y={FRONT_DEPTH / 2}>
-            Front
-          </text>
-        </g>
+        <StageGrid stage={patch.stage} />
         {patch.fixtures.map((fixture) => {
           const shown = position(fixture);
           const selected = fixture.id === selectedId;
@@ -201,6 +143,73 @@ export function StagePlan({ patch, selectedId, onSelect, onMove }: StagePlanProp
           : 'Drag a Fixture to move it. Dashed: Overhead.'}
       </figcaption>
     </figure>
+  );
+}
+
+// The stage, the Front row in front of it, the Zone grid and its labels,
+// top-down in SVG coordinates (see `stageViewBox`).
+export function StageGrid({ stage: { width, depth } }: { stage: StageBounds }) {
+  return (
+    <>
+      <rect
+        x={-width / 2}
+        y={-depth}
+        width={width}
+        height={depth}
+        fill="#2a2d35"
+        stroke="#aab"
+        strokeWidth={0.04}
+      />
+      <rect
+        x={-width / 2}
+        y={0}
+        width={width}
+        height={FRONT_DEPTH}
+        fill="none"
+        stroke="#667"
+        strokeWidth={0.03}
+        strokeDasharray="0.15 0.1"
+      />
+      {[1, 2].map((i) => (
+        <g key={i} stroke="#556" strokeWidth={0.02}>
+          <line
+            x1={-width / 2 + (width * i) / 3}
+            x2={-width / 2 + (width * i) / 3}
+            y1={-depth}
+            y2={FRONT_DEPTH}
+          />
+          <line x1={-width / 2} x2={width / 2} y1={(-depth * i) / 3} y2={(-depth * i) / 3} />
+        </g>
+      ))}
+      <g fill="#889" fontSize={0.3} textAnchor="middle">
+        <text x={-width / 3} y={-depth - 0.3}>
+          Stage Right
+        </text>
+        <text x={0} y={-depth - 0.3}>
+          Centre
+        </text>
+        <text x={width / 3} y={-depth - 0.3}>
+          Stage Left
+        </text>
+        <text x={0} y={FRONT_DEPTH + 0.6}>
+          Audience
+        </text>
+      </g>
+      <g fill="#889" fontSize={0.3} textAnchor="end">
+        <text x={-width / 2 - 0.1} y={(-depth * 5) / 6}>
+          Up
+        </text>
+        <text x={-width / 2 - 0.1} y={-depth / 2}>
+          Mid
+        </text>
+        <text x={-width / 2 - 0.1} y={-depth / 6}>
+          Down
+        </text>
+        <text x={-width / 2 - 0.1} y={FRONT_DEPTH / 2}>
+          Front
+        </text>
+      </g>
+    </>
   );
 }
 

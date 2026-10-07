@@ -64,8 +64,22 @@ A slot that holds at most one active Scene. Activating a Scene replaces the acti
 **Trigger**:
 A mapping from an incoming MIDI message to a Scene action: Go (activate and stay), Flash (active while held) or Release (clear the Layer).
 
+**MIDI Input**:
+The MIDI port Triggers listen to, chosen per machine and kept between runs. When it is lost, the current look holds until it returns.
+_Avoid_: MIDI device, controller
+
 **Base Look**:
-The Scene designated as the safe fallback look, available from the manual panel at any time.
+The Scene designated as the safe fallback look, available from the Fallback Panel at any time. Going to it clears every other Layer.
+
+**Fallback Panel**:
+The always-visible manual controls that need no MIDI: Blackout, Base Look, Grand Master and a few Scene buttons chosen per Show, each with a keyboard shortcut. Also shows the MIDI Input status.
+_Avoid_: Manual panel, fader panel
+
+**Blackout**:
+Takes every Fixture's intensity to 0 until turned off, in Blind too. The active Scenes stay active.
+
+**Default Colour**:
+The colour a Show gives Fixtures where no Rule sets one. White unless changed.
 
 **Grand Master**:
 A global intensity scaler applied after all Scenes are combined.
@@ -74,7 +88,7 @@ A global intensity scaler applied after all Scenes are combined.
 The default mode, where the preview mirrors exactly what is being sent to the rig.
 
 **Blind**:
-A mode where the preview updates but nothing is sent to the rig.
+A mode where the preview updates but nothing is sent to the rig, except Blackout.
 _Avoid_: Offline, preview mode
 
 **Venue Check**:

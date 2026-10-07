@@ -1,8 +1,10 @@
-import { validateShow, type Show } from '../shared/show';
+import { validateShow, type Colour, type Show } from '../shared/show';
 
-// The .lcshow file: a Show as versioned JSON.
+// The .lcshow file: a Show as versioned JSON. Version 2 added the default
+// colour and version 3 the Fallback Panel's Scene buttons; older files load without them.
 
-const VERSION = 1;
+const VERSION = 3;
+const VERSIONS = [1, 2, VERSION];
 
 interface ShowFile extends Show {
   version: number;
@@ -21,7 +23,7 @@ export function loadShowFile(json: string): Show {
   const file = parse(json);
   if (typeof file !== 'object' || file === null) throw new Error('Invalid Show: not an object');
   const { version, ...show } = file as ShowFile;
-  if (version !== VERSION) throw new Error(`Unsupported Show version: ${version}`);
+  if (!VERSIONS.includes(version)) throw new Error(`Unsupported Show version: ${version}`);
   if (!hasParts(show)) {
     throw new Error('Invalid Show: layers, scenes and triggers are required');
   }
@@ -63,7 +65,18 @@ function unknownFields(file: ShowFile): string[] {
       if (!fields.includes(key)) found.push(`unknown field "${path}${key}"`);
     }
   };
-  allow(file, ['version', 'layers', 'scenes', 'triggers', 'baseLook'], '');
+  const allowColour = (colour: Colour, path: string) =>
+    allow(colour, 'swatch' in colour ? ['swatch'] : ['hue', 'saturation'], path);
+  // The top-level fields each version added.
+  const added = [
+    ['version', 'layers', 'scenes', 'triggers', 'baseLook'],
+    ['defaultColour'],
+    ['panelScenes'],
+  ];
+  allow(file, added.slice(0, file.version).flat(), '');
+  if (file.version !== 1 && file.defaultColour !== undefined) {
+    allowColour(file.defaultColour, 'defaultColour.');
+  }
   file.layers.forEach((layer, i) => allow(layer, ['id', 'name'], `layers[${i}].`));
   file.scenes.forEach((scene, i) => {
     allow(scene, ['id', 'name', 'tags', 'layer', 'fadeIn', 'rules'], `scenes[${i}].`);
@@ -74,8 +87,7 @@ function unknownFields(file: ShowFile): string[] {
       target.zones?.forEach((zone, k) => {
         allow(zone, ['row', 'column', 'level'], `${at}target.zones[${k}].`);
       });
-      if (colour === undefined) return;
-      allow(colour, 'swatch' in colour ? ['swatch'] : ['hue', 'saturation'], `${at}colour.`);
+      if (colour !== undefined) allowColour(colour, `${at}colour.`);
     });
   });
   file.triggers.forEach((trigger, i) => {

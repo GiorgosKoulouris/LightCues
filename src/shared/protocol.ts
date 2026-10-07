@@ -1,7 +1,7 @@
 // The typed message contract between the UI and the engine process.
 // The UI sends EngineCommands; the engine sends EngineEvents.
 import type { FixtureProfile, UnsupportedFeature } from './fixture-profile';
-import type { Layer, Scene, Show } from './show';
+import type { Colour, Layer, MidiNote, Scene, Show, Trigger } from './show';
 import type {
   PatchedFixture,
   StageBounds,
@@ -39,16 +39,42 @@ export type EngineCommand =
   | { type: 'openShow'; requestId: number; path: string }
   | { type: 'saveShow'; requestId: number; path?: string }
   | { type: 'editShow'; requestId: number; edit: ShowEdit }
-  // Active Scenes and the mode. `goScene` replaces the active Scene in its
-  // Layer, fading in; `clearLayer` clears it at once.
+  // Active Scenes, the mode and the Fallback Panel. `goScene` replaces the
+  // active Scene in its Layer, fading in; `clearLayer` clears it at once.
+  // `goBaseLook` clears every Layer and goes to the Base Look, if the Show has
+  // one. The Grand Master `level` is 0–1. Blackout sets every Fixture's
+  // intensity to 0 until turned off, in Blind too; the Scenes stay active.
   | { type: 'getPlayback' }
   | { type: 'goScene'; sceneId: string }
   | { type: 'clearLayer'; layerId: string }
-  | { type: 'setMode'; mode: PlaybackMode };
+  | { type: 'goBaseLook' }
+  | { type: 'setMode'; mode: PlaybackMode }
+  | { type: 'setGrandMaster'; level: number }
+  | { type: 'setBlackout'; on: boolean }
+  | { type: 'listMidiInputs' }
+  // The MIDI input that Triggers listen to, chosen by port name. Without a
+  // name, none is used.
+  | { type: 'selectMidiInput'; name?: string }
+  // MIDI learn: the next note-on is reported as `triggerLearned` instead of
+  // firing its Trigger.
+  | { type: 'learnTrigger' }
+  | { type: 'cancelLearn' }
+  // While started, the engine sends `preview` events.
+  | { type: 'startPreview' }
+  | { type: 'stopPreview' };
 
 // Monitor sends the active Scenes to the Outputs. Blind holds the Outputs at
 // the frames sent last.
 export type PlaybackMode = 'monitor' | 'blind';
+
+// How a Fixture looks in the preview: its intensity, 0–1 after the Grand
+// Master, and the colour it shows at full, red, green and blue each 0–1.
+export interface FixtureLight {
+  intensity: number;
+  red: number;
+  green: number;
+  blue: number;
+}
 
 // The active Scene id per Layer id. A Layer without an entry is clear.
 export type ActiveByLayer = Record<string, string>;
@@ -60,7 +86,14 @@ export type ShowEdit =
   | { type: 'putLayer'; layer: Layer }
   // Removes the Layer's Scenes too.
   | { type: 'removeLayer'; id: string }
-  | { type: 'setBaseLook'; sceneId?: string };
+  | { type: 'setBaseLook'; sceneId?: string }
+  // Without a colour, the default is White.
+  | { type: 'setDefaultColour'; colour?: Colour }
+  // The Fallback Panel's Scene buttons, in order. Empty for none.
+  | { type: 'setPanelScenes'; sceneIds: string[] }
+  // Replaces the Trigger on the same channel and note.
+  | { type: 'putTrigger'; trigger: Trigger }
+  | { type: 'removeTrigger'; note: MidiNote };
 
 // A change to the current Venue Patch. `putFixture` embeds the Fixture's
 // Profile from the Profile Library when the patch does not have it yet.
@@ -87,6 +120,19 @@ export interface OutputStatus {
   id: string;
   name: string;
   state: 'unused' | 'connecting' | 'sending' | 'failed' | 'missing';
+  error?: string;
+}
+
+// The MIDI input ports and the one Triggers listen to. States:
+// - none: no port is selected.
+// - connected: listening to the selected port.
+// - lost: the selected port went away; the current look is held until it
+//   returns.
+// - failed: the selected port could not be opened; retried on the next scan.
+export interface MidiInputStatus {
+  ports: string[];
+  selected?: string;
+  state: 'none' | 'connected' | 'lost' | 'failed';
   error?: string;
 }
 
@@ -120,8 +166,23 @@ export type EngineEvent =
   // Reply to openShow, saveShow and editShow. An empty `errors` list means it
   // was done.
   | { type: 'showDone'; requestId: number; errors: string[] }
-  // The active Scenes and the mode. Sent on request and after every change.
-  | { type: 'playback'; active: ActiveByLayer; mode: PlaybackMode };
+  // The active Scenes, the mode, the Grand Master (0–1) and whether Blackout
+  // is on. Sent on request and after every change.
+  | {
+      type: 'playback';
+      active: ActiveByLayer;
+      mode: PlaybackMode;
+      grandMaster: number;
+      blackout: boolean;
+    }
+  // The MIDI input status. Sent on request and after every change.
+  | { type: 'midiInput'; status: MidiInputStatus }
+  // The note-on caught by MIDI learn.
+  | { type: 'triggerLearned'; note: MidiNote }
+  // How every Fixture in the Venue Patch looks now, by Fixture id. In Monitor
+  // it is what the Outputs send; in Blind, what they would send. Sent while
+  // the preview is started, on start and after every change.
+  | { type: 'preview'; lights: Record<string, FixtureLight> };
 
 // Sent by the main process to the engine with a fresh UI MessagePort attached.
 export type EngineConnect = { type: 'connect' };
@@ -172,3 +233,7 @@ export interface CloseGuardBridge {
 
 // Engine process argument naming the Profile Library file: `<arg><path>`.
 export const PROFILE_LIBRARY_ARG = '--profile-library=';
+
+// Engine process argument naming the file that keeps the selected MIDI input
+// on this machine: `<arg><path>`.
+export const MIDI_INPUT_ARG = '--midi-input=';

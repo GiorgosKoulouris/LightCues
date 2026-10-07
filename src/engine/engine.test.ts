@@ -394,6 +394,32 @@ describe('engine Show', () => {
     expect(show().show).toEqual({ layers: show().show.layers, scenes: [], triggers: [] });
   });
 
+  it('puts Scenes on the Fallback Panel, and removing a Scene takes its button off', () => {
+    const { edit, show } = showEngine();
+    edit({ type: 'putScene', scene: wash });
+
+    expect(edit({ type: 'setPanelScenes', sceneIds: ['wash'] })).toEqual([]);
+    expect(show()).toMatchObject({ show: { panelScenes: ['wash'] }, unsaved: true });
+    expect(edit({ type: 'setPanelScenes', sceneIds: ['outro'] })).toEqual([
+      'Fallback Panel: Scene "outro" is not in the Show',
+    ]);
+    expect(edit({ type: 'removeScene', id: 'wash' })).toEqual([]);
+
+    expect(show().show.panelScenes).toBeUndefined();
+  });
+
+  it('sets the default colour, and rejects an invalid one', () => {
+    const { edit, show } = showEngine();
+
+    expect(edit({ type: 'setDefaultColour', colour: { swatch: 'Amber' } })).toEqual([]);
+    expect(show()).toMatchObject({ show: { defaultColour: { swatch: 'Amber' } }, unsaved: true });
+    expect(edit({ type: 'setDefaultColour', colour: { hue: 0, saturation: 2 } })).toEqual([
+      'Default colour: saturation must be from 0 to 1',
+    ]);
+    expect(edit({ type: 'setDefaultColour' })).toEqual([]);
+    expect(show().show.defaultColour).toBeUndefined();
+  });
+
   it('rejects removing a Scene or Layer that is not in the Show, leaving it saved', () => {
     const { edit, show, engine } = showEngine();
     engine.handle({ type: 'getShow' });

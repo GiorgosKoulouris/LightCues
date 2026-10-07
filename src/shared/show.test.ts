@@ -8,6 +8,8 @@ import {
   removeScene,
   removeTrigger,
   setBaseLook,
+  setDefaultColour,
+  setPanelScenes,
   validateShow,
   type Rule,
   type Scene,
@@ -147,6 +149,7 @@ describe('editing a Show', () => {
         { channel: 1, note: 61, scene: 'hit', mode: 'flash' },
       ],
       baseLook: 'verse',
+      panelScenes: ['verse'],
     };
 
     expect(removeScene(before, 'verse')).toEqual({
@@ -154,7 +157,7 @@ describe('editing a Show', () => {
       scenes: [hit],
       triggers: [{ channel: 1, note: 61, scene: 'hit', mode: 'flash' }],
     });
-    expect(removeScene(before, 'hit').baseLook).toBe('verse');
+    expect(removeScene(before, 'hit')).toMatchObject({ baseLook: 'verse', panelScenes: ['verse'] });
   });
 
   it('adds and renames Layers, keeping their order', () => {
@@ -206,7 +209,7 @@ describe('editing a Show', () => {
     expect(putTrigger(before, { channel: 1, note: 61, scene: 'outro', mode: 'go' })).toEqual({
       errors: ['Trigger 1/61: Scene "outro" is not in the Show'],
     });
-    expect(removeTrigger(before, 1, 60)).toEqual({ ...before, triggers: [] });
+    expect(removeTrigger(before, { channel: 1, note: 60 })).toEqual({ ...before, triggers: [] });
   });
 
   it('designates a Scene as the Base Look, or none', () => {
@@ -218,6 +221,40 @@ describe('editing a Show', () => {
     expect(setBaseLook(designated.show, undefined)).toEqual({ show: before });
     expect(setBaseLook(before, 'outro')).toEqual({
       errors: ['Base Look: Scene "outro" is not in the Show'],
+    });
+  });
+
+  it('puts Scenes on the Fallback Panel in order, up to nine, or none', () => {
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'];
+    const before: Show = {
+      ...emptyShow(),
+      scenes: ids.map((id) => scene({ id, layer: 'layer-1' })),
+    };
+    const set = setPanelScenes(before, ['c', 'a']);
+    if ('errors' in set) throw new Error(set.errors.join('\n'));
+
+    expect(set.show.panelScenes).toEqual(['c', 'a']);
+    expect(setPanelScenes(set.show, [])).toEqual({ show: before });
+    expect(setPanelScenes(before, ['a', 'a', 'outro'])).toEqual({
+      errors: [
+        'Fallback Panel: Scene "outro" is not in the Show',
+        'Fallback Panel: Scene "a" is listed twice',
+      ],
+    });
+    expect(setPanelScenes(before, ids)).toEqual({
+      errors: ['Fallback Panel: at most 9 Scenes'],
+    });
+  });
+
+  it('sets the default colour, or White without one', () => {
+    const before = emptyShow();
+    const set = setDefaultColour(before, { swatch: 'Warm White' });
+    if ('errors' in set) throw new Error(set.errors.join('\n'));
+
+    expect(set.show.defaultColour).toEqual({ swatch: 'Warm White' });
+    expect(setDefaultColour(set.show, undefined)).toEqual({ show: before });
+    expect(setDefaultColour(before, { hue: 400, saturation: 1 })).toEqual({
+      errors: ['Default colour: hue must be from 0 to under 360'],
     });
   });
 });

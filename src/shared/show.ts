@@ -66,12 +66,16 @@ export interface Scene {
 export const TRIGGER_MODES = ['go', 'flash', 'release'] as const;
 export type TriggerMode = (typeof TRIGGER_MODES)[number];
 
-// A MIDI note mapped to a Scene action. Release clears the Scene's Layer.
-export interface Trigger {
+// A note on a MIDI channel.
+export interface MidiNote {
   // MIDI channel 1–16.
   channel: number;
   // MIDI note 0–127.
   note: number;
+}
+
+// A MIDI note mapped to a Scene action. Release clears the Scene's Layer.
+export interface Trigger extends MidiNote {
   // A Scene id.
   scene: string;
   mode: TriggerMode;
@@ -84,7 +88,14 @@ export interface Show {
   triggers: Trigger[];
   // The Scene id of the Base Look.
   baseLook?: string;
+  // The colour Fixtures show where no Rule sets one. White when absent.
+  defaultColour?: Colour;
+  // The Scene ids on the Fallback Panel's buttons, in order. None when absent.
+  panelScenes?: string[];
 }
+
+// The Fallback Panel's Scene buttons, one per shortcut key 1–9.
+export const MAX_PANEL_SCENES = 9;
 
 export type ShowResult = { show: Show } | { errors: string[] };
 
@@ -98,15 +109,17 @@ export function putScene(show: Show, scene: Scene): ShowResult {
   return validated({ ...show, scenes: put(show.scenes, scene, (s) => s.id === scene.id) });
 }
 
-// Removes a Scene with the Triggers that fire it. If it was the Base Look,
-// the Show is left without one.
+// Removes a Scene with the Triggers that fire it and its Fallback Panel
+// button. If it was the Base Look, the Show is left without one.
 export function removeScene(show: Show, id: string): Show {
-  const { baseLook, ...rest } = show;
+  const { baseLook, panelScenes, ...rest } = show;
+  const panel = panelScenes?.filter((s) => s !== id) ?? [];
   return {
     ...rest,
     scenes: show.scenes.filter((s) => s.id !== id),
     triggers: show.triggers.filter((t) => t.scene !== id),
     ...(baseLook !== undefined && baseLook !== id ? { baseLook } : {}),
+    ...(panel.length > 0 ? { panelScenes: panel } : {}),
   };
 }
 
@@ -122,23 +135,44 @@ export function removeLayer(show: Show, id: string): Show {
   return onLayer.reduce((rest, scene) => removeScene(rest, scene.id), { ...show, layers });
 }
 
-// Maps a channel and note, replacing the Trigger already on them.
-export function putTrigger(show: Show, trigger: Trigger): ShowResult {
-  const same = (t: Trigger) => t.channel === trigger.channel && t.note === trigger.note;
-  return validated({ ...show, triggers: put(show.triggers, trigger, same) });
+export function sameNote(a: MidiNote, b: MidiNote): boolean {
+  return a.channel === b.channel && a.note === b.note;
 }
 
-export function removeTrigger(show: Show, channel: number, note: number): Show {
-  return {
-    ...show,
-    triggers: show.triggers.filter((t) => t.channel !== channel || t.note !== note),
-  };
+// The Trigger mapped to a channel and note, if any.
+export function findTrigger(show: Show, note: MidiNote): Trigger | undefined {
+  return show.triggers.find((t) => sameNote(t, note));
+}
+
+// Maps a channel and note, replacing the Trigger already on them.
+export function putTrigger(show: Show, trigger: Trigger): ShowResult {
+  return validated({ ...show, triggers: put(show.triggers, trigger, (t) => sameNote(t, trigger)) });
+}
+
+export function removeTrigger(show: Show, note: MidiNote): Show {
+  return { ...show, triggers: show.triggers.filter((t) => !sameNote(t, note)) };
 }
 
 // Designates a Scene as the Base Look; undefined leaves the Show without one.
 export function setBaseLook(show: Show, sceneId: string | undefined): ShowResult {
   const next = { ...show, baseLook: sceneId };
   if (sceneId === undefined) delete next.baseLook;
+  return validated(next);
+}
+
+// Sets the colour Fixtures show where no Rule sets one; undefined leaves it
+// White.
+export function setDefaultColour(show: Show, colour: Colour | undefined): ShowResult {
+  const next = { ...show, defaultColour: colour };
+  if (colour === undefined) delete next.defaultColour;
+  return validated(next);
+}
+
+// Sets the Scenes on the Fallback Panel's buttons, in order; an empty list
+// leaves it without any.
+export function setPanelScenes(show: Show, sceneIds: string[]): ShowResult {
+  const next: Show = { ...show, panelScenes: sceneIds };
+  if (sceneIds.length === 0) delete next.panelScenes;
   return validated(next);
 }
 
@@ -178,6 +212,14 @@ export function validateShow(show: Show): string[] {
   if (show.baseLook !== undefined && !hasScene(show, show.baseLook)) {
     errors.push(`Base Look: Scene "${show.baseLook}" is not in the Show`);
   }
+  if (show.defaultColour !== undefined) {
+    for (const problem of colourProblems(show.defaultColour)) {
+      errors.push(`Default colour: ${problem}`);
+    }
+  }
+  for (const problem of panelProblems(show, show.panelScenes ?? [])) {
+    errors.push(`Fallback Panel: ${problem}`);
+  }
   return errors;
 }
 
@@ -208,6 +250,16 @@ function triggerProblems(show: Show, { channel, note, scene, mode }: Trigger): s
   return problems;
 }
 
+function panelProblems(show: Show, sceneIds: string[]): string[] {
+  const problems: string[] = [];
+  for (const id of sceneIds) {
+    if (!hasScene(show, id)) problems.push(`Scene "${id}" is not in the Show`);
+  }
+  for (const id of duplicates(sceneIds)) problems.push(`Scene "${id}" is listed twice`);
+  if (sceneIds.length > MAX_PANEL_SCENES) problems.push(`at most ${MAX_PANEL_SCENES} Scenes`);
+  return problems;
+}
+
 function hasScene(show: Show, id: string): boolean {
   return show.scenes.some((s) => s.id === id);
 }
@@ -228,11 +280,15 @@ function ruleProblems({ target, intensity, colour }: Rule): string[] {
   if (intensity !== undefined && !inRange(intensity, 0, 1)) {
     problems.push('intensity must be from 0 to 1');
   }
-  if (colour === undefined) return problems;
+  if (colour !== undefined) problems.push(...colourProblems(colour));
+  return problems;
+}
+
+function colourProblems(colour: Colour): string[] {
   if ('swatch' in colour) {
-    if (!SWATCHES.includes(colour.swatch)) problems.push(`"${colour.swatch}" is not a swatch`);
-    return problems;
+    return SWATCHES.includes(colour.swatch) ? [] : [`"${colour.swatch}" is not a swatch`];
   }
+  const problems: string[] = [];
   if (!inRange(colour.hue, 0, 360) || colour.hue === 360) {
     problems.push('hue must be from 0 to under 360');
   }

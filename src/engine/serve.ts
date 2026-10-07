@@ -21,10 +21,7 @@ function isConnect(data: unknown): data is EngineConnect {
 // Runs the engine behind a parent port. The parent hands over a UI port with
 // each `connect` message; a newer UI port (e.g. after a window reload)
 // replaces and closes the previous one.
-export function serve(
-  parentPort: ParentPortLike,
-  options: Pick<EngineOptions, 'now' | 'storage' | 'venueFiles' | 'showFiles' | 'serialPorts'> = {},
-): void {
+export function serve(parentPort: ParentPortLike, options: Omit<EngineOptions, 'emit'> = {}): void {
   let uiPort: PortLike | undefined;
   const engine = createEngine({ ...options, emit: (event) => uiPort?.postMessage(event) });
 

@@ -1,17 +1,23 @@
 import { useEffect, useState } from 'react';
 import type { PlaybackMode } from '../../../shared/protocol';
-import type { Layer, Scene, Show } from '../../../shared/show';
+import { MAX_PANEL_SCENES, type Layer, type Scene, type Show } from '../../../shared/show';
 import { useVenuePatch } from '../venue/useVenuePatch';
+import { ColourPicker } from './ColourPicker';
+import { Preview } from './Preview';
 import { SceneEditor } from './SceneEditor';
+import { TriggerPanel } from './TriggerPanel';
+import { useMidiInput } from './useMidiInput';
 import { usePlayback, type PlaybackState } from './usePlayback';
 import { useShow } from './useShow';
 
-// Edits the current Show: file, Layers and Scenes. Scenes go live from here
-// with Go; Clear empties a Layer. In Blind, the Outputs hold their last frame.
+// Edits the current Show: file, Layers, Scenes and MIDI Triggers. Scenes go
+// live from here with Go; Clear empties a Layer. In Blind, the Outputs hold
+// their last frame while the preview keeps showing the resolved look.
 export function ShowView() {
   const { show: state, edit, newShow, open, save } = useShow();
   const { venue } = useVenuePatch();
   const playback = usePlayback();
+  const midiInput = useMidiInput();
   const [selectedId, setSelectedId] = useState<string>();
   const [tag, setTag] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
@@ -37,6 +43,7 @@ export function ShowView() {
   const selected = show.scenes.find((s) => s.id === selectedId);
   const tags = [...new Set(show.scenes.flatMap((s) => s.tags))].sort();
   const listed = tag === '' ? show.scenes : show.scenes.filter((s) => s.tags.includes(tag));
+  const panelScenes = show.panelScenes ?? [];
 
   // Runs a change and shows its errors, or clears them when it worked. A
   // change resolving to undefined was cancelled and leaves them.
@@ -76,6 +83,12 @@ export function ShowView() {
     if (!window.confirm(`Remove ${scene.name}?${also}`)) return;
     setSelectedId(undefined);
     void run(() => edit({ type: 'removeScene', id: scene.id }));
+  }
+
+  // Adds a Scene's button at the end of the Fallback Panel, or removes it.
+  function togglePanelScene(scene: Scene, on: boolean) {
+    const sceneIds = on ? [...panelScenes, scene.id] : panelScenes.filter((id) => id !== scene.id);
+    void run(() => edit({ type: 'setPanelScenes', sceneIds }));
   }
 
   function removeLayer(layer: Layer) {
@@ -122,6 +135,7 @@ export function ShowView() {
         </button>
       </p>
       <ModeSwitch mode={playback.mode} />
+      <Preview patch={venue.patch} mode={playback.mode} />
       {errors.length > 0 && (
         <ul role="alert">
           {errors.map((line, i) => (
@@ -173,6 +187,12 @@ export function ShowView() {
             New Scene
           </button>
         </p>
+        <ColourPicker
+          label="Default colour, where no Rule sets one"
+          unset="White"
+          colour={show.defaultColour}
+          onChange={(colour) => void run(() => edit({ type: 'setDefaultColour', colour }))}
+        />
         <table>
           <thead>
             <tr>
@@ -180,6 +200,7 @@ export function ShowView() {
               <th>Tags</th>
               <th>Layer</th>
               <th>Fade-in</th>
+              <th>Fallback Panel</th>
               <th />
             </tr>
           </thead>
@@ -202,6 +223,13 @@ export function ShowView() {
                   <td>{layerName(show, scene.layer)}</td>
                   <td>{scene.fadeIn} s</td>
                   <td>
+                    <PanelButton
+                      position={panelScenes.indexOf(scene.id)}
+                      full={panelScenes.length >= MAX_PANEL_SCENES}
+                      onChange={(on) => togglePanelScene(scene, on)}
+                    />
+                  </td>
+                  <td>
                     <button
                       type="button"
                       onClick={() => window.engine.send({ type: 'goScene', sceneId: scene.id })}
@@ -215,6 +243,12 @@ export function ShowView() {
           </tbody>
         </table>
       </section>
+      <TriggerPanel
+        show={show}
+        status={midiInput}
+        onPut={(trigger) => void run(() => edit({ type: 'putTrigger', trigger }))}
+        onRemove={(note) => void run(() => edit({ type: 'removeTrigger', note }))}
+      />
       {selected && (
         <>
           <SceneEditor
@@ -233,6 +267,31 @@ export function ShowView() {
   );
 }
 
+// Whether a Scene has a Fallback Panel button, and which: `position` is its
+// index there, or -1. A full panel takes no more.
+function PanelButton({
+  position,
+  full,
+  onChange,
+}: {
+  position: number;
+  full: boolean;
+  onChange(on: boolean): void;
+}) {
+  const on = position >= 0;
+  return (
+    <label title={!on && full ? `The panel holds ${MAX_PANEL_SCENES} Scenes` : undefined}>
+      <input
+        type="checkbox"
+        checked={on}
+        disabled={!on && full}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      {on && ` key ${position + 1}`}
+    </label>
+  );
+}
+
 function ModeSwitch({ mode }: { mode: PlaybackMode }) {
   const modes: Record<PlaybackMode, string> = { monitor: 'Monitor', blind: 'Blind' };
   return (
@@ -248,7 +307,7 @@ function ModeSwitch({ mode }: { mode: PlaybackMode }) {
         </button>
       ))}{' '}
       {mode === 'blind'
-        ? 'Blind: the rig holds its last look; changes are not sent.'
+        ? 'Blind: the rig holds its last look; changes are not sent, except Blackout.'
         : 'Monitor: changes are sent to the rig.'}
     </p>
   );

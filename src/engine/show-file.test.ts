@@ -41,6 +41,8 @@ const show: Show = {
     { channel: 16, note: 0, scene: 'hit', mode: 'release' },
   ],
   baseLook: 'verse',
+  defaultColour: { hue: 30, saturation: 0.2 },
+  panelScenes: ['hit', 'verse'],
 };
 
 describe('.lcshow file', () => {
@@ -51,11 +53,32 @@ describe('.lcshow file', () => {
   it('rejects a file of an unknown version', () => {
     const saved = JSON.parse(saveShowFile(show));
 
-    expect(() => loadShowFile(JSON.stringify({ ...saved, version: 2 }))).toThrow(
-      'Unsupported Show version: 2',
+    expect(() => loadShowFile(JSON.stringify({ ...saved, version: 4 }))).toThrow(
+      'Unsupported Show version: 4',
     );
     expect(() => loadShowFile(JSON.stringify({ ...show }))).toThrow(
       'Unsupported Show version: undefined',
+    );
+  });
+
+  it('loads a version 1 file, which has no default colour or panel Scenes', () => {
+    const { defaultColour, panelScenes, ...v1 } = show;
+    void defaultColour;
+    void panelScenes;
+
+    expect(loadShowFile(JSON.stringify({ version: 1, ...v1 }))).toEqual(v1);
+    expect(() => loadShowFile(JSON.stringify({ version: 1, ...show }))).toThrow(
+      'Invalid Show:\nunknown field "defaultColour"\nunknown field "panelScenes"',
+    );
+  });
+
+  it('loads a version 2 file, which has no panel Scenes', () => {
+    const { panelScenes, ...v2 } = show;
+    void panelScenes;
+
+    expect(loadShowFile(JSON.stringify({ version: 2, ...v2 }))).toEqual(v2);
+    expect(() => loadShowFile(JSON.stringify({ version: 2, ...show }))).toThrow(
+      'Invalid Show:\nunknown field "panelScenes"',
     );
   });
 
@@ -70,6 +93,7 @@ describe('.lcshow file', () => {
     saved.layers.pop();
     saved.triggers[0].scene = 'chorus';
     saved.baseLook = 'outro';
+    saved.panelScenes = ['intro'];
 
     expect(() => loadShowFile(JSON.stringify(saved))).toThrow(
       [
@@ -77,6 +101,7 @@ describe('.lcshow file', () => {
         'Scene "Hit": Layer "accents" is not in the Show',
         'Trigger 1/60: Scene "chorus" is not in the Show',
         'Base Look: Scene "outro" is not in the Show',
+        'Fallback Panel: Scene "intro" is not in the Show',
       ].join('\n'),
     );
   });
@@ -103,12 +128,14 @@ describe('.lcshow file', () => {
     saved.scenes[0].rules[1].fixtureId = 'par-1';
     saved.scenes[0].rules[1].target.zones[0].dmx = 255;
     saved.triggers[2].velocity = 100;
+    saved.defaultColour.value = 1;
     saved.author = 'someone';
 
     expect(() => loadShowFile(JSON.stringify(saved))).toThrow(
       [
         'Invalid Show:',
         'unknown field "author"',
+        'unknown field "defaultColour.value"',
         'unknown field "scenes[0].rules[1].fixtureId"',
         'unknown field "scenes[0].rules[1].target.zones[0].dmx"',
         'unknown field "triggers[2].velocity"',

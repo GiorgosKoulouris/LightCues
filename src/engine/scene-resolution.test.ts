@@ -8,7 +8,13 @@ import type {
 } from '../shared/fixture-profile';
 import type { Rule, Scene, Show, Swatch } from '../shared/show';
 import type { PatchedFixture, VenuePatch } from '../shared/venue-patch';
-import { activate, clearLayer, resolveFrames, type ActiveScenes } from './scene-resolution';
+import {
+  activate,
+  clearLayer,
+  resolveFrames,
+  resolveLights,
+  type ActiveScenes,
+} from './scene-resolution';
 
 // A 0–255 channel with one capability.
 function channel(name: string, capability: Capability): Channel {
@@ -245,36 +251,38 @@ describe('resolveFrames', () => {
 
     expect(channels(resolveFrames(s, club, active, 0), 7)).toEqual([128, 0, 0, 0, 255, 0, 255]);
     const frames = resolveFrames(s, festival, active, 0);
-    // Amber is nearest to the Red slot; the Strobe has no colour set.
+    // Amber is nearest to the Red slot; the Strobe has no colour set, so it
+    // is White.
     expect([...frames.get(2)!.subarray(9, 11)]).toEqual([128, 14]);
-    expect(channels(frames, 4)).toEqual([255, 0, 0, 0]);
+    expect(channels(frames, 4)).toEqual([255, 255, 255, 255]);
   });
 
-  it('leaves colour channels at their Profile defaults when no Rule sets colour', () => {
-    const warm = (p: FixtureProfile): FixtureProfile => ({
-      ...p,
-      id: `${p.id}-warm`,
-      modes: p.modes.map((m) => ({
-        ...m,
-        channels: m.channels.map((c) =>
-          c.kind === 'control' && c.name !== 'Dimmer' ? { ...c, defaultValue: 200 } : c,
-        ),
-      })),
-    });
+  it("uses the Show's default colour when no Rule sets colour, or White without one", () => {
     const s = show(scene('look', [{ target: {}, intensity: 0.5 }]));
     const rig = patch(
       [
-        fixture({ profileId: warm(rgb).id }),
-        // Without a dimmer, intensity scales the defaults.
-        fixture({ id: 'f2', profileId: warm(rgbw).id, address: 5 }),
+        fixture({ profileId: rgb.id }),
+        // Without a dimmer, intensity scales the emitters.
+        fixture({ id: 'f2', profileId: rgbw.id, address: 5 }),
+        fixture({ id: 'f3', profileId: wheel.id, address: 9 }),
       ],
-      [warm(rgb), warm(rgbw)],
+      [rgb, rgbw, wheel],
     );
+    const active = play(s, ['look', 0]);
 
-    expect(channels(resolveFrames(s, rig, play(s, ['look', 0]), 0), 8)).toEqual([
-      128, 200, 200, 200, 100, 100, 100, 100,
+    expect(channels(resolveFrames(s, rig, active, 0), 10)).toEqual([
+      128, 255, 255, 255, 0, 0, 0, 128, 128, 4,
     ]);
-    expect(channels(resolveFrames(s, rig, {}, 0), 8)).toEqual([0, 200, 200, 200, 0, 0, 0, 0]);
+    const red: Show = { ...s, defaultColour: { swatch: 'Red' } };
+    expect(channels(resolveFrames(red, rig, active, 0), 10)).toEqual([
+      128, 255, 0, 0, 128, 0, 0, 0, 128, 14,
+    ]);
+    expect(resolveLights(red, rig, active, 0).f1).toEqual({
+      intensity: 0.5,
+      red: 1,
+      green: 0,
+      blue: 0,
+    });
   });
 
   it('encodes intensity across its DMX range, with a fine channel, and opens the shutter', () => {
@@ -353,13 +361,14 @@ describe('resolveFrames', () => {
 
       // 'out' sets no colour: the half-way colour holds until the fade ends.
       expect(at(active, 11.5)).toEqual([77, 128, 0, 128]);
-      expect(at(active, 12)).toEqual([0, 0, 0, 0]);
+      // Then no Scene sets colour: the default, White, at intensity 0.
+      expect(at(active, 12)).toEqual([0, 255, 255, 255]);
     });
 
     it('clears a Layer at once, even mid-fade', () => {
       const active = clearLayer(play(s, ['dim', 0], ['full', 10]), 'l1');
 
-      expect(at(active, 11)).toEqual([0, 0, 0, 0]);
+      expect(at(active, 11)).toEqual([0, 255, 255, 255]);
     });
   });
 
@@ -442,6 +451,88 @@ describe('resolveFrames', () => {
       const uv: Rule = { target: {}, intensity: 1, colour: { swatch: 'UV' } };
       expect(resolveOn(rgbUv, uv)).toEqual([0, 0, 0, 255]);
       expect(resolveOn(rgb, uv)).toEqual([255, 77, 0, 255]);
+    });
+  });
+});
+
+describe('resolveLights', () => {
+  // How one Rule makes a Fixture of `p` look.
+  function lightOn(p: FixtureProfile, rule: Rule) {
+    const s = show(scene('look', [rule]));
+    const rig = patch([fixture({ profileId: p.id })], [p]);
+    return resolveLights(s, rig, play(s, ['look', 0]), 0).f1;
+  }
+
+  const white = { red: 1, green: 1, blue: 1 };
+
+  it('gives each Fixture its intensity and the colour it shows, by Fixture id', () => {
+    const s = show(
+      scene('look', [
+        { target: {}, intensity: 0.5 },
+        { target: { roles: ['Blinder'] }, intensity: 1 },
+      ]),
+    );
+    const rig = patch([fixture({ id: 'a' }), fixture({ id: 'b', address: 2, role: 'Blinder' })]);
+
+    expect(resolveLights(s, rig, play(s, ['look', 0]), 0)).toEqual({
+      a: { intensity: 0.5, ...white },
+      b: { intensity: 1, ...white },
+    });
+  });
+
+  it('shows a Fixture that no Scene lights at intensity 0', () => {
+    const rig = patch([fixture({})]);
+    expect(resolveLights(show(), rig, {}, 0)).toEqual({ f1: { intensity: 0, ...white } });
+  });
+
+  it('shows the colour an RGB Fixture mixes, White by default', () => {
+    expect(
+      lightOn(rgb, { target: {}, intensity: 0.2, colour: { hue: 240, saturation: 0.5 } }),
+    ).toEqual({ intensity: 0.2, red: 0.5, green: 0.5, blue: 1 });
+    expect(lightOn(rgb, { target: {}, intensity: 1 })).toEqual({ intensity: 1, ...white });
+  });
+
+  it('shows deep violet for UV', () => {
+    expect(lightOn(rgbUv, { target: {}, intensity: 1, colour: { swatch: 'UV' } })).toEqual({
+      intensity: 1,
+      red: 0.3,
+      green: 0,
+      blue: 1,
+    });
+  });
+
+  it('shows the colour of the colour-wheel slot picked', () => {
+    const red = { target: {}, intensity: 1, colour: { hue: 350, saturation: 0.9 } };
+    expect(lightOn(wheel, red)).toEqual({ intensity: 1, red: 1, green: 0, blue: 0 });
+  });
+
+  it('shows the colour of fixed emitters, ignoring the Rule colour', () => {
+    const blinder = profile('test/blinder', [
+      emitter('Warm', 'warmWhite'),
+      emitter('Cold', 'coldWhite'),
+    ]);
+    const light = lightOn(blinder, { target: {}, intensity: 0.5, colour: { swatch: 'Red' } });
+    expect(light).toEqual({
+      intensity: 0.5,
+      red: expect.closeTo(0.925),
+      green: expect.closeTo(0.875),
+      blue: expect.closeTo(0.8),
+    });
+  });
+
+  it('fades intensity and colour, and applies the Grand Master', () => {
+    const s = show(
+      scene('red', [{ target: {}, intensity: 1, colour: { swatch: 'Red' } }]),
+      scene('blue', [{ target: {}, intensity: 0.5, colour: { swatch: 'Blue' } }], { fadeIn: 2 }),
+    );
+    const rig = patch([fixture({ profileId: rgb.id })], [rgb]);
+    const active = play(s, ['red', 0], ['blue', 10]);
+
+    expect(resolveLights(s, rig, active, 11, 0.5).f1).toEqual({
+      intensity: 0.375,
+      red: 0.5,
+      green: 0,
+      blue: 0.5,
     });
   });
 });

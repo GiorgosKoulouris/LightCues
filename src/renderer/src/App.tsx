@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { FallbackPanel } from './panel/FallbackPanel';
 import { ProfileLibraryView } from './profiles/ProfileLibraryView';
 import { ShowView } from './show/ShowView';
 import { VenuePatchView } from './venue/VenuePatchView';
@@ -35,6 +36,7 @@ export function App() {
     <main>
       <h1>LightCues</h1>
       <p>{status}</p>
+      <FallbackPanel />
       <button type="button" onClick={ping}>
         Ping engine
       </button>

@@ -1,11 +1,16 @@
 import type { EngineCommand, EngineEvent, ShowEdit } from '../shared/protocol';
 import {
   emptyShow,
+  findTrigger,
   putLayer,
   putScene,
+  putTrigger,
   removeLayer,
   removeScene,
+  removeTrigger,
   setBaseLook,
+  setDefaultColour,
+  setPanelScenes,
   type Show,
   type ShowResult,
 } from '../shared/show';
@@ -88,6 +93,19 @@ export function createShowSession({ emit, files, edited, replaced }: ShowSession
         return { show: removeLayer(show, change.id) };
       case 'setBaseLook':
         return setBaseLook(show, change.sceneId);
+      case 'setDefaultColour':
+        return setDefaultColour(show, change.colour);
+      case 'setPanelScenes':
+        return setPanelScenes(show, change.sceneIds);
+      case 'putTrigger':
+        return putTrigger(show, change.trigger);
+      case 'removeTrigger': {
+        const { channel, note } = change.note;
+        if (!findTrigger(show, change.note)) {
+          return { errors: [`No Trigger is mapped to channel ${channel}, note ${note}`] };
+        }
+        return { show: removeTrigger(show, change.note) };
+      }
     }
   }
 

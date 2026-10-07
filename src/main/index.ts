@@ -17,6 +17,7 @@ import {
   CHOOSE_VENUE_TO_SAVE_CHANNEL,
   DOCUMENTS,
   ENGINE_PORT_CHANNEL,
+  MIDI_INPUT_ARG,
   PROFILE_LIBRARY_ARG,
   SAVE_BEFORE_CLOSE_CHANNEL,
   SAVED_BEFORE_CLOSE_CHANNEL,
@@ -29,10 +30,13 @@ const VENUE_FILTERS = [{ name: 'LightCues Venue Patch', extensions: ['lcvenue'] 
 const SHOW_FILTERS = [{ name: 'LightCues Show', extensions: ['lcshow'] }];
 
 function startEngine(): UtilityProcess {
-  const library = join(app.getPath('userData'), 'profile-library.json');
+  const userData = app.getPath('userData');
   const engine = utilityProcess.fork(
     join(__dirname, 'engine.js'),
-    [PROFILE_LIBRARY_ARG + library],
+    [
+      PROFILE_LIBRARY_ARG + join(userData, 'profile-library.json'),
+      MIDI_INPUT_ARG + join(userData, 'midi-input.json'),
+    ],
     {
       serviceName: 'LightCues Engine',
     },

@@ -2,6 +2,7 @@
 // Patch, as one DMX frame per Universe. Pure, so it is testable without
 // hardware.
 import type { CapabilityRange, Channel, Emitter } from '../shared/fixture-profile';
+import type { FixtureLight } from '../shared/protocol';
 import type { Colour, Rule, Scene, Show, Swatch } from '../shared/show';
 import {
   DMX_CHANNELS,
@@ -61,7 +62,7 @@ function findScene(show: Show, id: string): Scene | undefined {
   return show.scenes.find((s) => s.id === id);
 }
 
-function clamp(value: number): number {
+export function clamp(value: number): number {
   return Math.min(Math.max(value, 0), 1);
 }
 
@@ -76,32 +77,85 @@ export function resolveFrames(
 ): Map<number, Uint8Array> {
   const frames = new Map(patch.universes.map((u) => [u.number, new Uint8Array(DMX_CHANNELS)]));
   for (const fixture of patch.fixtures) {
-    let intensity = 0;
-    let colour: ColourLevels | undefined;
-    for (const entry of byChange(show, active)) {
-      const look = layerLook(show, patch, fixture, entry, time);
-      intensity = Math.max(intensity, look.intensity ?? 0);
-      colour = look.colour ?? colour;
-    }
-    intensity *= grandMaster;
-    const frame = frames.get(fixture.universe)!;
-    const { channels } = fixtureMode(patch, fixture);
-    const capabilities = channels.flatMap((channel) =>
-      channel.kind === 'control' ? channel.ranges.map((r) => r.capability) : [],
-    );
-    const hasDimmer = capabilities.some((c) => c.type === 'intensity');
-    const emitters = new Set(
-      capabilities.flatMap((c) => (c.type === 'emitter' ? [c.emitter] : [])),
-    );
-    const output: FixtureOutput = {
-      intensity,
-      colour,
-      mix: mixesColour(emitters) ? colour && emitterMix(colour, emitters) : fullMix(emitters),
-      emitterScale: hasDimmer ? 1 : intensity,
-    };
-    frame.set(encodeChannels(channels, output), fixture.address - 1);
+    const { channels, output } = fixtureOutput(show, patch, active, fixture, time, grandMaster);
+    frames.get(fixture.universe)!.set(encodeChannels(channels, output), fixture.address - 1);
   }
   return frames;
+}
+
+// How each Fixture in the patch looks at `time`, by Fixture id, resolved like
+// `resolveFrames`.
+export function resolveLights(
+  show: Show,
+  patch: VenuePatch,
+  active: ActiveScenes,
+  time: number,
+  grandMaster = 1,
+): Record<string, FixtureLight> {
+  return Object.fromEntries(
+    patch.fixtures.map((fixture) => {
+      const { channels, output } = fixtureOutput(show, patch, active, fixture, time, grandMaster);
+      const { red, green, blue } = shownColour(channels, output);
+      return [fixture.id, { intensity: output.intensity, red, green, blue }];
+    }),
+  );
+}
+
+// What a Fixture is set to once the Layers are combined, and the channels of
+// its mode.
+function fixtureOutput(
+  show: Show,
+  patch: VenuePatch,
+  active: ActiveScenes,
+  fixture: PatchedFixture,
+  time: number,
+  grandMaster: number,
+): { channels: Channel[]; output: FixtureOutput } {
+  let intensity = 0;
+  let colour: ColourLevels | undefined;
+  for (const entry of byChange(show, active)) {
+    const look = layerLook(show, patch, fixture, entry, time);
+    intensity = Math.max(intensity, look.intensity ?? 0);
+    colour = look.colour ?? colour;
+  }
+  intensity *= grandMaster;
+  colour ??= show.defaultColour ? colourLevels(show.defaultColour) : WHITE;
+  const { channels } = fixtureMode(patch, fixture);
+  const capabilities = channels.flatMap((channel) =>
+    channel.kind === 'control' ? channel.ranges.map((r) => r.capability) : [],
+  );
+  const hasDimmer = capabilities.some((c) => c.type === 'intensity');
+  const emitters = new Set(capabilities.flatMap((c) => (c.type === 'emitter' ? [c.emitter] : [])));
+  const output: FixtureOutput = {
+    intensity,
+    colour,
+    emitters,
+    mix: mixesColour(emitters) ? emitterMix(colour, emitters) : fullMix(emitters),
+    emitterScale: hasDimmer ? 1 : intensity,
+  };
+  return { channels, output };
+}
+
+// The colour a Fixture shows at full: the colour-wheel slot picked, the
+// colour mixed, or the colour of its fixed emitters. White when it has none of
+// these.
+function shownColour(channels: Channel[], { colour, emitters }: FixtureOutput): ColourLevels {
+  const slots = channels.flatMap((channel) =>
+    channel.kind === 'control'
+      ? channel.ranges.filter((r) => r.capability.type === 'wheelSlot')
+      : [],
+  );
+  if (slots.length > 0) return slotLevels(nearestSlot(slots, colour));
+  if (mixesColour(emitters)) return colour;
+  if (emitters.size === 0) return WHITE;
+  const levels = [...emitters].map((e) => EMITTER_LEVELS[e]);
+  const average = (pick: (l: ColourLevels) => number) =>
+    levels.reduce((sum, l) => sum + pick(l), 0) / levels.length;
+  return rgbLevels(
+    average((l) => l.red),
+    average((l) => l.green),
+    average((l) => l.blue),
+  );
 }
 
 // The active Scenes, the one changed least recently first, so later ones
@@ -190,6 +244,8 @@ const rgbLevels = (red: number, green: number, blue: number): ColourLevels => ({
   uv: 0,
 });
 
+const WHITE = rgbLevels(1, 1, 1);
+
 const SWATCH_LEVELS: Record<Swatch, ColourLevels> = {
   Red: rgbLevels(1, 0, 0),
   Orange: rgbLevels(1, 0.5, 0),
@@ -201,7 +257,7 @@ const SWATCH_LEVELS: Record<Swatch, ColourLevels> = {
   Lavender: rgbLevels(0.6, 0.4, 1),
   Magenta: rgbLevels(1, 0, 1),
   Pink: rgbLevels(1, 0.4, 0.7),
-  White: rgbLevels(1, 1, 1),
+  White: WHITE,
   'Warm White': rgbLevels(1, 0.85, 0.6),
   UV: { red: 0.3, green: 0, blue: 1, uv: 1 },
 };
@@ -223,6 +279,23 @@ type EmitterMix = Partial<Record<Emitter, number>>;
 
 // The colour of an amber emitter.
 const AMBER = SWATCH_LEVELS.Amber;
+
+// The colour each kind of emitter gives out.
+const EMITTER_LEVELS: Record<Emitter, ColourLevels> = {
+  red: SWATCH_LEVELS.Red,
+  green: SWATCH_LEVELS.Green,
+  blue: SWATCH_LEVELS.Blue,
+  white: WHITE,
+  warmWhite: SWATCH_LEVELS['Warm White'],
+  coldWhite: rgbLevels(0.85, 0.9, 1),
+  amber: AMBER,
+  lime: rgbLevels(0.75, 1, 0),
+  cyan: SWATCH_LEVELS.Cyan,
+  magenta: SWATCH_LEVELS.Magenta,
+  yellow: SWATCH_LEVELS.Yellow,
+  indigo: rgbLevels(0.3, 0, 1),
+  uv: SWATCH_LEVELS.UV,
+};
 
 // The emitter levels that make `colour` on a Fixture with `emitters`. A UV
 // emitter takes the ultraviolet. White, then amber, take as much of the rest
@@ -263,9 +336,10 @@ function fullMix(emitters: Set<Emitter>): EmitterMix {
 // What a Fixture is set to once the Layers are combined.
 interface FixtureOutput {
   intensity: number;
-  // Undefined when no Rule sets colour.
-  colour: ColourLevels | undefined;
-  mix: EmitterMix | undefined;
+  // The Show's default colour when no Rule sets one.
+  colour: ColourLevels;
+  emitters: Set<Emitter>;
+  mix: EmitterMix;
   // Scales the emitters; carries intensity on Fixtures without a dimmer.
   emitterScale: number;
 }
@@ -319,7 +393,7 @@ function channelPoint(
 ): Point | undefined {
   const { ranges } = channel;
   const slots = ranges.filter((r) => r.capability.type === 'wheelSlot');
-  if (slots.length > 0) return colour && fixed(nearestSlot(slots, colour));
+  if (slots.length > 0) return fixed(middle(nearestSlot(slots, colour)));
   const open = ranges.find(
     (r) => r.capability.type === 'shutter' && r.capability.effect === 'open',
   );
@@ -328,7 +402,6 @@ function channelPoint(
   if (dimmer.length > 0) return levelPoint(dimmer, intensity);
   const emitter = ranges.find((r) => r.capability.type === 'emitter')?.capability;
   if (emitter?.type !== 'emitter') return undefined;
-  if (!mix) return { from: 0, to: channel.defaultValue, t: emitterScale };
   const same = ranges.filter(
     (r) => r.capability.type === 'emitter' && r.capability.emitter === emitter.emitter,
   );
@@ -357,18 +430,22 @@ function middle({ from, to }: CapabilityRange): number {
   return Math.floor((from + to) / 2);
 }
 
-// The middle of the wheel slot range whose colour is closest to `colour`.
-function nearestSlot(slots: CapabilityRange[], colour: ColourLevels): number {
-  const distance = ({ capability }: CapabilityRange) => {
-    if (capability.type !== 'wheelSlot') return Infinity;
-    const slot = hexLevels(capability.slot.colour);
+// The wheel slot range whose colour is closest to `colour`.
+function nearestSlot(slots: CapabilityRange[], colour: ColourLevels): CapabilityRange {
+  const distance = (range: CapabilityRange) => {
+    const slot = slotLevels(range);
     return (
       (slot.red - colour.red) ** 2 +
       (slot.green - colour.green) ** 2 +
       (slot.blue - colour.blue) ** 2
     );
   };
-  return middle(slots.reduce((best, range) => (distance(range) < distance(best) ? range : best)));
+  return slots.reduce((best, range) => (distance(range) < distance(best) ? range : best));
+}
+
+// A wheel slot range's colour; white for any other range.
+function slotLevels({ capability }: CapabilityRange): ColourLevels {
+  return capability.type === 'wheelSlot' ? hexLevels(capability.slot.colour) : WHITE;
 }
 
 // '#rrggbb' as ColourLevels.
