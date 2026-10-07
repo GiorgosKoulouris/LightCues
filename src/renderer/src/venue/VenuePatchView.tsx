@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ROLES, type FixtureProfile, type Role } from '../../../shared/fixture-profile';
+import type { OutputStatus } from '../../../shared/protocol';
 import {
   fixtureMode,
   fixturesInUniverse,
@@ -17,6 +18,7 @@ import {
 } from '../../../shared/venue-patch';
 import { useProfileLibrary } from '../profiles/useProfileLibrary';
 import { StagePlan, zoneName } from './StagePlan';
+import { useOutputs } from './useOutputs';
 import { useVenuePatch } from './useVenuePatch';
 
 // Edits the current Venue Patch: file, stage bounds, Universes and their
@@ -24,14 +26,19 @@ import { useVenuePatch } from './useVenuePatch';
 export function VenuePatchView() {
   const { venue, edit, newVenue, open, save } = useVenuePatch();
   const { entries } = useProfileLibrary();
+  const outputs = useOutputs();
   const [selectedId, setSelectedId] = useState<string>();
   const [errors, setErrors] = useState<string[]>([]);
+
+  // Tells main whether closing the window would lose changes.
+  const unsaved = venue?.unsaved ?? false;
+  useEffect(() => window.closeGuard.setUnsaved('venue', unsaved), [unsaved]);
 
   // Save chosen when closing the window. Cancelling the file dialog keeps
   // the window open.
   useEffect(
     () =>
-      window.closeGuard.onSaveBeforeClose(async () => {
+      window.closeGuard.onSaveBeforeClose('venue', async () => {
         const result = await save().catch((error: Error) => [`Save failed: ${error.message}`]);
         if (result) setErrors(result);
         return result?.length === 0;
@@ -40,7 +47,7 @@ export function VenuePatchView() {
   );
 
   if (!venue) return <p>Loading Venue Patch…</p>;
-  const { patch, path, unsaved } = venue;
+  const { patch, path } = venue;
   const selected = patch.fixtures.find((f) => f.id === selectedId);
 
   // Runs a change and shows its errors, or clears them when it worked. A
@@ -122,6 +129,7 @@ export function VenuePatchView() {
       <UniverseList
         universes={patch.universes}
         patch={patch}
+        outputs={outputs}
         onAdd={(universe) => run(() => edit({ type: 'addUniverse', universe }))}
         onPut={(universe) => void run(() => edit({ type: 'putUniverse', universe }))}
         onRemove={removeUniverse}
@@ -185,12 +193,14 @@ function StageForm({ stage, onApply }: { stage: StageBounds; onApply(stage: Stag
 function UniverseList({
   universes,
   patch,
+  outputs,
   onAdd,
   onPut,
   onRemove,
 }: {
   universes: Universe[];
   patch: VenuePatch;
+  outputs: OutputStatus[];
   // Resolves to true when the Universe was added.
   onAdd(universe: Universe): Promise<boolean>;
   onPut(universe: Universe): void;
@@ -207,18 +217,19 @@ function UniverseList({
           <tr>
             <th>Universe</th>
             <th>Output</th>
+            <th>Status</th>
             <th>Fixtures</th>
             <th />
           </tr>
         </thead>
         <tbody>
           {universes.map((universe) => (
-            // Keyed by Output too, so the field resets when the patch is replaced.
-            <tr key={`${universe.number}:${universe.output ?? ''}`}>
+            <tr key={universe.number}>
               <td>{universe.number}</td>
               <td>
-                <OutputInput universe={universe} onPut={onPut} />
+                <OutputSelect universe={universe} outputs={outputs} onPut={onPut} />
               </td>
+              <td>{outputState(outputs.find((o) => o.id === universe.output))}</td>
               <td>{fixturesInUniverse(patch, universe.number).length}</td>
               <td>
                 <button type="button" onClick={() => onRemove(universe.number)}>
@@ -254,27 +265,54 @@ function UniverseList({
   );
 }
 
-// Output ids are free text until Outputs can be discovered (issue 06). Blank
-// is unmapped. Commits on blur or Enter.
-function OutputInput({ universe, onPut }: { universe: Universe; onPut(u: Universe): void }) {
-  const [value, setValue] = useState(universe.output ?? '');
-  function commit() {
-    const output = value.trim();
-    if (output === (universe.output ?? '')) return;
-    onPut(output ? { number: universe.number, output } : { number: universe.number });
-  }
+// A choice of the Outputs the engine found. The current Output stays listed
+// while it is unplugged, and before the engine has reported Outputs.
+function OutputSelect({
+  universe,
+  outputs,
+  onPut,
+}: {
+  universe: Universe;
+  outputs: OutputStatus[];
+  onPut(u: Universe): void;
+}) {
   return (
-    <input
-      value={value}
-      placeholder="Unmapped"
+    <select
+      value={universe.output ?? ''}
       aria-label={`Output of Universe ${universe.number}`}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') commit();
+      onChange={(e) => {
+        const output = e.target.value;
+        onPut(output ? { number: universe.number, output } : { number: universe.number });
       }}
-    />
+    >
+      <option value="">Unmapped</option>
+      {universe.output !== undefined && !outputs.some((o) => o.id === universe.output) && (
+        <option value={universe.output}>{universe.output}</option>
+      )}
+      {outputs.map((output) => (
+        <option key={output.id} value={output.id}>
+          {output.name}
+        </option>
+      ))}
+    </select>
   );
+}
+
+function outputState(output: OutputStatus | undefined): string {
+  // A mapped Output is never unused once the engine has caught up.
+  switch (output?.state) {
+    case undefined:
+    case 'unused':
+      return '';
+    case 'connecting':
+      return 'Connecting…';
+    case 'sending':
+      return 'Sending';
+    case 'failed':
+      return `Failed: ${output.error ?? 'unknown error'}. Retrying…`;
+    case 'missing':
+      return 'Not connected';
+  }
 }
 
 function AddFixtureForm({

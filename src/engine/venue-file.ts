@@ -9,7 +9,9 @@ interface VenueFile extends VenuePatch {
   version: number;
 }
 
+// Throws when the patch is invalid, so every saved file loads.
 export function saveVenueFile(patch: VenuePatch): string {
+  throwIfInvalid(validatePatch(patch));
   const file: VenueFile = { version: VERSION, ...patch };
   return JSON.stringify(file);
 }
@@ -21,9 +23,12 @@ export function loadVenueFile(json: string): VenuePatch {
   if (!hasParts(patch)) {
     throw new Error('Invalid Venue Patch: stage, universes, fixtures and profiles are required');
   }
-  const errors = validatePatch(patch);
-  if (errors.length > 0) throw new Error(['Invalid Venue Patch:', ...errors].join('\n'));
+  throwIfInvalid(validatePatch(patch));
   return patch;
+}
+
+function throwIfInvalid(errors: string[]): void {
+  if (errors.length > 0) throw new Error(['Invalid Venue Patch:', ...errors].join('\n'));
 }
 
 function hasParts(patch: Partial<VenuePatch>): boolean {

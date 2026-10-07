@@ -67,7 +67,7 @@ npm run dev
 
 The window should show "Engine replied in N ms". That confirms the engine process is running.
 
-No native modules are installed yet. When the first one lands (`serialport` or `@julusian/midi`), add a `postinstall` step that rebuilds it for Electron. If that fails, the cause is usually step 2.
+`serialport` ships N-API prebuilds (win32-x64 included). N-API binaries load in both Node and Electron, so there is no rebuild step: the same install serves `npm test` and `npm run dev`. A native module without N-API prebuilds needs a `postinstall` step that rebuilds it for Electron. If that fails, the cause is usually step 2.
 
 ## 7. Commands
 
@@ -86,7 +86,7 @@ No native modules are installed yet. When the first one lands (`serialport` or `
 | Path | Runs in | Notes |
 | --- | --- | --- |
 | `src/shared/` | everywhere | Typed message contract (`protocol.ts`) and the Fixture Profile model (`fixture-profile.ts`). |
-| `src/engine/` | engine utilityProcess | No Electron or UI imports. Testable under plain Node. Includes OFL import and the Profile Library. |
+| `src/engine/` | engine utilityProcess | No Electron or UI imports. Testable under plain Node. Includes OFL import, the Profile Library and Outputs (`serial-ports.ts` is the only file that loads `serialport`). |
 | `src/main/` | Electron main | Window, engine process start-up (`engine-process.ts` is the utilityProcess entry). |
 | `src/preload/` | renderer, isolated | Exposes `window.engine` (send commands, receive events). |
 | `src/renderer/` | renderer | React UI. |

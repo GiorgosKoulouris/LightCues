@@ -32,12 +32,14 @@ export interface VenueFiles {
 export interface VenueSessionOptions {
   emit: (event: EngineEvent) => void;
   files?: VenueFiles;
+  // Called after the patch is replaced or edited.
+  changed?: () => void;
   // A Profile from the Profile Library, for Fixtures the patch has no copy of.
   libraryProfile: (id: string) => FixtureProfile | undefined;
 }
 
 // The engine's current Venue Patch.
-export function createVenueSession({ emit, files, libraryProfile }: VenueSessionOptions) {
+export function createVenueSession({ emit, files, changed, libraryProfile }: VenueSessionOptions) {
   let patch: VenuePatch = emptyPatch(DEFAULT_STAGE);
   // The file the patch was opened from or last saved to.
   let path: string | undefined;
@@ -57,6 +59,7 @@ export function createVenueSession({ emit, files, libraryProfile }: VenueSession
     path = from;
     unsaved = false;
     emitVenue();
+    changed?.();
     return [];
   }
 
@@ -100,6 +103,7 @@ export function createVenueSession({ emit, files, libraryProfile }: VenueSession
   }
 
   return {
+    patch: () => patch,
     handle(command: VenueCommand): void {
       switch (command.type) {
         case 'getVenue':
@@ -110,6 +114,7 @@ export function createVenueSession({ emit, files, libraryProfile }: VenueSession
           path = undefined;
           unsaved = false;
           emitVenue();
+          changed?.();
           break;
         case 'openVenue':
           emit({ type: 'venueDone', requestId: command.requestId, errors: open(command.path) });
@@ -123,6 +128,7 @@ export function createVenueSession({ emit, files, libraryProfile }: VenueSession
             patch = result.patch;
             unsaved = true;
             emitVenue();
+            changed?.();
           }
           const errors = 'errors' in result ? result.errors : [];
           emit({ type: 'venueDone', requestId: command.requestId, errors });

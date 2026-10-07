@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import {
+  CHOOSE_SHOW_TO_OPEN_CHANNEL,
+  CHOOSE_SHOW_TO_SAVE_CHANNEL,
   CHOOSE_VENUE_TO_OPEN_CHANNEL,
   CHOOSE_VENUE_TO_SAVE_CHANNEL,
   ENGINE_PORT_CHANNEL,
@@ -8,6 +10,7 @@ import {
   UNSAVED_CHANNEL,
   type CloseGuardBridge,
   type DialogBridge,
+  type DocumentKind,
   type EngineBridge,
   type EngineCommand,
   type EngineEvent,
@@ -43,17 +46,20 @@ contextBridge.exposeInMainWorld('engine', bridge);
 const dialogs: DialogBridge = {
   chooseVenueToOpen: () => ipcRenderer.invoke(CHOOSE_VENUE_TO_OPEN_CHANNEL),
   chooseVenueToSave: (current) => ipcRenderer.invoke(CHOOSE_VENUE_TO_SAVE_CHANNEL, current),
+  chooseShowToOpen: () => ipcRenderer.invoke(CHOOSE_SHOW_TO_OPEN_CHANNEL),
+  chooseShowToSave: (current) => ipcRenderer.invoke(CHOOSE_SHOW_TO_SAVE_CHANNEL, current),
 };
 
 contextBridge.exposeInMainWorld('dialogs', dialogs);
 
 const closeGuard: CloseGuardBridge = {
-  setUnsaved: (unsaved) => ipcRenderer.send(UNSAVED_CHANNEL, unsaved),
-  onSaveBeforeClose(save) {
-    const listener = () => {
+  setUnsaved: (document, unsaved) => ipcRenderer.send(UNSAVED_CHANNEL, document, unsaved),
+  onSaveBeforeClose(document, save) {
+    const listener = (_event: unknown, asked: DocumentKind) => {
+      if (asked !== document) return;
       void save()
         .catch(() => false)
-        .then((saved) => ipcRenderer.send(SAVED_BEFORE_CLOSE_CHANNEL, saved));
+        .then((saved) => ipcRenderer.send(SAVED_BEFORE_CLOSE_CHANNEL, document, saved));
     };
     ipcRenderer.on(SAVE_BEFORE_CLOSE_CHANNEL, listener);
     return () => ipcRenderer.removeListener(SAVE_BEFORE_CLOSE_CHANNEL, listener);

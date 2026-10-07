@@ -1,5 +1,8 @@
 import type { EngineCommand, EngineEvent, OflImportResult } from '../shared/protocol';
+import { createOutputs, type SerialPorts } from './outputs';
+import { createPlayback } from './playback';
 import { createProfileLibrary, type ProfileLibrary } from './profile-library';
+import { createShowSession, type ShowFiles } from './show-session';
 import { createVenueSession, type VenueFiles } from './venue-session';
 
 // Where the Profile Library is kept between runs.
@@ -16,6 +19,9 @@ export interface EngineOptions {
   now?: () => number;
   storage?: LibraryStorage;
   venueFiles?: VenueFiles;
+  showFiles?: ShowFiles;
+  // Without it, nothing is sent to Outputs.
+  serialPorts?: SerialPorts;
 }
 
 export interface Engine {
@@ -27,14 +33,32 @@ export function createEngine({
   now = performance.now.bind(performance),
   storage,
   venueFiles,
+  showFiles,
+  serialPorts,
 }: EngineOptions): Engine {
   const startedAt = now();
   const library = openLibrary(storage);
   const venue = createVenueSession({
     emit,
+    changed: () => outputs?.patchChanged(),
     files: venueFiles,
     libraryProfile: (id) => library.get(id),
   });
+  const show = createShowSession({
+    emit,
+    files: showFiles,
+    edited: () => playback.showEdited(),
+    replaced: () => playback.showReplaced(),
+  });
+  const playback = createPlayback({ emit, now, show: show.show, patch: venue.patch });
+  const outputs =
+    serialPorts &&
+    createOutputs({
+      ports: serialPorts,
+      emit,
+      universes: () => venue.patch().universes,
+      frames: () => playback.frames(),
+    });
 
   function libraryChanged(): void {
     storage?.write(library.save());
@@ -92,6 +116,22 @@ export function createEngine({
         case 'saveVenue':
         case 'editVenue':
           venue.handle(command);
+          break;
+        case 'getShow':
+        case 'newShow':
+        case 'openShow':
+        case 'saveShow':
+        case 'editShow':
+          show.handle(command);
+          break;
+        case 'getPlayback':
+        case 'goScene':
+        case 'clearLayer':
+        case 'setMode':
+          playback.handle(command);
+          break;
+        case 'listOutputs':
+          outputs?.emitOutputs();
           break;
       }
     },

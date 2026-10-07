@@ -5,22 +5,28 @@ import {
   ipcMain,
   MessageChannelMain,
   utilityProcess,
+  type FileFilter,
   type IpcMainEvent,
   type UtilityProcess,
 } from 'electron';
 import { join } from 'node:path';
 import {
+  CHOOSE_SHOW_TO_OPEN_CHANNEL,
+  CHOOSE_SHOW_TO_SAVE_CHANNEL,
   CHOOSE_VENUE_TO_OPEN_CHANNEL,
   CHOOSE_VENUE_TO_SAVE_CHANNEL,
+  DOCUMENTS,
   ENGINE_PORT_CHANNEL,
   PROFILE_LIBRARY_ARG,
   SAVE_BEFORE_CLOSE_CHANNEL,
   SAVED_BEFORE_CLOSE_CHANNEL,
   UNSAVED_CHANNEL,
+  type DocumentKind,
   type EngineConnect,
 } from '../shared/protocol';
 
 const VENUE_FILTERS = [{ name: 'LightCues Venue Patch', extensions: ['lcvenue'] }];
+const SHOW_FILTERS = [{ name: 'LightCues Show', extensions: ['lcshow'] }];
 
 function startEngine(): UtilityProcess {
   const library = join(app.getPath('userData'), 'profile-library.json');
@@ -47,20 +53,20 @@ function connectWindowToEngine(window: BrowserWindow, engine: UtilityProcess): v
   });
 }
 
-// Native Open/Save dialogs for .lcvenue files. The engine reads and writes
+// Native Open/Save dialogs for one kind of file. The engine reads and writes
 // the chosen path.
-function handleVenueDialogs(): void {
-  ipcMain.handle(CHOOSE_VENUE_TO_OPEN_CHANNEL, async (event) => {
+function handleFileDialogs(openChannel: string, saveChannel: string, filters: FileFilter[]): void {
+  ipcMain.handle(openChannel, async (event) => {
     const window = BrowserWindow.fromWebContents(event.sender);
-    const options = { filters: VENUE_FILTERS, properties: ['openFile' as const] };
+    const options = { filters, properties: ['openFile' as const] };
     const result = await (window
       ? dialog.showOpenDialog(window, options)
       : dialog.showOpenDialog(options));
     return result.canceled ? undefined : result.filePaths[0];
   });
-  ipcMain.handle(CHOOSE_VENUE_TO_SAVE_CHANNEL, async (event, current?: string) => {
+  ipcMain.handle(saveChannel, async (event, current?: string) => {
     const window = BrowserWindow.fromWebContents(event.sender);
-    const options = { filters: VENUE_FILTERS, defaultPath: current };
+    const options = { filters, defaultPath: current };
     const result = await (window
       ? dialog.showSaveDialog(window, options)
       : dialog.showSaveDialog(options));
@@ -68,21 +74,27 @@ function handleVenueDialogs(): void {
   });
 }
 
-// Asks before closing a window whose Venue Patch has unsaved changes. Save
-// runs the renderer's own save flow; the window closes only once it worked.
+// Asks before closing a window whose Show or Venue Patch has unsaved
+// changes. Save runs the renderer's own save flow for each document in turn;
+// the window closes only once all of them worked.
 function guardClose(window: BrowserWindow): void {
   const contents = window.webContents;
-  let unsaved = false;
-  let saving = false;
+  const unsaved = new Set<DocumentKind>();
+  // The documents still to save, the one being saved first.
+  let saving: DocumentKind[] = [];
   let closing = false;
 
-  function onUnsaved(event: IpcMainEvent, value: boolean): void {
-    if (event.sender === contents) unsaved = value;
+  function onUnsaved(event: IpcMainEvent, document: DocumentKind, value: boolean): void {
+    if (event.sender !== contents) return;
+    if (value) unsaved.add(document);
+    else unsaved.delete(document);
   }
-  function onSaved(event: IpcMainEvent, saved: boolean): void {
-    if (event.sender !== contents || !saving) return;
-    saving = false;
-    if (saved) close();
+  function onSaved(event: IpcMainEvent, document: DocumentKind, saved: boolean): void {
+    if (event.sender !== contents || saving[0] !== document) return;
+    saving = saved ? saving.slice(1) : [];
+    if (!saved) return;
+    if (saving[0]) contents.send(SAVE_BEFORE_CLOSE_CHANNEL, saving[0]);
+    else close();
   }
   ipcMain.on(UNSAVED_CHANNEL, onUnsaved);
   ipcMain.on(SAVED_BEFORE_CLOSE_CHANNEL, onSaved);
@@ -90,9 +102,11 @@ function guardClose(window: BrowserWindow): void {
     ipcMain.removeListener(UNSAVED_CHANNEL, onUnsaved);
     ipcMain.removeListener(SAVED_BEFORE_CLOSE_CHANNEL, onSaved);
   });
-  // A reload drops a save in progress; the new page reports its own state.
+  // A reload drops a save in progress and the documents' state; the new page
+  // reports its own.
   contents.on('did-start-loading', () => {
-    saving = false;
+    saving = [];
+    unsaved.clear();
   });
 
   function close(): void {
@@ -101,20 +115,22 @@ function guardClose(window: BrowserWindow): void {
   }
 
   window.on('close', (event) => {
-    if (closing || !unsaved) return;
+    if (closing || unsaved.size === 0) return;
     event.preventDefault();
-    if (saving) return;
+    if (saving.length > 0) return;
+    const documents = (Object.keys(DOCUMENTS) as DocumentKind[]).filter((d) => unsaved.has(d));
+    const names = documents.map((d) => `The ${DOCUMENTS[d]}`).join(' and ');
     const choice = dialog.showMessageBoxSync(window, {
       type: 'warning',
       buttons: ['Save', "Don't Save", 'Cancel'],
       defaultId: 0,
       cancelId: 2,
-      message: 'The Venue Patch has unsaved changes.',
+      message: `${names} ${documents.length > 1 ? 'have' : 'has'} unsaved changes.`,
       detail: 'Save them before closing?',
     });
     if (choice === 0) {
-      saving = true;
-      contents.send(SAVE_BEFORE_CLOSE_CHANNEL);
+      saving = documents;
+      contents.send(SAVE_BEFORE_CLOSE_CHANNEL, documents[0]);
     } else if (choice === 1) {
       close();
     }
@@ -142,7 +158,8 @@ function createWindow(engine: UtilityProcess): void {
 
 void app.whenReady().then(() => {
   const engine = startEngine();
-  handleVenueDialogs();
+  handleFileDialogs(CHOOSE_VENUE_TO_OPEN_CHANNEL, CHOOSE_VENUE_TO_SAVE_CHANNEL, VENUE_FILTERS);
+  handleFileDialogs(CHOOSE_SHOW_TO_OPEN_CHANNEL, CHOOSE_SHOW_TO_SAVE_CHANNEL, SHOW_FILTERS);
   createWindow(engine);
 });
 

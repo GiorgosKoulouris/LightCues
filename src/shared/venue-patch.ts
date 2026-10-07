@@ -24,7 +24,8 @@ export interface Zone {
 // Fixtures at or above this height are suggested Overhead.
 export const OVERHEAD_HEIGHT = 2;
 
-const DMX_CHANNELS = 512;
+// Channels in one Universe.
+export const DMX_CHANNELS = 512;
 
 export interface StageBounds {
   width: number;
@@ -266,8 +267,12 @@ function fixtureProblem(patch: VenuePatch, fixture: PatchedFixture): string | un
   return undefined;
 }
 
-function isZone({ row, column, level }: Zone): boolean {
+export function isZone({ row, column, level }: Zone): boolean {
   return ZONE_ROWS.includes(row) && ZONE_COLUMNS.includes(column) && ZONE_LEVELS.includes(level);
+}
+
+export function sameZone(a: Zone, b: Zone): boolean {
+  return a.row === b.row && a.column === b.column && a.level === b.level;
 }
 
 // Universe.address notation, e.g. 1.1–1.3.

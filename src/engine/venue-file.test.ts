@@ -141,4 +141,12 @@ describe('.lcvenue file', () => {
       loadVenueFile(JSON.stringify({ version: 1, stage: { width: 1, depth: 1 } })),
     ).toThrow('Invalid Venue Patch: stage, universes, fixtures and profiles are required');
   });
+
+  it('refuses to save an invalid patch', () => {
+    const valid = patch([fixture({ profileId: 'acme/led-bar' }), handMade]);
+
+    expect(() => saveVenueFile({ ...valid, stage: { width: 0, depth: 6 } })).toThrow(
+      'Invalid Venue Patch:\nStage width and depth must be greater than 0',
+    );
+  });
 });

@@ -3,13 +3,15 @@ import {
   fixtureRole,
   fixtureZone,
   type PatchedFixture,
+  type StageBounds,
   type StagePosition,
   type VenuePatch,
   type Zone,
+  type ZoneRow,
 } from '../../../shared/venue-patch';
 
 // Depth of the Front row drawn in front of the stage, in metres.
-const FRONT_DEPTH = 2;
+export const FRONT_DEPTH = 2;
 const MARGIN = 1;
 const FIXTURE_RADIUS = 0.25;
 // Dragged positions snap to this, in metres.
@@ -97,7 +99,7 @@ export function StagePlan({ patch, selectedId, onSelect, onMove }: StagePlanProp
     <figure style={{ margin: 0 }}>
       <svg
         ref={svg}
-        viewBox={`${-width / 2 - MARGIN} ${-depth - MARGIN} ${width + 2 * MARGIN} ${depth + FRONT_DEPTH + 2 * MARGIN}`}
+        viewBox={stageViewBox(patch.stage)}
         style={{ width: '100%', maxWidth: 800, background: '#1b1d22', touchAction: 'none' }}
         role="img"
         aria-label="Top-down stage plan"
@@ -200,6 +202,22 @@ export function StagePlan({ patch, selectedId, onSelect, onMove }: StagePlanProp
       </figcaption>
     </figure>
   );
+}
+
+// SVG coordinates are metres with y flipped: stage y = -svg y. The view
+// shows the stage, the Front row and a margin.
+export function stageViewBox({ width, depth }: StageBounds): string {
+  return `${-width / 2 - MARGIN} ${-depth - MARGIN} ${width + 2 * MARGIN} ${depth + FRONT_DEPTH + 2 * MARGIN}`;
+}
+
+// Each Zone row's top and bottom in SVG y, Front first.
+export function zoneRowBounds({ depth }: StageBounds): Record<ZoneRow, [number, number]> {
+  return {
+    Front: [0, FRONT_DEPTH],
+    Downstage: [-depth / 3, 0],
+    Midstage: [(-depth * 2) / 3, -depth / 3],
+    Upstage: [-depth, (-depth * 2) / 3],
+  };
 }
 
 export function zoneName({ row, column, level }: Zone): string {

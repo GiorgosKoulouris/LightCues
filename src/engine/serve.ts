@@ -23,7 +23,7 @@ function isConnect(data: unknown): data is EngineConnect {
 // replaces and closes the previous one.
 export function serve(
   parentPort: ParentPortLike,
-  options: Pick<EngineOptions, 'now' | 'storage' | 'venueFiles'> = {},
+  options: Pick<EngineOptions, 'now' | 'storage' | 'venueFiles' | 'showFiles' | 'serialPorts'> = {},
 ): void {
   let uiPort: PortLike | undefined;
   const engine = createEngine({ ...options, emit: (event) => uiPort?.postMessage(event) });

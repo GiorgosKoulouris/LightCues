@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ProfileLibraryView } from './profiles/ProfileLibraryView';
+import { ShowView } from './show/ShowView';
 import { VenuePatchView } from './venue/VenuePatchView';
 
-const VIEWS = { venue: 'Venue Patch', profiles: 'Profile Library' } as const;
+const VIEWS = { show: 'Show', venue: 'Venue Patch', profiles: 'Profile Library' } as const;
 
 export function App() {
   const [status, setStatus] = useState('Waiting for engine…');
@@ -49,7 +50,10 @@ export function App() {
           </button>
         ))}
       </nav>
-      {/* Both stay mounted, so the Venue Patch still guards the window close. */}
+      {/* All stay mounted, so the Show and Venue Patch still guard the window close. */}
+      <div hidden={view !== 'show'}>
+        <ShowView />
+      </div>
       <div hidden={view !== 'venue'}>
         <VenuePatchView />
       </div>

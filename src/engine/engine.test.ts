@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FixtureProfile } from '../shared/fixture-profile';
-import type { EngineCommand, EngineEvent, VenueEdit } from '../shared/protocol';
+import type { EngineCommand, EngineEvent, ShowEdit, VenueEdit } from '../shared/protocol';
+import type { Scene } from '../shared/show';
 import { fixtureZone, type PatchedFixture, type VenuePatch } from '../shared/venue-patch';
 import { createEngine } from './engine';
 
@@ -282,5 +283,189 @@ describe('engine Venue Patch', () => {
     ]);
 
     expect(patch().universes).toEqual([{ number: 1, output: 'usb-1' }, { number: 4 }]);
+  });
+});
+
+const wash: Scene = {
+  id: 'wash',
+  name: 'Wash',
+  tags: ['verse'],
+  layer: 'layer-1',
+  fadeIn: 2,
+  rules: [{ target: {}, intensity: 1 }],
+};
+
+// An engine with Show files. `files` stands in for the disk, by path.
+function showEngine(files = new Map<string, string>()) {
+  const events: EngineEvent[] = [];
+  const showFiles = {
+    read(path: string) {
+      const json = files.get(path);
+      if (json === undefined) throw new Error(`ENOENT: ${path}`);
+      return json;
+    },
+    write: (path: string, json: string) => void files.set(path, json),
+  };
+  const engine = createEngine({ emit: (e) => events.push(e), showFiles });
+  let nextRequestId = 1;
+
+  // Sends a command and returns the engine's reply to it.
+  function request(command: (requestId: number) => EngineCommand): string[] {
+    const requestId = nextRequestId++;
+    engine.handle(command(requestId));
+    const reply = events.find((e) => e.type === 'showDone' && e.requestId === requestId);
+    if (reply?.type !== 'showDone') throw new Error('No reply');
+    return reply.errors;
+  }
+
+  return {
+    edit: (edit: ShowEdit) => request((requestId) => ({ type: 'editShow', requestId, edit })),
+    save: (path?: string) => request((requestId) => ({ type: 'saveShow', requestId, path })),
+    open: (path: string) => request((requestId) => ({ type: 'openShow', requestId, path })),
+    // The last Show state the engine sent.
+    show() {
+      const show = events.findLast((e) => e.type === 'show');
+      if (show?.type !== 'show') throw new Error('No show event');
+      return show;
+    },
+    engine,
+    events,
+  };
+}
+
+describe('engine Show', () => {
+  it('starts with an empty Show that is not saved to a file', () => {
+    const events: EngineEvent[] = [];
+    const engine = createEngine({ emit: (e) => events.push(e) });
+
+    engine.handle({ type: 'getShow' });
+
+    expect(events).toEqual([
+      {
+        type: 'show',
+        show: { layers: [{ id: 'layer-1', name: 'Layer 1' }], scenes: [], triggers: [] },
+        unsaved: false,
+      },
+    ]);
+  });
+
+  it('adds and edits a Scene, marking the Show unsaved', () => {
+    const { edit, show } = showEngine();
+
+    expect(edit({ type: 'putScene', scene: wash })).toEqual([]);
+    expect(edit({ type: 'putScene', scene: { ...wash, fadeIn: 0 } })).toEqual([]);
+
+    expect(show().show.scenes).toEqual([{ ...wash, fadeIn: 0 }]);
+    expect(show().unsaved).toBe(true);
+  });
+
+  it('rejects an edit that leaves the Show invalid, without changing it', () => {
+    const { edit, show, events } = showEngine();
+    edit({ type: 'putScene', scene: wash });
+    const sent = events.length;
+
+    expect(edit({ type: 'putScene', scene: { ...wash, layer: 'gone' } })).toEqual([
+      'Scene "Wash": Layer "gone" is not in the Show',
+    ]);
+    expect(events.slice(sent).some((e) => e.type === 'show')).toBe(false);
+    expect(show().show.scenes).toEqual([wash]);
+  });
+
+  it('adds a Layer and removes it with its Scenes', () => {
+    const { edit, show } = showEngine();
+    const chorus = { ...wash, id: 'chorus', name: 'Chorus', layer: 'layer-2' };
+
+    expect(edit({ type: 'putLayer', layer: { id: 'layer-2', name: 'Accents' } })).toEqual([]);
+    edit({ type: 'putScene', scene: wash });
+    edit({ type: 'putScene', scene: chorus });
+    expect(edit({ type: 'removeLayer', id: 'layer-2' })).toEqual([]);
+
+    expect(show().show).toMatchObject({ layers: [{ id: 'layer-1' }], scenes: [wash] });
+  });
+
+  it('sets the Base Look, and removing its Scene leaves the Show without one', () => {
+    const { edit, show } = showEngine();
+    edit({ type: 'putScene', scene: wash });
+
+    expect(edit({ type: 'setBaseLook', sceneId: 'wash' })).toEqual([]);
+    expect(show().show.baseLook).toBe('wash');
+    expect(edit({ type: 'removeScene', id: 'wash' })).toEqual([]);
+
+    expect(show().show).toEqual({ layers: show().show.layers, scenes: [], triggers: [] });
+  });
+
+  it('rejects removing a Scene or Layer that is not in the Show, leaving it saved', () => {
+    const { edit, show, engine } = showEngine();
+    engine.handle({ type: 'getShow' });
+
+    expect(edit({ type: 'removeScene', id: 'nope' })).toEqual([
+      'Scene id "nope" is not in the Show',
+    ]);
+    expect(edit({ type: 'removeLayer', id: 'nope' })).toEqual([
+      'Layer id "nope" is not in the Show',
+    ]);
+    expect(show().unsaved).toBe(false);
+  });
+
+  it('saves the Show to a file that another engine opens', () => {
+    const files = new Map<string, string>();
+    const first = showEngine(files);
+    first.edit({ type: 'putScene', scene: wash });
+
+    expect(first.save('C:/shows/tour.lcshow')).toEqual([]);
+    expect(first.show()).toMatchObject({ path: 'C:/shows/tour.lcshow', unsaved: false });
+
+    const second = showEngine(files);
+    expect(second.open('C:/shows/tour.lcshow')).toEqual([]);
+
+    expect(second.show()).toEqual({
+      type: 'show',
+      show: first.show().show,
+      path: 'C:/shows/tour.lcshow',
+      unsaved: false,
+    });
+  });
+
+  it('saves to the file it was opened from when no path is given', () => {
+    const files = new Map<string, string>();
+    showEngine(files).save('tour.lcshow');
+    const { open, edit, save, show } = showEngine(files);
+    open('tour.lcshow');
+    edit({ type: 'putScene', scene: wash });
+
+    expect(save()).toEqual([]);
+
+    expect(show()).toMatchObject({ path: 'tour.lcshow', unsaved: false });
+    expect(JSON.parse(files.get('tour.lcshow')!)).toMatchObject({ scenes: [wash] });
+  });
+
+  it('asks for a file when saving a Show that has none', () => {
+    expect(showEngine().save()).toEqual(['Choose a file to save the Show to']);
+  });
+
+  it('keeps the current Show when a file does not open', () => {
+    const files = new Map([['bad.lcshow', '{"version": 99}']]);
+    const { open, edit, show } = showEngine(files);
+    edit({ type: 'putScene', scene: wash });
+
+    expect(open('bad.lcshow')).toEqual(['Could not open bad.lcshow: Unsupported Show version: 99']);
+    expect(open('missing.lcshow')).toEqual([
+      'Could not open missing.lcshow: ENOENT: missing.lcshow',
+    ]);
+    expect(show()).toMatchObject({ show: { scenes: [wash] }, unsaved: true });
+  });
+
+  it('starts a new Show, forgetting the file', () => {
+    const { engine, edit, save, show } = showEngine();
+    edit({ type: 'putScene', scene: wash });
+    save('tour.lcshow');
+
+    engine.handle({ type: 'newShow' });
+
+    expect(show()).toEqual({
+      type: 'show',
+      show: { layers: [{ id: 'layer-1', name: 'Layer 1' }], scenes: [], triggers: [] },
+      unsaved: false,
+    });
   });
 });

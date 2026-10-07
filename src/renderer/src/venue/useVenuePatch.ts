@@ -28,10 +28,6 @@ export function useVenuePatch() {
 
   const newVenue = useCallback(() => window.engine.send({ type: 'newVenue' }), []);
 
-  // Tells main whether closing the window would lose changes.
-  const unsaved = venue?.unsaved ?? false;
-  useEffect(() => window.closeGuard.setUnsaved(unsaved), [unsaved]);
-
   // Resolves to undefined when the user cancels the dialog.
   const open = useCallback(async (): Promise<string[] | undefined> => {
     const path = await window.dialogs.chooseVenueToOpen();
