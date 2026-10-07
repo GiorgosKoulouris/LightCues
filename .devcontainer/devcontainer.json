@@ -1,0 +1,23 @@
+{
+  "name": "LightCues",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  // Build with plain `docker build` so Compose never builds. Dev Containers
+  // otherwise injects a temp Dockerfile outside the build context, which
+  // `buildx bake` (used by recent Compose) rejects without fs entitlements.
+  "initializeCommand": ["docker", "build", "-t", "lightcues-devcontainer:latest", ".devcontainer"],
+  "workspaceFolder": "/workspaces",
+  "remoteUser": "node",
+  "updateRemoteUserUID": true,
+  "postCreateCommand": "sudo chown node:node node_modules && if [ -f package.json ]; then npm install; fi",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "vitest.explorer",
+        "anthropic.claude-code"
+      ]
+    }
+  }
+}

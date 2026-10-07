@@ -1,0 +1,21 @@
+services:
+  app:
+    container_name: lightcues-devcontainer
+
+    # Built by initializeCommand in devcontainer.json, not by Compose.
+    image: lightcues-devcontainer:latest
+    pull_policy: never
+    volumes:
+      - ..:/workspaces:cached
+      # Linux node_modules lives in a volume so it never clobbers the
+      # Windows-built native modules in the host checkout.
+      - node_modules:/workspaces/node_modules
+
+    environment:
+      # The container runs engine/logic work and tests, not the Electron app.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    
+    tty: true
+
+volumes:
+  node_modules:
