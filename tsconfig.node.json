@@ -1,0 +1,17 @@
+{
+  // Electron main process, preload and build config.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "tsBuildInfoFile": "out/tsc/node.tsbuildinfo"
+  },
+  "include": [
+    "src/main/**/*",
+    "src/preload/**/*",
+    "src/engine/**/*",
+    "src/shared/**/*",
+    "electron.vite.config.ts",
+    "vitest.config.ts"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  // Renderer (React UI).
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": [],
+    "jsx": "react-jsx",
+    "tsBuildInfoFile": "out/tsc/web.tsbuildinfo"
+  },
+  "include": ["src/renderer/src/**/*", "src/shared/**/*"]
+}

@@ -1,0 +1,10 @@
+{
+  // Engine and shared contract only: Node types, no DOM, no Electron.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "tsBuildInfoFile": "out/tsc/engine.tsbuildinfo"
+  },
+  "include": ["src/engine/**/*", "src/shared/**/*"]
+}

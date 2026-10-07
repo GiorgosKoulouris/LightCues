@@ -9,3 +9,9 @@ MIDI input in the engine process (@julusian/midi). Select the input port (rtpMID
 
 - Trigger behaviour is unit-tested with synthetic MIDI messages.
 - Port loss and return are surfaced in the UI.
+
+## Comments
+
+### 2026-10-07: from issue 01
+
+Whichever of 06 and 10 lands first adds the first native module. Add a `postinstall` step that rebuilds it for Electron on the Windows host (`docs/setup.md` §6). In the devcontainer, engine tests run under plain Node, so the module must stay built for Node there.

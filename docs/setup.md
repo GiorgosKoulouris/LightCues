@@ -62,8 +62,54 @@ git clone <repo-url> LightCues
 cd LightCues
 git switch dev
 npm install
+npm run dev
 ```
 
-The scaffold should rebuild native modules for Electron on install (e.g. a `postinstall` step). If that fails, the cause is usually step 2.
+The window should show "Engine replied in N ms". That confirms the engine process is running.
 
-Note: the app is not scaffolded yet (issue `.scratch/mvp/issues/01-scaffold.md`). Until then there is no `package.json` and nothing to install or run. Once it lands, the run, test and lint commands will be in `package.json` scripts.
+No native modules are installed yet. When the first one lands (`serialport` or `@julusian/midi`), add a `postinstall` step that rebuilds it for Electron. If that fails, the cause is usually step 2.
+
+## 7. Commands
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Start the app with hot reload. Windows host only. |
+| `npm run build` | Build main, engine, preload and renderer into `out/`. |
+| `npm start` | Run the built app. Windows host only. |
+| `npm test` | Run the test suite (Vitest). |
+| `npm run typecheck` | Typecheck engine, Electron side and renderer separately. |
+| `npm run lint` | ESLint. Also blocks Electron/UI imports in `src/engine` and `src/shared`. |
+| `npm run format` | Prettier. |
+
+## 8. Source layout
+
+| Path | Runs in | Notes |
+| --- | --- | --- |
+| `src/shared/` | everywhere | Typed message contract (`protocol.ts`) and the Fixture Profile model (`fixture-profile.ts`). |
+| `src/engine/` | engine utilityProcess | No Electron or UI imports. Testable under plain Node. Includes OFL import and the Profile Library. |
+| `src/main/` | Electron main | Window, engine process start-up (`engine-process.ts` is the utilityProcess entry). |
+| `src/preload/` | renderer, isolated | Exposes `window.engine` (send commands, receive events). |
+| `src/renderer/` | renderer | React UI. |
+
+The UI talks to the engine over a direct MessagePort; main only hands out the ports.
+
+## 9. Troubleshooting
+
+### `npm run dev` fails with `Error: Electron uninstall`
+
+The Electron binary was not downloaded. The `electron` package's install script downloads it and writes `node_modules\electron\path.txt`; electron-vite reports "Electron uninstall" when that file is missing.
+
+Fix:
+
+```powershell
+node node_modules\electron\install.js
+npm run dev
+```
+
+If the download is skipped or fails, check:
+
+| Check | Expected | If not |
+| --- | --- | --- |
+| `$env:ELECTRON_SKIP_BINARY_DOWNLOAD` | empty | This is set on purpose in the devcontainer only. Remove it from the host environment. |
+| `npm config get ignore-scripts` | `false` | `npm config set ignore-scripts false`, then `npm install`. |
+| `Test-Path node_modules\electron\dist\electron.exe` | `True` | The download failed. Check proxy, firewall or antivirus. |

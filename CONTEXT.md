@@ -14,6 +14,10 @@ _Avoid_: Figure, light, device
 The manufacturer/model definition of a fixture type: its modes, channels and capabilities.
 _Avoid_: Fixture definition, personality
 
+**Profile Library**:
+The app-level collection of Fixture Profiles, imported from the Open Fixture Library or made by hand. A Venue Patch embeds copies of the Profiles it uses, so it does not depend on the library.
+_Avoid_: Fixture library, catalogue
+
 **Universe**:
 One independent set of 512 DMX channels.
 
