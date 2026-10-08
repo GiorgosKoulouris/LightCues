@@ -23,3 +23,7 @@ Uses the five default triage roles (needs-triage, needs-info, ready-for-agent, r
 ### Domain docs
 
 Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### Staging
+
+Squash `dev` into 4-5 commits on a `stage` branch before merging to `main`. No AI co-author trailers in staged commits. See `docs/agents/staging.md`.

@@ -58,7 +58,7 @@ Not needed for engine work. The engine is testable without hardware.
 ## 6. Project
 
 ```powershell
-git clone <repo-url> LightCues
+git clone https://github.com/GiorgosKoulouris/LightCues.git LightCues
 cd LightCues
 git switch dev
 npm install
@@ -71,15 +71,7 @@ The window should show "Engine replied in N ms". That confirms the engine proces
 
 ## 7. Commands
 
-| Command | What it does |
-| --- | --- |
-| `npm run dev` | Start the app with hot reload. Windows host only. |
-| `npm run build` | Build main, engine, preload and renderer into `out/`. |
-| `npm start` | Run the built app. Windows host only. |
-| `npm test` | Run the test suite (Vitest). |
-| `npm run typecheck` | Typecheck engine, Electron side and renderer separately. |
-| `npm run lint` | ESLint. Also blocks Electron/UI imports in `src/engine` and `src/shared`. |
-| `npm run format` | Prettier. |
+See [Commands in the README](../README.md#commands).
 
 ## 8. Source layout
 
