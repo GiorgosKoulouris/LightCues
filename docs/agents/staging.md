@@ -2,6 +2,8 @@
 
 `dev` collects many small commits (feature, review fixes, issue tracker updates). Before work reaches `main`, it is squashed on a `stage` branch into a few commits (4-5 max). `dev` is not touched during staging.
 
+If the batch is a release, bump the version on `dev` first and tag after the merge. See [releasing.md](releasing.md).
+
 ## Flow
 
 1. **Check `dev` is clean.** `git status` on `dev` shows nothing. Commit or ask first.
@@ -27,4 +29,10 @@
    git log --format=%B main..stage | grep -i co-authored   # must be empty
    git log --oneline main..stage      # 4-5 commits
    ```
-7. **Merge and clean up.** When the user asks: fast-forward `main` to `stage` (`git checkout main && git merge --ff-only stage`), push `main`, reset `dev` to `main`, then delete `stage` (`git branch -d stage`). `stage` exists only for the squash.
+7. **Push `stage` and wait for CI.**
+   ```sh
+   git push --force-with-lease origin stage
+   ```
+   The push runs CI (see [README § CI](../../README.md#ci)). Wait for a green run. If the batch touches the app, download the `LightCues-Setup-<version>` artifact from the run (kept 7 days), install it on Windows and check the app starts.
+8. **Merge and clean up.** When the user asks: fast-forward `main` to `stage` (`git checkout main && git merge --ff-only stage`), push `main`, reset `dev` to `main` (and `git push --force-with-lease origin dev` if `dev` is on the remote), then delete `stage` locally and on the remote (`git branch -d stage && git push origin --delete stage`). `stage` exists only for the squash and its CI run.
+9. **Tag, if this is a release.** See [releasing.md](releasing.md).

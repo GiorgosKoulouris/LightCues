@@ -1,0 +1,38 @@
+# Windows installer. Run `npm run package`; output goes to dist/.
+appId: io.github.giorgoskoulouris.lightcues
+copyright: Copyright (C) 2026 Georgios Koulouris. Licensed under GPL-3.0-only.
+directories:
+  output: dist
+files:
+  - out/**
+  - package.json
+  # Only the win32-x64 native prebuilds ship.
+  - '!node_modules/@serialport/bindings-cpp/prebuilds/!(win32-x64)/**'
+  - '!node_modules/@julusian/midi/prebuilds/!(midi-win32-x64)/**'
+  - '!node_modules/@julusian/midi/{src-cpp,vendor}/**'
+# The native modules load their .node files from disk, not from app.asar.
+asarUnpack:
+  - node_modules/@serialport/bindings-cpp/**
+  - node_modules/@julusian/midi/**
+extraResources:
+  - from: LICENSE
+    to: LICENSE.txt
+# Use the N-API prebuilds as shipped. A rebuild would need Windows build tools.
+npmRebuild: false
+win:
+  target:
+    - target: nsis
+      arch: x64
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  license: LICENSE
+  artifactName: ${productName}-Setup-${version}.${ext}
+# CI uploads the files to the GitHub Release (.github/workflows/release.yml).
+# This provider only makes electron-builder write latest.yml and the blockmap
+# for a future auto-updater. `npm run package` passes --publish never.
+publish:
+  provider: github
+  owner: GiorgosKoulouris
+  repo: LightCues

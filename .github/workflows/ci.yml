@@ -1,0 +1,88 @@
+# CI for `stage`, `main` and PRs. See docs/agents/staging.md and
+# docs/agents/releasing.md.
+# - Push to `stage`: check, package, upload the installer for an install test.
+# - PR to `main`: check only.
+# - Push to `main`: check, package, upload the installer, warn on untagged code.
+# - Push to `dev`: nothing.
+# Tags are released by release.yml.
+name: CI
+
+on:
+  push:
+    branches: [stage, main]
+  pull_request:
+    branches: [main]
+
+# `stage` is force-pushed each staging round. Only the latest push matters.
+# Every push to `main` builds to the end: its own group, so a newer push can't
+# cancel a queued one.
+concurrency:
+  group: ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The drift check on `main` needs history and tags.
+          fetch-depth: ${{ github.ref == 'refs/heads/main' && '0' || '1' }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # Release dry-run: the version must be valid semver.
+      - name: Check package.json version
+        id: version
+        if: github.event_name == 'push'
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if ! [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error file=package.json::Version '$version' is not valid semver (X.Y.Z, optional -prerelease)."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # Code on `main` that no `v*` tag covers yet. A warning, not a failure:
+      # the tag is pushed by hand a few minutes after the merge.
+      - name: Check for untagged code
+        if: github.ref == 'refs/heads/main'
+        run: |
+          if [ -n "$(git tag --points-at HEAD --list 'v*')" ]; then
+            exit 0
+          fi
+          last=$(git describe --tags --abbrev=0 --match 'v*' HEAD 2>/dev/null || true)
+          if [ -z "$last" ]; then
+            echo "::warning::No v* tag on main yet. Tag a release (docs/agents/releasing.md)."
+            exit 0
+          fi
+          changed=$(git diff --name-only "$last" HEAD -- . ':!docs' ':!.scratch' ':!.github' ':!*.md')
+          if [ -n "$changed" ]; then
+            count=$(echo "$changed" | wc -l)
+            echo "::warning::$count file(s) outside docs/, .scratch/, .github/ and *.md changed since $last and are not released. Tag a release (docs/agents/releasing.md)."
+            echo "$changed"
+          fi
+
+      - run: npm ci
+
+      - run: npm run check
+
+      - run: npm run package
+        if: github.event_name == 'push'
+
+      - uses: actions/upload-artifact@v5
+        if: github.event_name == 'push'
+        with:
+          name: LightCues-Setup-${{ steps.version.outputs.version }}
+          path: dist/LightCues-Setup-${{ steps.version.outputs.version }}.exe
+          if-no-files-found: error
+          retention-days: 7

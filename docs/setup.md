@@ -69,6 +69,8 @@ The window should show "Engine replied in N ms". That confirms the engine proces
 
 `serialport` and `@julusian/midi` ship N-API prebuilds (win32-x64 included). N-API binaries load in both Node and Electron, so there is no rebuild step: the same install serves `npm test` and `npm run dev`. A native module without N-API prebuilds needs a `postinstall` step that rebuilds it for Electron. If that fails, the cause is usually step 2.
 
+`dependencies` lists only the packages main and the engine load at runtime. They ship in the installer. Renderer packages (React, Radix, …) go in `devDependencies`, because Vite bundles them into the renderer. A new native module also needs adding to `asarUnpack` and the prebuild filters in `electron-builder.yml`.
+
 ## 7. Commands
 
 See [Commands in the README](../README.md#commands).

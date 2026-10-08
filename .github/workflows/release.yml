@@ -1,0 +1,79 @@
+# Publish a GitHub Release for a `vX.Y.Z` tag. See docs/agents/releasing.md
+# and docs/adr/0006-tag-driven-releases.md.
+# The tag must equal `v` + the package.json version and point to a commit on
+# `main`. The installer is built from the tagged commit, never reused from a
+# `main` run.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+# One run per tag. A re-pushed tag must not race the first run.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The `main` check needs the full history of origin/main.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Check tag
+        id: tag
+        run: |
+          tag="$GITHUB_REF_NAME"
+          version=$(node -p "require('./package.json').version")
+          if ! [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error file=package.json::Version '$version' is not valid semver (X.Y.Z, optional -prerelease)."
+            exit 1
+          fi
+          if [ "$tag" != "v$version" ]; then
+            echo "::error::Tag $tag does not match package.json version $version. Expected v$version."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$(git rev-parse "$tag^{commit}")" origin/main; then
+            echo "::error::Tag $tag points to a commit that is not on main."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - run: npm ci
+
+      - run: npm run check
+
+      - run: npm run package
+
+      # A suffix (v0.3.0-rc.1) makes a prerelease. Build metadata (+...) does not.
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          prerelease=()
+          if [[ "${VERSION%%+*}" == *-* ]]; then
+            prerelease=(--prerelease)
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --verify-tag \
+            --title "LightCues $VERSION" \
+            --generate-notes \
+            "${prerelease[@]}" \
+            "dist/LightCues-Setup-$VERSION.exe" \
+            "dist/LightCues-Setup-$VERSION.exe.blockmap" \
+            dist/latest.yml

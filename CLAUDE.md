@@ -27,3 +27,7 @@ Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/ag
 ### Staging
 
 Squash `dev` into 4-5 commits on a `stage` branch before merging to `main`. No AI co-author trailers in staged commits. See `docs/agents/staging.md`.
+
+### Releasing
+
+A release is a `vX.Y.Z` tag on `main` that equals `v` + the `package.json` version. Bump the version in the staged batch, merge, then tag by hand. See `docs/agents/releasing.md`.
