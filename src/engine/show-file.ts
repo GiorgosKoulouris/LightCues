@@ -1,10 +1,11 @@
 import { validateShow, type Colour, type Show } from '../shared/show';
 
 // The .lcshow file: a Show as versioned JSON. Version 2 added the default
-// colour and version 3 the Fallback Panel's Scene buttons; older files load without them.
+// colour, version 3 the Fallback Panel's Scene buttons and version 4 Rule
+// Directions and the Default Direction; older files load without them.
 
-const VERSION = 3;
-const VERSIONS = [1, 2, VERSION];
+const VERSION = 4;
+const VERSIONS = [1, 2, 3, VERSION];
 
 interface ShowFile extends Show {
   version: number;
@@ -72,6 +73,7 @@ function unknownFields(file: ShowFile): string[] {
     ['version', 'layers', 'scenes', 'triggers', 'baseLook'],
     ['defaultColour'],
     ['panelScenes'],
+    ['defaultDirection'],
   ];
   allow(file, added.slice(0, file.version).flat(), '');
   if (file.version !== 1 && file.defaultColour !== undefined) {
@@ -82,7 +84,7 @@ function unknownFields(file: ShowFile): string[] {
     allow(scene, ['id', 'name', 'tags', 'layer', 'fadeIn', 'rules'], `scenes[${i}].`);
     scene.rules.forEach(({ target, colour, ...rest }, j) => {
       const at = `scenes[${i}].rules[${j}].`;
-      allow(rest, ['intensity'], at);
+      allow(rest, file.version >= 4 ? ['intensity', 'direction'] : ['intensity'], at);
       allow(target, ['zones', 'roles'], `${at}target.`);
       target.zones?.forEach((zone, k) => {
         allow(zone, ['row', 'column', 'level'], `${at}target.zones[${k}].`);

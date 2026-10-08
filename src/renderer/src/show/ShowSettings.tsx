@@ -1,6 +1,6 @@
 import { Settings2, X } from 'lucide-react';
 import type { ShowEdit } from '../../../shared/protocol';
-import { MAX_PANEL_SCENES, type Show } from '../../../shared/show';
+import { DEFAULT_DIRECTION, DIRECTIONS, MAX_PANEL_SCENES, type Show } from '../../../shared/show';
 import { Button, IconButton } from '../ui/Button';
 import { Popover } from '../ui/Popover';
 import { Select } from '../ui/Select';
@@ -10,7 +10,8 @@ import { sceneName } from './scenes';
 import styles from './ShowSettings.module.css';
 
 // The Show-wide settings, in a popover from the view header: Base Look,
-// Default Colour and the Fallback Panel's Scene buttons in drag order.
+// Default Colour, Default Direction and the Fallback Panel's Scene buttons in
+// drag order.
 export function ShowSettings({ show, onEdit }: { show: Show; onEdit(edit: ShowEdit): void }) {
   const panelScenes = show.panelScenes ?? [];
   const nameOf = (id: string) => sceneName(show, id);
@@ -39,6 +40,12 @@ export function ShowSettings({ show, onEdit }: { show: Show; onEdit(edit: ShowEd
           unset="White"
           colour={show.defaultColour}
           onChange={(colour) => onEdit({ type: 'setDefaultColour', colour })}
+        />
+        <Select
+          label="Default Direction"
+          value={show.defaultDirection ?? DEFAULT_DIRECTION}
+          options={DIRECTIONS.map((d) => ({ value: d, label: d }))}
+          onChange={(direction) => onEdit({ type: 'setDefaultDirection', direction })}
         />
         <section className={styles.panel} aria-label="Fallback Panel Scenes">
           <h3 className={styles.heading}>Fallback Panel Scenes</h3>

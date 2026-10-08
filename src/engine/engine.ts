@@ -71,6 +71,7 @@ export function createEngine({
     emit,
     now,
     changed: () => outputs?.patchChanged(),
+    replaced: () => playback.venueReplaced(),
     files: venueFiles,
     recent: recentFiles.of('venue'),
     libraryProfile: (id) => library.get(id),
@@ -201,6 +202,7 @@ export function createEngine({
         case 'setMode':
         case 'setGrandMaster':
         case 'setBlackout':
+        case 'setFocusCheck':
           playback.handle(command);
           break;
         case 'listOutputs':

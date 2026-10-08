@@ -1,5 +1,6 @@
 import { XMLParser } from 'fast-xml-parser';
 import { strFromU8, unzipSync } from 'fflate';
+import { isDeepStrictEqual } from 'node:util';
 import {
   DMX_MAX_VALUE,
   type Capability,
@@ -491,9 +492,13 @@ function importRanges(
   starts.forEach(({ start, capability }, i) => {
     // Ranges are 8-bit, so a finer one may share its coarse value with the
     // previous one; the earlier range keeps it.
-    const from = Math.max(toCoarse(start, width), (ranges.at(-1)?.to ?? -1) + 1);
+    const previous = ranges.at(-1);
+    const from = Math.max(toCoarse(start, width), (previous?.to ?? -1) + 1);
     const to = toCoarse((starts[i + 1]?.start ?? end) - 1, width);
-    if (from <= to) ranges.push({ from, to, capability });
+    if (from > to) return;
+    // Adjacent ranges with the same capability read as one.
+    if (previous && isDeepStrictEqual(previous.capability, capability)) previous.to = to;
+    else ranges.push({ from, to, capability });
   });
   return ranges;
 }
@@ -505,7 +510,7 @@ function channelSetImporter(
   wheels: Wheels,
 ): ((channelSet: GdtfChannelSet) => Capability) | undefined {
   const attribute = channelFunction.Attribute ?? '';
-  if (SHUTTER.test(attribute)) return (channelSet) => shutter(attribute, channelSet.Name);
+  if (SHUTTER.test(attribute)) return (channelSet) => shutter(channelFunction, channelSet);
   if (COLOUR_WHEEL.test(attribute)) {
     const slots = wheels.get(channelFunction.Wheel ?? '');
     return (channelSet) => wheelSlot(attribute, channelSet, slots);
@@ -522,7 +527,7 @@ function importCapability(channelFunction: GdtfChannelFunction): Capability {
   };
   const emitter = EMITTERS[attribute];
   if (emitter) return { type: 'emitter', emitter };
-  if (SHUTTER.test(attribute)) return shutter(attribute, channelFunction.Name);
+  if (SHUTTER.test(attribute)) return shutter(channelFunction);
   if (STROBE.test(attribute)) return { type: 'strobe', hz: physical() };
   switch (attribute) {
     case 'NoFeature':
@@ -543,11 +548,23 @@ const COLOUR_WHEEL = /^Color\d+$/;
 // Shutter1Strobe, Shutter1StrobePulse, Shutter1StrobeRandom and the like.
 const STROBE = /^Shutter\d+Strobe/;
 
-// Open or Closed, read from the function or channel set name.
-function shutter(attribute: string, name = ''): Capability {
-  if (/open/i.test(name)) return { type: 'shutter', effect: 'open' };
-  if (/clos/i.test(name)) return { type: 'shutter', effect: 'closed' };
-  return unsupported(`${attribute} ${name}`.trim());
+// Open or Closed, read from the channel set name, else the function name,
+// else the function's physical value: 1 is open and 0 closed.
+function shutter(channelFunction: GdtfChannelFunction, channelSet?: GdtfChannelSet): Capability {
+  const attribute = channelFunction.Attribute ?? '';
+  const from = parseFloat(channelFunction.PhysicalFrom ?? '');
+  const to = parseFloat(channelFunction.PhysicalTo ?? '');
+  const physical =
+    from !== to ? undefined : from === 1 ? 'open' : from === 0 ? 'closed' : undefined;
+  const effect = shutterEffect(channelSet?.Name) ?? shutterEffect(channelFunction.Name) ?? physical;
+  if (effect) return { type: 'shutter', effect };
+  return unsupported(`${attribute} ${channelSet?.Name ?? channelFunction.Name ?? ''}`.trim());
+}
+
+function shutterEffect(name = ''): 'open' | 'closed' | undefined {
+  if (/open/i.test(name)) return 'open';
+  if (/clos/i.test(name)) return 'closed';
+  return undefined;
 }
 
 // Split colours sit between slots: no slot index, or 0. An open slot is

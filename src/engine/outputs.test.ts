@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { FixtureProfile } from '../shared/fixture-profile';
-import type { EngineCommand, EngineEvent, OutputStatus, ShowEdit } from '../shared/protocol';
+import type { CapabilityRange, Channel, FixtureProfile } from '../shared/fixture-profile';
+import type {
+  EngineCommand,
+  EngineEvent,
+  OutputStatus,
+  ShowEdit,
+  VenueEdit,
+} from '../shared/protocol';
 import type { Scene } from '../shared/show';
-import type { PatchedFixture, Universe } from '../shared/venue-patch';
+import { DEFAULT_MOUNTING, type PatchedFixture, type Universe } from '../shared/venue-patch';
 import { createEngine } from './engine';
 import { encodeSendDmx } from './enttec';
 import type { SerialPortInfo, SerialPorts } from './outputs';
@@ -592,5 +598,233 @@ describe('engine preview', () => {
     );
     expect(a!.length).toBeGreaterThan(110);
     expect(a).toEqual(b);
+  });
+});
+
+// Dimmer, shutter (closed 0–31, open 32–63), red, green, blue, pan, tilt.
+const mover: FixtureProfile = {
+  id: 'acme/mover',
+  manufacturer: 'Acme',
+  model: 'Mover',
+  defaultRole: 'Spot/Beam',
+  modes: [
+    {
+      name: '7ch',
+      channels: [
+        control('Dimmer', [{ from: 0, to: 255, capability: { type: 'intensity' } }]),
+        control('Shutter', [
+          { from: 0, to: 31, capability: { type: 'shutter', effect: 'closed' } },
+          { from: 32, to: 63, capability: { type: 'shutter', effect: 'open' } },
+        ]),
+        control('Red', [{ from: 0, to: 255, capability: { type: 'emitter', emitter: 'red' } }]),
+        control('Green', [{ from: 0, to: 255, capability: { type: 'emitter', emitter: 'green' } }]),
+        control('Blue', [{ from: 0, to: 255, capability: { type: 'emitter', emitter: 'blue' } }]),
+        control('Pan', [{ from: 0, to: 255, capability: { type: 'pan', degrees: [-270, 270] } }]),
+        control('Tilt', [{ from: 0, to: 255, capability: { type: 'tilt', degrees: [-135, 135] } }]),
+      ],
+    },
+  ],
+};
+
+function control(name: string, ranges: CapabilityRange[]): Channel {
+  return { kind: 'control', name, defaultValue: 0, ranges };
+}
+
+// The mover hung 6 m up on Stage Left at address 1, and a dimmer at 10, both
+// in Universe 1, sent to COM3. `cross` sets everything to 40% Red, aimed at
+// Cross; it is active. `files` stands in for the disk, by path.
+async function focusEngine() {
+  const serial = fakeSerial();
+  const events: EngineEvent[] = [];
+  const files = new Map<string, string>();
+  const engine = createEngine({
+    emit: (e) => events.push(e),
+    now: () => Date.now(),
+    serialPorts: serial.ports,
+    venueFiles: {
+      read: (path) => files.get(path) ?? '',
+      write: (path, json) => void files.set(path, json),
+    },
+  });
+  let requestId = 1;
+  engine.handle({ type: 'saveProfile', requestId: requestId++, profile: dimmer });
+  engine.handle({ type: 'saveProfile', requestId: requestId++, profile: mover });
+  const moverFixture: PatchedFixture = {
+    ...{ id: 'm1', name: 'Mover 1', profileId: 'acme/mover', mode: '7ch' },
+    ...{ universe: 1, address: 1, x: 3, y: 4, height: 6 },
+  };
+  const editVenue = (edit: VenueEdit) =>
+    engine.handle({ type: 'editVenue', requestId: requestId++, edit });
+  editVenue({ type: 'putUniverse', universe: { number: 1, output: 'EN1' } });
+  editVenue({ type: 'putFixture', fixture: moverFixture });
+  editVenue({
+    type: 'putFixture',
+    fixture: {
+      ...{ id: 'd1', name: 'Dimmer 1', profileId: 'acme/dimmer', mode: '1ch' },
+      ...{ universe: 1, address: 10, x: 0, y: 1, height: 0 },
+    },
+  });
+  const cross: Scene = {
+    ...{ id: 'cross', name: 'Cross', tags: [], layer: 'layer-1', fadeIn: 0 },
+    rules: [{ target: {}, intensity: 0.4, colour: { swatch: 'Red' }, direction: 'Cross' }],
+  };
+  engine.handle({
+    type: 'editShow',
+    requestId: requestId++,
+    edit: { type: 'putScene', scene: cross },
+  });
+  engine.handle({ type: 'goScene', sceneId: 'cross' });
+  serial.plug('COM3', 'EN1');
+  await vi.advanceTimersByTimeAsync(1000);
+
+  return {
+    events,
+    files,
+    editProfile: (profile: FixtureProfile) =>
+      engine.handle({ type: 'saveProfile', requestId: requestId++, profile }),
+    moverFixture,
+    editVenue,
+    send: (command: EngineCommand) => engine.handle(command),
+    // The mover's 7 channels in the latest frame sent.
+    moverChannels: () => [...(serial.port('COM3')?.writes.at(-1)?.subarray(5, 12) ?? [])],
+    // The dimmer's level in the latest frame sent.
+    dimmer: () => serial.port('COM3')?.writes.at(-1)?.[14],
+    // The Focus Check the engine reported last.
+    focusCheck() {
+      const event = events.findLast((e) => e.type === 'playback');
+      return event?.type === 'playback' ? event.focusCheck : undefined;
+    },
+  };
+}
+
+// Full, shutter open (the middle of 32–63), white, pan and tilt at the centre.
+const FOCUS_DOWN = [255, 47, 255, 255, 255, 128, 128];
+
+describe('engine Focus Check', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('sends every mover open in white to the Direction, leaving the others to the Show', async () => {
+    const { send, moverChannels, dimmer, focusCheck } = await focusEngine();
+    const showing = moverChannels();
+    expect(showing.slice(0, 5)).toEqual([102, 47, 255, 0, 0]);
+
+    send({ type: 'setFocusCheck', direction: 'Down' });
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(moverChannels()).toEqual(FOCUS_DOWN);
+    expect(dimmer()).toBe(102);
+    expect(focusCheck()).toBe('Down');
+
+    send({ type: 'setFocusCheck' });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(moverChannels()).toEqual(showing);
+    expect(focusCheck()).toBeUndefined();
+  });
+
+  it('reaches the Outputs in Blind too, which still hold the others', async () => {
+    const { send, moverChannels, dimmer } = await focusEngine();
+    const held = moverChannels();
+    send({ type: 'setMode', mode: 'blind' });
+    send({ type: 'clearLayer', layerId: 'layer-1' });
+
+    send({ type: 'setFocusCheck', direction: 'Down' });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(moverChannels()).toEqual(FOCUS_DOWN);
+    expect(dimmer()).toBe(102);
+
+    send({ type: 'setFocusCheck' });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(moverChannels()).toEqual(held);
+  });
+
+  it('goes dark under Blackout, in Monitor and in Blind', async () => {
+    const { send, moverChannels, dimmer } = await focusEngine();
+    send({ type: 'setFocusCheck', direction: 'Down' });
+    const dark = [0, ...FOCUS_DOWN.slice(1)];
+
+    send({ type: 'setBlackout', on: true });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(moverChannels()).toEqual(dark);
+    expect(dimmer()).toBe(0);
+
+    send({ type: 'setMode', mode: 'blind' });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(moverChannels()).toEqual(dark);
+
+    send({ type: 'setBlackout', on: false });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(moverChannels()).toEqual(FOCUS_DOWN);
+  });
+
+  it('follows edits to position, Mounting and Profile live', async () => {
+    const { send, editVenue, editProfile, moverFixture, moverChannels } = await focusEngine();
+    send({ type: 'setFocusCheck', direction: 'Centre' });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(moverChannels().slice(5)).not.toEqual([128, 128]);
+
+    // Straight above centre stage (the stage is 8 m deep): the beam drops along the yoke axis.
+    editVenue({ type: 'moveFixture', id: 'm1', position: { x: 0, y: 4, height: 6 } });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(moverChannels().slice(5)).toEqual([128, 128]);
+
+    // Tilt 27° off: -27° of the 270° range is 40% across it.
+    editVenue({
+      type: 'putFixture',
+      fixture: {
+        ...moverFixture,
+        x: 0,
+        y: 4,
+        mounting: { ...DEFAULT_MOUNTING, tiltOffset: 27 },
+      },
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(moverChannels().slice(5)).toEqual([128, 102]);
+
+    // Tilt over 180° instead: -27° is 35% across it.
+    const narrow = structuredClone(mover);
+    narrow.id = 'acme/narrow-mover';
+    narrow.modes[0]!.channels[6] = control('Tilt', [
+      { from: 0, to: 255, capability: { type: 'tilt', degrees: [-90, 90] } },
+    ]);
+    editProfile(narrow);
+    editVenue({
+      type: 'putFixture',
+      fixture: {
+        ...moverFixture,
+        profileId: narrow.id,
+        x: 0,
+        y: 4,
+        mounting: { ...DEFAULT_MOUNTING, tiltOffset: 27 },
+      },
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(moverChannels().slice(5)).toEqual([128, 89]);
+  });
+
+  it('ends on New and Open of a Venue Patch', async () => {
+    const { send, focusCheck } = await focusEngine();
+    send({ type: 'setFocusCheck', direction: 'Up' });
+    send({ type: 'saveVenue', requestId: 100, path: 'rig.lcvenue' });
+
+    send({ type: 'openVenue', requestId: 101, path: 'rig.lcvenue' });
+    expect(focusCheck()).toBeUndefined();
+
+    send({ type: 'setFocusCheck', direction: 'Up' });
+    send({ type: 'newVenue' });
+    expect(focusCheck()).toBeUndefined();
+  });
+
+  it('is neither saved with the Venue Patch nor undone', async () => {
+    const { send, files, editVenue, focusCheck } = await focusEngine();
+    send({ type: 'setFocusCheck', direction: 'Up' });
+
+    send({ type: 'saveVenue', requestId: 100, path: 'rig.lcvenue' });
+    expect(files.get('rig.lcvenue')).not.toContain('Up');
+    editVenue({ type: 'setStage', stage: { width: 14, depth: 8 } });
+    send({ type: 'undoVenue' });
+    send({ type: 'redoVenue' });
+
+    expect(focusCheck()).toBe('Up');
   });
 });

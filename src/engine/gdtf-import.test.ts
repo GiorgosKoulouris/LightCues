@@ -160,6 +160,61 @@ describe('importGdtfFixture', () => {
     expect(unsupported).toEqual([]);
   });
 
+  it('reads shutter sets without Open or Closed in their name from the function', () => {
+    // As in the FOS Wash LED Quad III: an "Off" set and an unnamed set.
+    const { profile, unsupported } = importGdtfFixture(
+      gdtf(
+        { Manufacturer: 'Generic', Name: 'Wash' },
+        mode(
+          '2ch',
+          channel(
+            '1',
+            'Shutter1',
+            channelFunction(
+              'Shutter1',
+              '0/1',
+              { Name: 'Shutter Open' },
+              channelSet('Off', '0/1'),
+              channelSet('', '1/1'),
+            ),
+            channelFunction('Shutter1Strobe', '4/1', { PhysicalFrom: '0', PhysicalTo: '15' }),
+          ),
+          channel(
+            '2',
+            'Shutter2',
+            channelFunction(
+              'Shutter2',
+              '0/1',
+              { PhysicalFrom: '0', PhysicalTo: '0' },
+              channelSet('', '0/1'),
+            ),
+            channelFunction(
+              'Shutter2',
+              '128/1',
+              { PhysicalFrom: '1', PhysicalTo: '1' },
+              channelSet('', '128/1'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    const [shutter1, shutter2] = profile.modes[0]!.channels;
+    expect(shutter1).toMatchObject({
+      ranges: [
+        { from: 0, to: 3, capability: { type: 'shutter', effect: 'open' } },
+        { from: 4, to: 255, capability: { type: 'strobe', hz: [0, 15] } },
+      ],
+    });
+    expect(shutter2).toMatchObject({
+      ranges: [
+        { from: 0, to: 127, capability: { type: 'shutter', effect: 'closed' } },
+        { from: 128, to: 255, capability: { type: 'shutter', effect: 'open' } },
+      ],
+    });
+    expect(unsupported).toEqual([]);
+  });
+
   it('reports unmapped attributes and virtual channels instead of dropping them', () => {
     const { profile, unsupported } = importGdtfFixture(
       gdtf(

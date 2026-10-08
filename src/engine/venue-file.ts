@@ -2,8 +2,12 @@ import { validatePatch, type VenuePatch } from '../shared/venue-patch';
 
 // The .lcvenue file: a Venue Patch as versioned JSON. The patch embeds its
 // Profiles, so a file opens without the Profile Library.
+//
+// Version 2 adds each Fixture's optional Mounting. Version 1 files still
+// load; their Fixtures have none.
 
-const VERSION = 1;
+const VERSION = 2;
+const READABLE_VERSIONS = [1, 2];
 
 interface VenueFile extends VenuePatch {
   version: number;
@@ -19,7 +23,9 @@ export function saveVenueFile(patch: VenuePatch): string {
 // Throws when the file is of an unknown version or its patch is invalid.
 export function loadVenueFile(json: string): VenuePatch {
   const { version, ...patch } = JSON.parse(json) as VenueFile;
-  if (version !== VERSION) throw new Error(`Unsupported Venue Patch version: ${version}`);
+  if (!READABLE_VERSIONS.includes(version)) {
+    throw new Error(`Unsupported Venue Patch version: ${version}`);
+  }
   if (!hasParts(patch)) {
     throw new Error('Invalid Venue Patch: stage, universes, fixtures and profiles are required');
   }

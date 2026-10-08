@@ -47,8 +47,15 @@ _Avoid_: Cue, preset
 One part of a Scene: a target (Zones × Roles) and the settings applied to it (intensity, colour, Direction, effect). Later Rules in a Scene override earlier ones.
 
 **Effect**:
-A time-varying change within a Rule, timed in beats. A spatial Effect is ordered by Fixture positions on stage (e.g. a left-to-right wave).
+A time-varying change within a Rule, timed in beats of the Tempo. A movement Effect (Circle, Pan sweep, Tilt sweep, Ballyhoo) runs around a base Direction, which may come from another Scene; its size is in degrees and its length in beats. Sequences over time are not Effects: the DAW sequences Scenes through Triggers. A spatial Effect is ordered by Fixture positions on stage (e.g. a left-to-right wave).
 _Avoid_: Chase (a kind of Effect), FX
+
+**Focus Check**:
+A Venue Patch editor mode that sends every moving Fixture, open in white, to one chosen Direction on the real rig, in Blind too, so placement and Mounting can be corrected live. Blackout still wins. Ends when the editor is left.
+
+**Spread**:
+How an Effect is offset across the Fixtures it targets, by their stage positions: In sync, Left→Right, Mirrored (centre out) or Alternate.
+_Avoid_: Phase, wings
 
 **Zone**:
 A cell of the fixed stage grid: rows Front/Downstage/Midstage/Upstage × columns Stage Left/Centre/Stage Right × levels Floor/Overhead. The grid scales to each venue's stage bounds. A Fixture belongs to the Zone it is physically in, not the one it lights.
@@ -59,8 +66,19 @@ A Fixture's function, from a fixed list: Wash, Spot/Beam, Blinder, Strobe, Pixel
 _Avoid_: Type, group
 
 **Direction**:
-A named aim from a fixed vocabulary (Down, Audience, Up, Cross), recorded per moving Fixture in the Venue Patch and referenced by Scenes.
+A named aim from a fixed vocabulary (Down, Audience, Up, Cross, Centre, Out), referenced by Scenes. A moving Fixture is one with a pan or tilt channel; it uses the axes it has. Each moving Fixture's pan/tilt for a Direction is computed from its stage position and Mounting, not stored per Fixture, so correcting a Fixture's placement corrects every Direction at once. Down and Up are straight down and up; Audience points each beam straight out at the audience; Cross aims each beam at the mirror point across centre stage; Centre converges every beam on centre stage; Out points away from centre into the audience. An aim a Fixture cannot reach is approximated and reported in the Venue Check.
 _Avoid_: Position, preset, palette
+
+**Mounting**:
+How a moving Fixture is physically installed, recorded in the Venue Patch: Hung or Standing, the rotation of its base, pan/tilt inversion, and a pan/tilt offset for a fixture whose own zero is off. With its stage position, enough to compute where it points.
+_Avoid_: Orientation, hang
+
+**Tempo**:
+The beats per minute that Effects run to. Taken from the MIDI Input's MIDI Clock when present, otherwise set by Tap Tempo, which also overrides it. When the clock is lost, the last Tempo holds.
+_Avoid_: BPM, speed
+
+**Freeze**:
+Stops every movement Effect where it is, until turned off. Directions still apply.
 
 **Layer**:
 A slot that holds at most one active Scene. Activating a Scene replaces the active Scene in its Layer; different Layers stack.
@@ -76,11 +94,14 @@ _Avoid_: MIDI device, controller
 The Scene designated as the safe fallback look, available from the Fallback Panel at any time. Going to it clears every other Layer.
 
 **Fallback Panel**:
-The always-visible manual controls that need no MIDI: Blackout, Base Look, Grand Master and a few Scene buttons chosen per Show, each with a keyboard shortcut. Also shows the MIDI Input status.
+The always-visible manual controls that need no MIDI: Blackout, Base Look, Grand Master, Tap Tempo, Freeze and a few Scene buttons chosen per Show, each with a keyboard shortcut. Also shows the MIDI Input status.
 _Avoid_: Manual panel, fader panel
 
 **Blackout**:
 Takes every Fixture's intensity to 0 until turned off, in Blind too. The active Scenes stay active.
+
+**Default Direction**:
+The Direction a Show gives moving Fixtures where no Rule sets one, and the base of a movement Effect with none. Down unless changed.
 
 **Default Colour**:
 The colour a Show gives Fixtures where no Rule sets one. White unless changed.

@@ -279,6 +279,21 @@ describe('Scene editor', () => {
     });
   });
 
+  it("sets a Rule's Direction, and leaves it to others when not set", async () => {
+    await selectWarm();
+    const direction = screen.getAllByLabelText('Direction')[0]!;
+    expect(direction).toHaveValue('');
+    await userEvent.selectOptions(direction, 'Audience');
+    expect(edits().at(-1)).toMatchObject({
+      type: 'putScene',
+      scene: { rules: [{ target: {}, intensity: 0.5, direction: 'Audience' }, {}] },
+    });
+    await userEvent.selectOptions(direction, 'Not set');
+    const put = edits().at(-1);
+    if (put?.type !== 'putScene') throw new Error('No Scene put');
+    expect(put.scene.rules[0]).toEqual({ target: {}, intensity: 0.5 });
+  });
+
   it('shows an engine error as a toast', async () => {
     await selectWarm();
     rejectWith = ['Scene "Warm" has no Rules'];
@@ -320,6 +335,14 @@ describe('Show settings', () => {
     const settings = await openSettings();
     await userEvent.selectOptions(within(settings).getByLabelText('Base Look'), 'Blue');
     expect(edits()).toEqual([{ type: 'setBaseLook', sceneId: 'blue' }]);
+  });
+
+  it('sets the Default Direction, Down unless changed', async () => {
+    const settings = await openSettings();
+    const direction = within(settings).getByLabelText('Default Direction');
+    expect(direction).toHaveValue('Down');
+    await userEvent.selectOptions(direction, 'Centre');
+    expect(edits()).toEqual([{ type: 'setDefaultDirection', direction: 'Centre' }]);
   });
 
   it('orders the Fallback Panel Scenes by drag, and adds and removes them', async () => {

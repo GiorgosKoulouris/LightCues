@@ -32,7 +32,10 @@ const show: Show = {
       tags: [],
       layer: 'accents',
       fadeIn: 0,
-      rules: [{ target: { roles: ['Blinder'] }, intensity: 1 }],
+      rules: [
+        { target: { roles: ['Blinder'] }, intensity: 1 },
+        { target: { roles: ['Spot/Beam'] }, direction: 'Audience' },
+      ],
     },
   ],
   triggers: [
@@ -42,8 +45,21 @@ const show: Show = {
   ],
   baseLook: 'verse',
   defaultColour: { hue: 30, saturation: 0.2 },
+  defaultDirection: 'Centre',
   panelScenes: ['hit', 'verse'],
 };
+
+// `show` as an older version had it, without Directions.
+function withoutDirections({ defaultDirection, ...rest }: Show): Show {
+  void defaultDirection;
+  return {
+    ...rest,
+    scenes: rest.scenes.map((scene) => ({
+      ...scene,
+      rules: scene.rules.filter((rule) => rule.direction === undefined),
+    })),
+  };
+}
 
 describe('.lcshow file', () => {
   it('round-trips a Show losslessly', () => {
@@ -53,8 +69,8 @@ describe('.lcshow file', () => {
   it('rejects a file of an unknown version', () => {
     const saved = JSON.parse(saveShowFile(show));
 
-    expect(() => loadShowFile(JSON.stringify({ ...saved, version: 4 }))).toThrow(
-      'Unsupported Show version: 4',
+    expect(() => loadShowFile(JSON.stringify({ ...saved, version: 5 }))).toThrow(
+      'Unsupported Show version: 5',
     );
     expect(() => loadShowFile(JSON.stringify({ ...show }))).toThrow(
       'Unsupported Show version: undefined',
@@ -62,23 +78,32 @@ describe('.lcshow file', () => {
   });
 
   it('loads a version 1 file, which has no default colour or panel Scenes', () => {
-    const { defaultColour, panelScenes, ...v1 } = show;
+    const { defaultColour, panelScenes, ...v1 } = withoutDirections(show);
     void defaultColour;
     void panelScenes;
 
     expect(loadShowFile(JSON.stringify({ version: 1, ...v1 }))).toEqual(v1);
-    expect(() => loadShowFile(JSON.stringify({ version: 1, ...show }))).toThrow(
+    expect(() => loadShowFile(JSON.stringify({ version: 1, ...withoutDirections(show) }))).toThrow(
       'Invalid Show:\nunknown field "defaultColour"\nunknown field "panelScenes"',
     );
   });
 
   it('loads a version 2 file, which has no panel Scenes', () => {
-    const { panelScenes, ...v2 } = show;
+    const { panelScenes, ...v2 } = withoutDirections(show);
     void panelScenes;
 
     expect(loadShowFile(JSON.stringify({ version: 2, ...v2 }))).toEqual(v2);
-    expect(() => loadShowFile(JSON.stringify({ version: 2, ...show }))).toThrow(
+    expect(() => loadShowFile(JSON.stringify({ version: 2, ...withoutDirections(show) }))).toThrow(
       'Invalid Show:\nunknown field "panelScenes"',
+    );
+  });
+
+  it('loads a version 3 file, which has no Directions', () => {
+    const v3 = withoutDirections(show);
+
+    expect(loadShowFile(JSON.stringify({ version: 3, ...v3 }))).toEqual(v3);
+    expect(() => loadShowFile(JSON.stringify({ version: 3, ...show }))).toThrow(
+      'Invalid Show:\nunknown field "defaultDirection"\nunknown field "scenes[1].rules[1].direction"',
     );
   });
 

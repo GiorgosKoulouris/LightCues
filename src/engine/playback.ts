@@ -5,12 +5,13 @@ import type {
   FixtureLight,
   PlaybackMode,
 } from '../shared/protocol';
-import { sameNote, type MidiNote, type Show, type Trigger } from '../shared/show';
+import { sameNote, type Direction, type MidiNote, type Show, type Trigger } from '../shared/show';
 import type { VenuePatch } from '../shared/venue-patch';
 import {
   activate,
   clamp,
   clearLayer,
+  focusCheckFrames,
   resolveFrames,
   resolveLights,
   type ActiveScene,
@@ -27,7 +28,8 @@ export type PlaybackCommand = Extract<
       | 'goBaseLook'
       | 'setMode'
       | 'setGrandMaster'
-      | 'setBlackout';
+      | 'setBlackout'
+      | 'setFocusCheck';
   }
 >;
 
@@ -52,7 +54,9 @@ interface Flash {
 // before switching, while the preview keeps showing the resolved Show.
 // Blackout resolves like a Grand Master at 0, so colours are kept for when it
 // is turned off. It reaches the Outputs in Blind too, as a safety control;
-// turned off there, they hold the frames from before again.
+// turned off there, they hold the frames from before again. The Focus Check
+// overrides the moving Fixtures on the Outputs in both modes, at full unless
+// Blackout is on. It is not part of the Show or the Venue Patch.
 export function createPlayback({ emit, now, show, patch }: PlaybackOptions) {
   let active: ActiveScenes = {};
   // By Layer id.
@@ -60,13 +64,21 @@ export function createPlayback({ emit, now, show, patch }: PlaybackOptions) {
   let mode: PlaybackMode = 'monitor';
   let grandMaster = 1;
   let blackout = false;
+  let focusCheck: Direction | undefined;
   let sent = new Map<number, Uint8Array>();
 
   function emitPlayback(): void {
     const scenes: ActiveByLayer = Object.fromEntries(
       Object.entries(active).map(([id, a]) => [id, a.scene]),
     );
-    emit({ type: 'playback', active: scenes, mode, grandMaster, blackout });
+    emit({
+      type: 'playback',
+      active: scenes,
+      mode,
+      grandMaster,
+      blackout,
+      ...(focusCheck === undefined ? {} : { focusCheck }),
+    });
   }
 
   // The Grand Master as resolved, Blackout included.
@@ -82,6 +94,10 @@ export function createPlayback({ emit, now, show, patch }: PlaybackOptions) {
     return now() / 1000;
   }
 
+  function go(from: ActiveScenes, sceneId: string): ActiveScenes {
+    return activate(from, show(), patch(), sceneId, seconds(), resolvedGrandMaster());
+  }
+
   return {
     handle(command: PlaybackCommand): void {
       switch (command.type) {
@@ -90,7 +106,7 @@ export function createPlayback({ emit, now, show, patch }: PlaybackOptions) {
         case 'goScene': {
           const layer = layerOf(command.sceneId);
           if (layer !== undefined) flashes.delete(layer);
-          active = activate(active, show(), command.sceneId, seconds());
+          active = go(active, command.sceneId);
           break;
         }
         case 'clearLayer':
@@ -101,10 +117,10 @@ export function createPlayback({ emit, now, show, patch }: PlaybackOptions) {
           const { baseLook } = show();
           const layer = baseLook === undefined ? undefined : layerOf(baseLook);
           if (baseLook === undefined || layer === undefined) break;
-          // Its own Layer crossfades into it; the others clear at once.
-          const own = active[layer];
+          // Its own Layer crossfades into it, from what all of them show; the
+          // others clear at once.
           flashes.clear();
-          active = activate(own ? { [layer]: own } : {}, show(), baseLook, seconds());
+          active = { [layer]: go(active, baseLook)[layer]! };
           break;
         }
         case 'setMode':
@@ -117,6 +133,9 @@ export function createPlayback({ emit, now, show, patch }: PlaybackOptions) {
         case 'setBlackout':
           blackout = command.on;
           break;
+        case 'setFocusCheck':
+          focusCheck = command.direction;
+          break;
       }
       emitPlayback();
     },
@@ -127,7 +146,7 @@ export function createPlayback({ emit, now, show, patch }: PlaybackOptions) {
       const previous = flashes.get(layer)?.previous ?? active[layer];
       flashes.delete(layer);
       if (mode === 'release') active = clearLayer(active, layer);
-      else active = activate(active, show(), scene, seconds());
+      else active = go(active, scene);
       if (mode === 'flash') {
         flashes.set(layer, { scene, held: { channel, note }, ...(previous ? { previous } : {}) });
       }
@@ -164,14 +183,23 @@ export function createPlayback({ emit, now, show, patch }: PlaybackOptions) {
       flashes.clear();
       emitPlayback();
     },
+    // Ends the Focus Check, when the Venue Patch is replaced.
+    venueReplaced(): void {
+      if (focusCheck === undefined) return;
+      focusCheck = undefined;
+      emitPlayback();
+    },
     // The frames to send now, one per Universe. Resolved once per call.
     frames(): Map<number, Uint8Array> {
       if (mode === 'monitor') {
         sent = resolveFrames(show(), patch(), active, seconds(), resolvedGrandMaster());
-      } else if (blackout) {
-        return resolveFrames(show(), patch(), active, seconds(), 0);
       }
-      return sent;
+      let frames = sent;
+      if (mode === 'blind' && blackout) {
+        frames = resolveFrames(show(), patch(), active, seconds(), 0);
+      }
+      if (focusCheck === undefined) return frames;
+      return focusCheckFrames(patch(), frames, focusCheck, blackout ? 0 : 1);
     },
     // How each Fixture looks now, by Fixture id, in either mode. Resolved apart
     // from `frames`, so Blind can preview what it does not send.

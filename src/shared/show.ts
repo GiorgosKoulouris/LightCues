@@ -4,7 +4,15 @@
 // Scenes target Zones × Roles, never Fixtures, and hold no raw DMX values, so
 // the same Show runs against any Venue Patch (ADR 0001).
 import { ROLES, type Role } from './fixture-profile';
-import { isZone, type Zone } from './venue-patch';
+import {
+  fixtureRole,
+  fixtureZone,
+  isZone,
+  sameZone,
+  type PatchedFixture,
+  type VenuePatch,
+  type Zone,
+} from './venue-patch';
 
 // Named colours for a Rule, translated per Fixture by the engine.
 export const SWATCHES = [
@@ -27,6 +35,14 @@ export type Swatch = (typeof SWATCHES)[number];
 // hue in degrees, 0 to under 360; saturation 0–1.
 export type Colour = { hue: number; saturation: number } | { swatch: Swatch };
 
+// Named aims for moving Fixtures, computed per Fixture from its stage
+// position and Mounting (ADR 0007).
+export const DIRECTIONS = ['Down', 'Audience', 'Up', 'Cross', 'Centre', 'Out'] as const;
+export type Direction = (typeof DIRECTIONS)[number];
+
+// Where moving Fixtures aim when neither a Rule nor the Show sets a Direction.
+export const DEFAULT_DIRECTION: Direction = 'Down';
+
 // The Fixtures a Rule applies to: those in one of `zones` with one of
 // `roles`. An absent list means every Zone or every Role.
 export interface RuleTarget {
@@ -41,6 +57,8 @@ export interface Rule {
   // 0–1.
   intensity?: number;
   colour?: Colour;
+  // Aims the moving Fixtures targeted.
+  direction?: Direction;
 }
 
 // A slot that holds at most one active Scene.
@@ -90,6 +108,9 @@ export interface Show {
   baseLook?: string;
   // The colour Fixtures show where no Rule sets one. White when absent.
   defaultColour?: Colour;
+  // The Direction moving Fixtures aim at where no Rule sets one. Down when
+  // absent.
+  defaultDirection?: Direction;
   // The Scene ids on the Fallback Panel's buttons, in order. None when absent.
   panelScenes?: string[];
 }
@@ -98,6 +119,15 @@ export interface Show {
 export const MAX_PANEL_SCENES = 9;
 
 export type ShowResult = { show: Show } | { errors: string[] };
+
+// Whether a Rule applies to a patched Fixture: in one of its Zones and with
+// one of its Roles, either absent meaning any.
+export function ruleTargets(patch: VenuePatch, fixture: PatchedFixture, { target }: Rule): boolean {
+  const zone = fixtureZone(patch, fixture);
+  const role = fixtureRole(patch, fixture);
+  const inZone = !target.zones || target.zones.some((z) => sameZone(z, zone));
+  return inZone && (!target.roles || target.roles.includes(role));
+}
 
 // A new Show with one Layer.
 export function emptyShow(): Show {
@@ -168,6 +198,14 @@ export function setDefaultColour(show: Show, colour: Colour | undefined): ShowRe
   return validated(next);
 }
 
+// Sets the Direction moving Fixtures aim at where no Rule sets one;
+// undefined leaves it Down.
+export function setDefaultDirection(show: Show, direction: Direction | undefined): ShowResult {
+  const next = { ...show, defaultDirection: direction };
+  if (direction === undefined) delete next.defaultDirection;
+  return validated(next);
+}
+
 // Sets the Scenes on the Fallback Panel's buttons, in order; an empty list
 // leaves it without any.
 export function setPanelScenes(show: Show, sceneIds: string[]): ShowResult {
@@ -217,6 +255,11 @@ export function validateShow(show: Show): string[] {
       errors.push(`Default colour: ${problem}`);
     }
   }
+  if (show.defaultDirection !== undefined) {
+    for (const problem of directionProblems(show.defaultDirection)) {
+      errors.push(`Default Direction: ${problem}`);
+    }
+  }
   for (const problem of panelProblems(show, show.panelScenes ?? [])) {
     errors.push(`Fallback Panel: ${problem}`);
   }
@@ -264,7 +307,7 @@ function hasScene(show: Show, id: string): boolean {
   return show.scenes.some((s) => s.id === id);
 }
 
-function ruleProblems({ target, intensity, colour }: Rule): string[] {
+function ruleProblems({ target, intensity, colour, direction }: Rule): string[] {
   const problems: string[] = [];
   const { zones, roles } = target;
   if (zones?.length === 0) problems.push('Zone list is empty');
@@ -281,7 +324,12 @@ function ruleProblems({ target, intensity, colour }: Rule): string[] {
     problems.push('intensity must be from 0 to 1');
   }
   if (colour !== undefined) problems.push(...colourProblems(colour));
+  if (direction !== undefined) problems.push(...directionProblems(direction));
   return problems;
+}
+
+function directionProblems(direction: Direction): string[] {
+  return DIRECTIONS.includes(direction) ? [] : [`"${direction}" is not a Direction`];
 }
 
 function colourProblems(colour: Colour): string[] {

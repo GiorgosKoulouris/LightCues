@@ -44,6 +44,8 @@ export interface VenueSessionOptions {
   recent?: RecentFile;
   // Called after the patch is replaced, edited, undone or redone.
   changed?: () => void;
+  // Called after New, or Open of a file.
+  replaced?: () => void;
   // A Profile from the Profile Library, for Fixtures the patch has no copy of.
   libraryProfile: (id: string) => FixtureProfile | undefined;
 }
@@ -55,6 +57,7 @@ export function createVenueSession({
   files,
   recent,
   changed,
+  replaced,
   libraryProfile,
 }: VenueSessionOptions) {
   const history = createHistory(emptyPatch(DEFAULT_STAGE), { now });
@@ -88,6 +91,7 @@ export function createVenueSession({
     recent?.set(path);
     emitVenue();
     changed?.();
+    replaced?.();
     return [];
   }
 
@@ -158,6 +162,7 @@ export function createVenueSession({
           recent?.set(undefined);
           emitVenue();
           changed?.();
+          replaced?.();
           break;
         case 'openVenue':
           emit({ type: 'venueDone', requestId: command.requestId, errors: open(command.path) });

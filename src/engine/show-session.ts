@@ -10,6 +10,7 @@ import {
   removeTrigger,
   setBaseLook,
   setDefaultColour,
+  setDefaultDirection,
   setPanelScenes,
   type Rule,
   type Show,
@@ -122,6 +123,8 @@ export function createShowSession({
         return setBaseLook(show, change.sceneId);
       case 'setDefaultColour':
         return setDefaultColour(show, change.colour);
+      case 'setDefaultDirection':
+        return setDefaultDirection(show, change.direction);
       case 'setPanelScenes':
         return setPanelScenes(show, change.sceneIds);
       case 'putTrigger':

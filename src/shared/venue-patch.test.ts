@@ -9,6 +9,9 @@ import {
   fixtureZone,
   moveFixture,
   addressProblem,
+  DEFAULT_MOUNTING,
+  fixtureMounting,
+  isMovingFixture,
   putFixture,
   putFixtures,
   putUniverse,
@@ -455,5 +458,134 @@ describe('Adding a Universe', () => {
     if ('errors' in gap) throw new Error(gap.errors.join('\n'));
     expect(freeUniverseNumber(gap.patch)).toBe(2);
     expect(freeUniverseNumber(removeUniverse(gap.patch, 1))).toBe(1);
+  });
+});
+
+// A moving head with pan and tilt, and a mode with tilt only.
+const head: FixtureProfile = {
+  id: 'acme/head',
+  manufacturer: 'Acme',
+  model: 'Head',
+  defaultRole: 'Spot/Beam',
+  modes: [
+    {
+      name: 'basic',
+      channels: [
+        {
+          kind: 'control',
+          name: 'Pan',
+          defaultValue: 128,
+          ranges: [{ from: 0, to: 255, capability: { type: 'pan', degrees: [0, 540] } }],
+        },
+        {
+          kind: 'control',
+          name: 'Tilt',
+          defaultValue: 128,
+          ranges: [{ from: 0, to: 255, capability: { type: 'tilt' } }],
+        },
+      ],
+    },
+    {
+      name: 'tilt only',
+      channels: [
+        {
+          kind: 'control',
+          name: 'Tilt',
+          defaultValue: 128,
+          ranges: [{ from: 0, to: 255, capability: { type: 'tilt' } }],
+        },
+      ],
+    },
+  ],
+};
+
+function withHead(...fixtures: PatchedFixture[]): VenuePatch {
+  const result = putFixtures(emptyPatch(stage), fixtures, (id) => (id === head.id ? head : par));
+  if ('errors' in result) throw new Error(result.errors.join('\n'));
+  return result.patch;
+}
+
+describe('Mounting', () => {
+  const mover = (overrides: Partial<PatchedFixture> = {}) =>
+    fixture({ id: 'm1', name: 'Head 1', profileId: 'acme/head', mode: 'basic', ...overrides });
+
+  it('defaults to Hung, 0°, no inverts and no offsets', () => {
+    expect(DEFAULT_MOUNTING).toEqual({
+      mount: 'Hung',
+      rotation: 0,
+      panInvert: false,
+      tiltInvert: false,
+      panOffset: 0,
+      tiltOffset: 0,
+    });
+    expect(fixtureMounting(mover())).toEqual(DEFAULT_MOUNTING);
+  });
+
+  it("keeps a Fixture's Mounting", () => {
+    const mounting = {
+      mount: 'Standing' as const,
+      rotation: 90,
+      panInvert: true,
+      tiltInvert: false,
+      panOffset: -2.5,
+      tiltOffset: 4,
+    };
+    const patch = withHead(mover({ mounting }));
+
+    expect(fixtureMounting(patch.fixtures[0]!)).toEqual(mounting);
+  });
+
+  it.each([
+    { rotation: 360, normalised: 0 },
+    { rotation: 450, normalised: 90 },
+    { rotation: -90, normalised: 270 },
+    { rotation: 359.5, normalised: 359.5 },
+  ])('normalises a rotation of $rotation° to $normalised°', ({ rotation, normalised }) => {
+    const patch = withHead(mover({ mounting: { ...DEFAULT_MOUNTING, rotation } }));
+
+    expect(fixtureMounting(patch.fixtures[0]!).rotation).toBe(normalised);
+  });
+
+  it.each(['rotation', 'panOffset', 'tiltOffset'] as const)(
+    'rejects a %s that is not a number',
+    (field) => {
+      const result = putFixture(
+        emptyPatch(stage),
+        mover({ mounting: { ...DEFAULT_MOUNTING, [field]: Infinity } }),
+        head,
+      );
+
+      expect(result).toEqual({
+        errors: ['"Head 1": Mounting rotation and offsets must be numbers'],
+      });
+    },
+  );
+
+  it('rejects an unknown mount or a non-boolean invert', () => {
+    const odd = { ...DEFAULT_MOUNTING, mount: 'Sideways' } as unknown as PatchedFixture['mounting'];
+    expect(putFixture(emptyPatch(stage), mover({ mounting: odd }), head)).toEqual({
+      errors: ['"Head 1": Mounting "Sideways" is not Hung or Standing'],
+    });
+
+    const invert = {
+      ...DEFAULT_MOUNTING,
+      tiltInvert: 'yes',
+    } as unknown as PatchedFixture['mounting'];
+    expect(putFixture(emptyPatch(stage), mover({ mounting: invert }), head)).toEqual({
+      errors: ['"Head 1": Mounting inverts must be true or false'],
+    });
+  });
+
+  it('calls a Fixture whose mode has a pan or tilt channel a moving Fixture', () => {
+    const patch = withHead(
+      mover(),
+      mover({ id: 'm2', mode: 'tilt only', address: 10 }),
+      fixture({ address: 20 }),
+    );
+    const [both, tiltOnly, still] = patch.fixtures;
+
+    expect(isMovingFixture(patch, both!)).toBe(true);
+    expect(isMovingFixture(patch, tiltOnly!)).toBe(true);
+    expect(isMovingFixture(patch, still!)).toBe(false);
   });
 });

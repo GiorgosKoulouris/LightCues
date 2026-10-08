@@ -480,6 +480,18 @@ describe('engine Show', () => {
     expect(show().show.defaultColour).toBeUndefined();
   });
 
+  it('sets the Default Direction, and rejects an unknown one', () => {
+    const { edit, show } = showEngine();
+
+    expect(edit({ type: 'setDefaultDirection', direction: 'Audience' })).toEqual([]);
+    expect(show()).toMatchObject({ show: { defaultDirection: 'Audience' }, unsaved: true });
+    expect(edit({ type: 'setDefaultDirection', direction: 'Sideways' as never })).toEqual([
+      'Default Direction: "Sideways" is not a Direction',
+    ]);
+    expect(edit({ type: 'setDefaultDirection' })).toEqual([]);
+    expect(show().show.defaultDirection).toBeUndefined();
+  });
+
   it('rejects removing a Scene or Layer that is not in the Show, leaving it saved', () => {
     const { edit, show, engine } = showEngine();
     engine.handle({ type: 'getShow' });

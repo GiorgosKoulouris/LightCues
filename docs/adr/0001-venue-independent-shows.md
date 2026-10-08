@@ -5,4 +5,4 @@ A project is split into a Show (Scenes, triggers, mappings) and a Venue Patch (F
 ## Consequences
 
 - A Scene can resolve to different Fixtures, or none, in each venue. Gaps are surfaced by a Venue Check rather than failing silently.
-- Pan/tilt cannot be portable as raw values; movement needs per-venue calibration stored in the Venue Patch.
+- Pan/tilt cannot be portable as raw values. Directions are computed per venue from stage geometry stored in the Venue Patch (ADR 0007).

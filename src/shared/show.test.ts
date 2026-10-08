@@ -9,6 +9,7 @@ import {
   removeTrigger,
   setBaseLook,
   setDefaultColour,
+  setDefaultDirection,
   setPanelScenes,
   validateShow,
   type Rule,
@@ -38,6 +39,7 @@ describe('validateShow', () => {
         colour: { hue: 359.9, saturation: 1 },
       },
       { target: { roles: ['Effect'] }, colour: { swatch: 'UV' } },
+      { target: {}, direction: 'Audience' },
     ];
 
     expect(validateShow(show(scene({ rules })))).toEqual([]);
@@ -54,6 +56,7 @@ describe('validateShow', () => {
           roles: ['Laser'],
         },
         colour: { swatch: 'Teal' },
+        direction: 'Sideways',
       },
     ] as unknown as Rule[];
 
@@ -67,6 +70,7 @@ describe('validateShow', () => {
       'Scene "Verse" Rule 4: Zone Balcony/Centre/Floor is not on the stage grid',
       'Scene "Verse" Rule 4: Role "Laser" is not a Role',
       'Scene "Verse" Rule 4: "Teal" is not a swatch',
+      'Scene "Verse" Rule 4: "Sideways" is not a Direction',
     ]);
   });
 
@@ -255,6 +259,18 @@ describe('editing a Show', () => {
     expect(setDefaultColour(set.show, undefined)).toEqual({ show: before });
     expect(setDefaultColour(before, { hue: 400, saturation: 1 })).toEqual({
       errors: ['Default colour: hue must be from 0 to under 360'],
+    });
+  });
+
+  it('sets the Default Direction, or Down without one', () => {
+    const before = emptyShow();
+    const set = setDefaultDirection(before, 'Audience');
+    if ('errors' in set) throw new Error(set.errors.join('\n'));
+
+    expect(set.show.defaultDirection).toBe('Audience');
+    expect(setDefaultDirection(set.show, undefined)).toEqual({ show: before });
+    expect(setDefaultDirection(before, 'Sideways' as never)).toEqual({
+      errors: ['Default Direction: "Sideways" is not a Direction'],
     });
   });
 });

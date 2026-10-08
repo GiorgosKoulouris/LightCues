@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FixtureProfile } from '../shared/fixture-profile';
 import {
+  DEFAULT_MOUNTING,
   emptyPatch,
   fixtureRole,
   patchProfile,
@@ -85,6 +86,40 @@ describe('.lcvenue file', () => {
     expect(patchProfile(opened, bar)).toEqual(handMade);
     expect(patchProfile(opened, par).model).toBe('Par 64');
     expect(fixtureRole(opened, bar)).toBe('Pixel/Bar');
+  });
+
+  it("keeps each Fixture's Mounting", () => {
+    const mounting = { ...DEFAULT_MOUNTING, mount: 'Standing' as const, rotation: 270 };
+    const hung = fixture({ id: 'hung', profileId: 'acme/led-bar' });
+    const standing = fixture({ id: 'standing', profileId: 'acme/led-bar', address: 2, mounting });
+    const saved = saveVenueFile(patch([hung, handMade], [standing, handMade]));
+
+    expect(JSON.parse(saved).version).toBe(2);
+    expect(loadVenueFile(saved).fixtures).toEqual([hung, standing]);
+  });
+
+  it('opens a version 1 file, whose Fixtures have no Mounting', () => {
+    const bar = fixture({ profileId: 'acme/led-bar' });
+    const v1 = {
+      version: 1,
+      stage: { width: 10, depth: 6 },
+      universes: [{ number: 1 }],
+      fixtures: [bar],
+      profiles: [handMade],
+    };
+
+    expect(loadVenueFile(JSON.stringify(v1)).fixtures).toEqual([bar]);
+  });
+
+  it('rejects a Mounting rotation outside 0 to under 360', () => {
+    const saved = JSON.parse(
+      saveVenueFile(patch([fixture({ profileId: 'acme/led-bar' }), handMade])),
+    );
+    saved.fixtures[0].mounting = { ...DEFAULT_MOUNTING, rotation: 360 };
+
+    expect(() => loadVenueFile(JSON.stringify(saved))).toThrow(
+      'Invalid Venue Patch:\n"Fixture": Mounting rotation must be 0 to under 360',
+    );
   });
 
   it('rejects a file of an unknown version', () => {

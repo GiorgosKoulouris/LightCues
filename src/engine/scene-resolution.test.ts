@@ -82,9 +82,14 @@ function show(...scenes: Scene[]): Show {
   };
 }
 
-// Activates the Scenes in order, each at its given time.
+// Activates the Scenes in order, each at its given time, on a rig.
+function playOn(rig: VenuePatch, s: Show, ...steps: [string, number][]): ActiveScenes {
+  return steps.reduce<ActiveScenes>((active, [id, time]) => activate(active, s, rig, id, time), {});
+}
+
+// As `playOn`, for a Show whose tests have no movers: no aims to keep.
 function play(s: Show, ...steps: [string, number][]): ActiveScenes {
-  return steps.reduce<ActiveScenes>((active, [id, time]) => activate(active, s, id, time), {});
+  return playOn(patch([]), s, ...steps);
 }
 
 // The first `count` channels of Universe 1.
@@ -451,6 +456,125 @@ describe('resolveFrames', () => {
       const uv: Rule = { target: {}, intensity: 1, colour: { swatch: 'UV' } };
       expect(resolveOn(rgbUv, uv)).toEqual([0, 0, 0, 255]);
       expect(resolveOn(rgb, uv)).toEqual([255, 77, 0, 255]);
+    });
+  });
+
+  describe('Directions', () => {
+    const mover = profile('test/mover', [
+      channel('Dimmer', { type: 'intensity' }),
+      channel('Pan', { type: 'pan', degrees: [-270, 270] }),
+      channel('Tilt', { type: 'tilt', degrees: [-135, 135] }),
+    ]);
+    // Hung 6 m up on Stage Left. Down is pan and tilt at their centres;
+    // Cross aims at the mirror point, pan 90° and tilt 45°: 2/3 across both.
+    const hung = fixture({ id: 'mover', profileId: mover.id, x: 3, y: 4, height: 6 });
+    const DOWN = [128, 128];
+    const CROSS = [170, 170];
+    const rig = patch([hung, fixture({ id: 'par', address: 4 })], [mover, dimmer]);
+
+    // Pan and tilt of the mover, then the dimmer-only Fixture.
+    const aimed = (s: Show, active: ActiveScenes, time = 0) =>
+      channels(resolveFrames(s, rig, active, time), 4).slice(1);
+
+    it('aims movers at the Default Direction, Down unless changed', () => {
+      const s = show(scene('lit', [{ target: {}, intensity: 1 }]));
+
+      expect(aimed(s, {})).toEqual([...DOWN, 0]);
+      expect(aimed({ ...s, defaultDirection: 'Cross' }, playOn(rig, s, ['lit', 0]))).toEqual([
+        ...CROSS,
+        255,
+      ]);
+    });
+
+    it('takes the Direction of the Scene changed last that targets the mover', () => {
+      const s = show(
+        scene('cross', [{ target: {}, direction: 'Cross' }]),
+        scene('down', [{ target: {}, direction: 'Down' }], { layer: 'l2' }),
+        scene('dim', [{ target: {}, intensity: 0.5 }], { layer: 'l2' }),
+      );
+
+      expect(aimed(s, playOn(rig, s, ['cross', 0]))).toEqual([...CROSS, 0]);
+      // Down keeps the pan shown, as pan does not change it.
+      expect(aimed(s, playOn(rig, s, ['cross', 0], ['down', 1]))).toEqual([170, 128, 0]);
+      expect(aimed(s, playOn(rig, s, ['down', 0], ['cross', 1]))).toEqual([...CROSS, 0]);
+      // A Scene that sets no Direction leaves it to the others.
+      expect(aimed(s, playOn(rig, s, ['cross', 0], ['dim', 1]))).toEqual([...CROSS, 128]);
+    });
+
+    it('lets later Rules override earlier ones, and only aims Fixtures they target', () => {
+      const s = show(
+        scene('look', [
+          { target: {}, direction: 'Up' },
+          { target: { roles: ['Wash'] }, direction: 'Cross' },
+          { target: { roles: ['Strobe'] }, direction: 'Down' },
+        ]),
+      );
+
+      expect(aimed(s, playOn(rig, s, ['look', 0]))).toEqual([...CROSS, 0]);
+    });
+
+    describe('moves', () => {
+      const s = show(
+        scene('cross', [{ target: {}, intensity: 1, direction: 'Cross' }]),
+        scene('dark cross', [{ target: {}, direction: 'Cross' }]),
+        scene('out', [{ target: {}, intensity: 1, direction: 'Out' }], { fadeIn: 2 }),
+        scene('down', [{ target: {}, intensity: 1, direction: 'Down' }], { layer: 'l2' }),
+      );
+      // Out is pan -18°, tilt 77°; or pan 162°, tilt -77°, nearer the 90° of
+      // Cross. Then 204 and 55, against 119 and 200 from the centre.
+      const OUT = [204, 55];
+      // Pan and tilt of the mover alone.
+      const panTilt = (s: Show, active: ActiveScenes, time = 0) =>
+        aimed(s, active, time).slice(0, 2);
+
+      it('fades pan and tilt in degrees from the aim shown, to the pan nearest it', () => {
+        const active = playOn(rig, s, ['cross', 0], ['out', 10]);
+
+        expect(panTilt(s, active, 10)).toEqual(CROSS);
+        // Half way: pan 126°, tilt -16°.
+        expect(panTilt(s, active, 11)).toEqual([187, 112]);
+        expect(panTilt(s, active, 12)).toEqual(OUT);
+        expect(panTilt(s, active, 20)).toEqual(OUT);
+      });
+
+      it('starts from the range centre, where the Default Direction leaves pan', () => {
+        expect(panTilt(s, playOn(rig, s, ['out', 0]), 2)).toEqual([119, 200]);
+      });
+
+      it('snaps a mover dark at activation to its new aim', () => {
+        const dark = playOn(rig, s, ['dark cross', 0], ['out', 10]);
+        expect(panTilt(s, dark, 10)).toEqual(OUT);
+
+        // Dark at the Grand Master too.
+        const lit = playOn(rig, s, ['cross', 0]);
+        const blackout = activate(lit, s, rig, 'out', 10, 0);
+        expect(panTilt(s, blackout, 11)).toEqual(OUT);
+      });
+
+      it('moves to the Direction left when a Layer crossfades into a Scene without one', () => {
+        const lit = scene('lit', [{ target: {}, intensity: 1 }], { fadeIn: 2 });
+        const t = show(...s.scenes, lit);
+        const active = playOn(rig, t, ['down', 0], ['cross', 5], ['lit', 10]);
+
+        expect(panTilt(t, active, 10)).toEqual(CROSS);
+        // Half way to Down: pan kept at 90°, tilt 22.5°.
+        expect(panTilt(t, active, 11)).toEqual([170, 149]);
+        expect(panTilt(t, active, 12)).toEqual([170, 128]);
+      });
+
+      it('keeps the pan shown at the Default Direction', () => {
+        const lit = scene('lit', [{ target: {}, intensity: 1 }]);
+        const t = show(...s.scenes, lit);
+
+        // Down after Cross, without a swing back to the centre.
+        expect(panTilt(t, playOn(rig, t, ['cross', 0], ['lit', 10]), 10)).toEqual([170, 128]);
+      });
+
+      it("drops a cleared Layer's aims at once, back to the next Layer's", () => {
+        const active = playOn(rig, s, ['down', 0], ['cross', 5], ['out', 10]);
+
+        expect(panTilt(s, clearLayer(active, 'l1'), 11)).toEqual(DOWN);
+      });
     });
   });
 });

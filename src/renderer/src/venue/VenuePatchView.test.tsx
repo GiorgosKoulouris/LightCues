@@ -3,8 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FixtureProfile } from '../../../shared/fixture-profile';
 import type { EngineCommand, EngineEvent, VenueEdit } from '../../../shared/protocol';
+import type { Direction, Show } from '../../../shared/show';
 import {
   addUniverse,
+  DEFAULT_MOUNTING,
   moveFixture,
   putFixture,
   putFixtures,
@@ -68,6 +70,10 @@ const PATCH: VenuePatch = {
 
 let engine: FakeEngine;
 let patch: VenuePatch;
+// The engine's Show; none sent when absent.
+let show: Show | undefined;
+// The engine's Focus Check Direction; off when absent.
+let focusCheck: Direction | undefined;
 const dialogs = {
   chooseVenueToOpen: vi.fn(async (): Promise<string | undefined> => undefined),
   chooseVenueToSave: vi.fn(async (): Promise<string | undefined> => undefined),
@@ -84,6 +90,13 @@ function answer(command: EngineCommand): EngineEvent[] {
   switch (command.type) {
     case 'getVenue':
       return [venueEvent()];
+    case 'getShow':
+      return show ? [{ type: 'show', show, unsaved: false, canUndo: false, canRedo: false }] : [];
+    case 'setFocusCheck':
+      focusCheck = command.direction;
+      return [playbackEvent()];
+    case 'getPlayback':
+      return [playbackEvent()];
     case 'listProfiles':
       return [{ type: 'profiles', entries: [{ profile: par, handEdited: false }] }];
     case 'editVenue': {
@@ -96,6 +109,17 @@ function answer(command: EngineCommand): EngineEvent[] {
     default:
       return [];
   }
+}
+
+function playbackEvent(): EngineEvent {
+  return {
+    type: 'playback',
+    active: {},
+    mode: 'monitor',
+    grandMaster: 1,
+    blackout: false,
+    ...(focusCheck === undefined ? {} : { focusCheck }),
+  };
 }
 
 function applied(current: VenuePatch, edit: VenueEdit): PatchResult {
@@ -145,6 +169,8 @@ const inspector = () => within(screen.getByRole('region', { name: 'Fixture inspe
 
 beforeEach(() => {
   patch = PATCH;
+  show = undefined;
+  focusCheck = undefined;
   engine = installFakeEngine(answer);
   vi.stubGlobal('dialogs', dialogs);
   vi.stubGlobal('closeGuard', { setUnsaved: vi.fn(), onSaveBeforeClose: vi.fn(() => () => {}) });
@@ -335,6 +361,175 @@ describe('Fixture inspector', () => {
   });
 });
 
+// A moving head whose Profile gives no pan or tilt degrees.
+const head: FixtureProfile = {
+  id: 'acme/head',
+  manufacturer: 'Acme',
+  model: 'Head',
+  defaultRole: 'Spot/Beam',
+  modes: [
+    {
+      name: '2ch',
+      channels: [
+        {
+          kind: 'control',
+          name: 'Pan',
+          defaultValue: 128,
+          ranges: [{ from: 0, to: 255, capability: { type: 'pan' } }],
+        },
+        {
+          kind: 'control',
+          name: 'Tilt',
+          defaultValue: 128,
+          ranges: [{ from: 0, to: 255, capability: { type: 'tilt' } }],
+        },
+      ],
+    },
+  ],
+};
+const mover = fixture('Head', { profileId: 'acme/head', mode: '2ch', universe: 2, address: 10 });
+
+describe('Mounting', () => {
+  beforeEach(() => {
+    patch = { ...PATCH, profiles: [par, head], fixtures: [...PATCH.fixtures, mover] };
+  });
+
+  const mounting = () => within(inspector().getByRole('group', { name: 'Mounting' }));
+  const lastMounting = () => {
+    const edit = edits().at(-1);
+    return edit?.type === 'putFixtures' ? edit.fixtures[0]?.mounting : undefined;
+  };
+
+  it('shows Mounting fields only for a moving Fixture', async () => {
+    await renderView();
+    const user = userEvent.setup();
+
+    await user.click(option('Par 1'));
+    expect(inspector().queryByRole('group', { name: 'Mounting' })).not.toBeInTheDocument();
+
+    await user.click(option('Head'));
+    expect(mounting().getByRole('combobox', { name: 'Mounted' })).toHaveDisplayValue('Hung');
+    expect(mounting().getByRole('textbox', { name: 'Rotation (°)' })).toHaveValue('0');
+    expect(mounting().getByRole('button', { name: '0°' })).toHaveAttribute('aria-pressed', 'true');
+    expect(mounting().getByRole('checkbox', { name: 'Invert pan' })).not.toBeChecked();
+    expect(mounting().getByRole('checkbox', { name: 'Invert tilt' })).not.toBeChecked();
+    expect(mounting().getByRole('textbox', { name: 'Pan offset (°)' })).toHaveValue('0');
+    expect(mounting().getByRole('textbox', { name: 'Tilt offset (°)' })).toHaveValue('0');
+  });
+
+  it('commits each Mounting field at once', async () => {
+    await renderView();
+    const user = userEvent.setup();
+    await user.click(option('Head'));
+
+    await user.selectOptions(mounting().getByRole('combobox', { name: 'Mounted' }), 'Standing');
+    expect(lastMounting()).toEqual({ ...DEFAULT_MOUNTING, mount: 'Standing' });
+
+    await user.click(mounting().getByRole('button', { name: '180°' }));
+    expect(lastMounting()).toEqual({ ...DEFAULT_MOUNTING, mount: 'Standing', rotation: 180 });
+    expect(mounting().getByRole('textbox', { name: 'Rotation (°)' })).toHaveValue('180');
+
+    await user.click(mounting().getByRole('checkbox', { name: 'Invert tilt' }));
+    expect(lastMounting()).toMatchObject({ tiltInvert: true, panInvert: false });
+
+    const offset = mounting().getByRole('textbox', { name: 'Pan offset (°)' });
+    await user.clear(offset);
+    await user.paste('-2.5');
+    expect(lastMounting()).toEqual({
+      ...DEFAULT_MOUNTING,
+      mount: 'Standing',
+      rotation: 180,
+      tiltInvert: true,
+      panOffset: -2.5,
+    });
+  });
+
+  it('normalises a typed rotation to 0 to under 360', async () => {
+    await renderView();
+    const user = userEvent.setup();
+    await user.click(option('Head'));
+    const rotation = mounting().getByRole('textbox', { name: 'Rotation (°)' });
+
+    await user.clear(rotation);
+    await user.type(rotation, '450');
+    expect(lastMounting()).toEqual({ ...DEFAULT_MOUNTING, rotation: 90 });
+    expect(rotation).toHaveValue('450');
+
+    await user.tab();
+    expect(rotation).toHaveValue('90');
+    expect(mounting().getByRole('button', { name: '90°' })).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+describe('Approximated aims', () => {
+  beforeEach(() => {
+    patch = { ...PATCH, profiles: [par, head], fixtures: [...PATCH.fixtures, mover] };
+    show = {
+      layers: [{ id: 'l1', name: 'Layer 1' }],
+      scenes: [
+        {
+          id: 's1',
+          name: 'Up',
+          tags: [],
+          layer: 'l1',
+          fadeIn: 0,
+          rules: [{ target: {}, direction: 'Up' }],
+        },
+      ],
+      triggers: [],
+    };
+  });
+
+  const warning = () => inspector().queryByRole('region', { name: 'Approximated aims' });
+
+  it('names the Directions a mover only approximates, and why', async () => {
+    await renderView();
+    const user = userEvent.setup();
+
+    await user.click(option('Head'));
+    const items = within(warning()!).getAllByRole('listitem');
+    expect(items.map((item) => item.textContent)).toEqual([
+      'Down: pan range assumed (540°), tilt range assumed (270°)',
+      'Up: pan range assumed (540°), tilt range assumed (270°), out of reach',
+    ]);
+    expect(warning()).toHaveTextContent(
+      'Add the pan and tilt degrees to its Profile in the Profile editor.',
+    );
+  });
+
+  it('names only the axes whose degrees the Profile lacks', async () => {
+    const ranged: FixtureProfile = {
+      ...head,
+      modes: head.modes.map((mode) => ({
+        ...mode,
+        channels: mode.channels.map((channel) =>
+          channel.kind === 'control' && channel.name === 'Tilt'
+            ? {
+                ...channel,
+                ranges: [{ from: 0, to: 255, capability: { type: 'tilt', degrees: [-135, 135] } }],
+              }
+            : channel,
+        ),
+      })),
+    };
+    patch = { ...patch, profiles: [par, ranged] };
+    await renderView();
+    const user = userEvent.setup();
+
+    await user.click(option('Head'));
+    expect(warning()).toHaveTextContent('Up: pan range assumed (540°), out of reach');
+    expect(warning()).toHaveTextContent('Add the pan degrees to its Profile');
+  });
+
+  it('shows nothing on a Fixture that does not move', async () => {
+    await renderView();
+    const user = userEvent.setup();
+
+    await user.click(option('Par 1'));
+    expect(warning()).not.toBeInTheDocument();
+  });
+});
+
 describe('Fixture list', () => {
   it('removes the selected Fixtures on Del, naming them', async () => {
     await renderView();
@@ -366,7 +561,7 @@ describe('Fixture list', () => {
     const search = screen.getByRole('searchbox', { name: 'Search Fixtures' });
     expect(search).toHaveFocus();
     await userEvent.keyboard('spot');
-    expect(screen.getAllByRole('option')).toHaveLength(1);
+    expect(listOptions()).toHaveLength(1);
   });
 
   it('adds a Fixture from the dialog at the next free address and selects it', async () => {
@@ -456,5 +651,29 @@ describe('Rig setup', () => {
       'usb-1',
     );
     expect(edits()).toEqual([{ type: 'putUniverse', universe: { number: 1, output: 'usb-1' } }]);
+  });
+});
+
+describe('Focus Check', () => {
+  const focusChecks = () =>
+    engine.sent.flatMap((c) => (c.type === 'setFocusCheck' ? [c.direction] : []));
+
+  it('sends the movers to the Direction picked, and ends when the view is left', async () => {
+    const view = (active: boolean) => (
+      <UiProvider>
+        <VenuePatchView active={active} />
+      </UiProvider>
+    );
+    const { rerender } = render(view(true));
+    const control = await screen.findByRole('combobox', { name: 'Focus Check' });
+    expect(control).toHaveValue('');
+
+    await userEvent.setup().selectOptions(control, 'Audience');
+    expect(focusChecks()).toEqual(['Audience']);
+    await vi.waitFor(() => expect(control).toHaveValue('Audience'));
+
+    rerender(view(false));
+    expect(focusChecks()).toEqual(['Audience', undefined]);
+    await vi.waitFor(() => expect(control).toHaveValue(''));
   });
 });

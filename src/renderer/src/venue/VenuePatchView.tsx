@@ -1,13 +1,17 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { VenueEdit } from '../../../shared/protocol';
+import { DIRECTIONS, type Direction } from '../../../shared/show';
 import { fixturesInUniverse, type PatchedFixture } from '../../../shared/venue-patch';
 import { useProfileLibrary } from '../profiles/useProfileLibrary';
 import { FileButtons } from '../shell/FileButtons';
 import { HistoryButtons } from '../shell/HistoryButtons';
 import { useFileCommands } from '../shell/useFileCommands';
 import { useFileShortcuts, useFindShortcut, useHistoryShortcuts } from '../shell/useShortcuts';
+import { usePlayback } from '../show/usePlayback';
+import { useShow } from '../show/useShow';
 import type { SelectModifiers } from '../ui/List';
 import { namedCount, removedMessage } from '../ui/removed';
+import { Select } from '../ui/Select';
 import { SidePanel, SidePanelToggle } from '../ui/SidePanel';
 import { Tabs } from '../ui/Tabs';
 import { useToast } from '../ui/Toast';
@@ -34,14 +38,22 @@ const TABS = [
   { value: 'rig', label: 'Rig setup' },
 ] as const;
 
+const FOCUS_CHECK_OPTIONS = [
+  { value: '', label: 'Focus Check: Off' },
+  ...DIRECTIONS.map((d) => ({ value: d, label: `Focus Check: ${d}` })),
+] as const;
+
 // Edits the current Venue Patch. Fixtures: the Fixture list, the stage plan
 // and the inspector, with Shift/Ctrl multi-select in the list and on the plan.
 // Rig setup: stage size, Universes and Outputs. Removing is instant, and
 // undone with Undo. While `active`, Ctrl+N, O, S and Shift+S act on its file,
 // Ctrl+Z and Ctrl+Shift+Z undo and redo, and Ctrl+F searches the Fixtures.
+// The Focus Check, on either tab, ends when the view is left.
 export function VenuePatchView({ active }: { active: boolean }) {
   const { venue, edit, newVenue, undo, redo, open, save } = useVenuePatch();
+  const focusCheck = usePlayback()?.focusCheck;
   const { entries } = useProfileLibrary();
+  const show = useShow().show?.show;
   const outputs = useOutputs();
   const toast = useToast();
   const [tab, setTab] = useState<SubTab>('fixtures');
@@ -67,6 +79,10 @@ export function VenuePatchView({ active }: { active: boolean }) {
     searchRef.current?.focus();
     searchRef.current?.select();
   });
+  useEffect(() => {
+    if (!active) return;
+    return () => window.engine.send({ type: 'setFocusCheck' });
+  }, [active]);
 
   if (!venue || !fileCommands) return <p className={styles.loading}>Loading Venue Patch…</p>;
   const { patch } = venue;
@@ -130,6 +146,18 @@ export function VenuePatchView({ active }: { active: boolean }) {
               onToggle={() => setSideOpen(!sideOpen)}
             />
           )}
+          <Select<Direction | ''>
+            label="Focus Check"
+            hideLabel
+            value={focusCheck ?? ''}
+            options={FOCUS_CHECK_OPTIONS}
+            onChange={(direction) =>
+              window.engine.send({
+                type: 'setFocusCheck',
+                ...(direction === '' ? {} : { direction }),
+              })
+            }
+          />
           <HistoryButtons
             commands={{ undo, redo }}
             enabled={{ undo: venue.canUndo, redo: venue.canRedo }}
@@ -163,6 +191,7 @@ export function VenuePatchView({ active }: { active: boolean }) {
               <FixtureInspector
                 key={selectedIds.join()}
                 patch={patch}
+                show={show}
                 fixtures={selected}
                 onPut={(fixtures) => void change({ type: 'putFixtures', fixtures })}
                 onRemove={() => void removeSelected()}

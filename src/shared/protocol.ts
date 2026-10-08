@@ -1,7 +1,7 @@
 // The typed message contract between the UI and the engine process.
 // The UI sends EngineCommands; the engine sends EngineEvents.
 import type { FixtureProfile, UnsupportedFeature } from './fixture-profile';
-import type { Colour, Layer, MidiNote, Scene, Show, Trigger } from './show';
+import type { Colour, Direction, Layer, MidiNote, Scene, Show, Trigger } from './show';
 import type {
   PatchedFixture,
   StageBounds,
@@ -59,6 +59,10 @@ export type EngineCommand =
   | { type: 'setMode'; mode: PlaybackMode }
   | { type: 'setGrandMaster'; level: number }
   | { type: 'setBlackout'; on: boolean }
+  // Focus Check: every moving Fixture aims at `direction`, open at full in
+  // white, on the Outputs in Blind too. Blackout still wins. Without a
+  // Direction, it is off. Off on New and Open of a Venue Patch.
+  | { type: 'setFocusCheck'; direction?: Direction }
   | { type: 'listMidiInputs' }
   // The MIDI input that Triggers listen to, chosen by port name. Without a
   // name, none is used.
@@ -100,6 +104,8 @@ export type ShowEdit =
   | { type: 'setBaseLook'; sceneId?: string }
   // Without a colour, the default is White.
   | { type: 'setDefaultColour'; colour?: Colour }
+  // Without a Direction, the default is Down.
+  | { type: 'setDefaultDirection'; direction?: Direction }
   // The Fallback Panel's Scene buttons, in order. Empty for none.
   | { type: 'setPanelScenes'; sceneIds: string[] }
   // Replaces the Trigger on the same channel and note.
@@ -182,14 +188,16 @@ export type EngineEvent =
   // Reply to openShow, saveShow and editShow. An empty `errors` list means it
   // was done.
   | { type: 'showDone'; requestId: number; errors: string[] }
-  // The active Scenes, the mode, the Grand Master (0–1) and whether Blackout
-  // is on. Sent on request and after every change.
+  // The active Scenes, the mode, the Grand Master (0–1), whether Blackout
+  // is on, and the Focus Check's Direction while it is on. Sent on request and
+  // after every change.
   | {
       type: 'playback';
       active: ActiveByLayer;
       mode: PlaybackMode;
       grandMaster: number;
       blackout: boolean;
+      focusCheck?: Direction;
     }
   // The MIDI input status. Sent on request and after every change.
   | { type: 'midiInput'; status: MidiInputStatus }

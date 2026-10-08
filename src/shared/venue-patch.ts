@@ -66,6 +66,32 @@ export interface Universe {
   output?: string;
 }
 
+export const MOUNTS = ['Hung', 'Standing'] as const;
+export type Mount = (typeof MOUNTS)[number];
+
+// How a moving Fixture is installed. Angles are degrees. A rotation of 0 has
+// the front of the base facing the audience; it turns clockwise seen from
+// above, so 90 faces Stage Right. The offsets correct a Fixture
+// whose own zero is off, and apply to every Direction.
+export interface Mounting {
+  mount: Mount;
+  // 0 to under 360.
+  rotation: number;
+  panInvert: boolean;
+  tiltInvert: boolean;
+  panOffset: number;
+  tiltOffset: number;
+}
+
+export const DEFAULT_MOUNTING: Mounting = {
+  mount: 'Hung',
+  rotation: 0,
+  panInvert: false,
+  tiltInvert: false,
+  panOffset: 0,
+  tiltOffset: 0,
+};
+
 export interface PatchedFixture extends StagePosition {
   // Unique in the patch.
   id: string;
@@ -79,6 +105,8 @@ export interface PatchedFixture extends StagePosition {
   // Overrides of the Profile's default Role and the suggested Zone.
   role?: Role;
   zone?: Zone;
+  // Absent means DEFAULT_MOUNTING.
+  mounting?: Mounting;
 }
 
 export interface VenuePatch {
@@ -127,10 +155,28 @@ export function putFixtures(
     const profile = profiles.some((p) => p.id === profileId) ? undefined : profileOf(profileId);
     if (profile) profiles.push(profile);
   }
+  fixtures = fixtures.map(withNormalRotation);
   const byId = new Map(fixtures.map((f) => [f.id, f]));
   const added = fixtures.filter((f) => !patch.fixtures.some((p) => p.id === f.id));
   const replaced = patch.fixtures.map((f) => byId.get(f.id) ?? f);
   return validated(dropUnusedProfiles({ ...patch, fixtures: [...replaced, ...added], profiles }));
+}
+
+// `degrees` as a rotation from 0 to under 360.
+export function normalRotation(degrees: number): number {
+  // + 0 turns -0 into 0.
+  return (((degrees % 360) + 360) % 360) + 0;
+}
+
+// Brings a Mounting's rotation into 0 to under 360. A non-finite one is left
+// for validation to reject.
+function withNormalRotation(fixture: PatchedFixture): PatchedFixture {
+  const { mounting } = fixture;
+  if (!mounting || !Number.isFinite(mounting.rotation)) return fixture;
+  const rotation = normalRotation(mounting.rotation);
+  return rotation === mounting.rotation
+    ? fixture
+    : { ...fixture, mounting: { ...mounting, rotation } };
 }
 
 // Places a Fixture at `position`. Its Zone follows the new position unless it
@@ -263,8 +309,12 @@ function validateUniverses(universes: Universe[]): string[] {
 
 // Why a Fixture cannot be placed in its Universe, if it cannot.
 function fixtureProblem(patch: VenuePatch, fixture: PatchedFixture): string | undefined {
-  const { universe, profileId, mode, address, x, y, height, role, zone } = fixture;
+  const { universe, profileId, mode, address, x, y, height, role, zone, mounting } = fixture;
   if (![x, y, height].every(Number.isFinite)) return 'x, y and height must be numbers';
+  if (mounting !== undefined) {
+    const problem = mountingProblem(mounting);
+    if (problem) return problem;
+  }
   if (role !== undefined && !ROLES.includes(role)) return `Role "${role}" is not a Role`;
   if (zone !== undefined && !isZone(zone)) {
     return `Zone ${zone.row}/${zone.column}/${zone.level} is not on the stage grid`;
@@ -278,6 +328,21 @@ function fixtureProblem(patch: VenuePatch, fixture: PatchedFixture): string | un
   if (!channels) return `mode "${mode}" is not in Profile "${profileId}"`;
   if (channels.length === 0) return `mode "${mode}" has no channels`;
   if (!isAddress(address)) return `address must be a whole number from 1 to ${DMX_CHANNELS}`;
+  return undefined;
+}
+
+// Why a Mounting is invalid, if it is. A saved rotation must already be
+// normalised; only edits are normalised on the way in.
+function mountingProblem(mounting: Mounting): string | undefined {
+  const { mount, rotation, panInvert, tiltInvert, panOffset, tiltOffset } = mounting;
+  if (!MOUNTS.includes(mount)) return `Mounting "${mount}" is not Hung or Standing`;
+  if (![rotation, panOffset, tiltOffset].every(Number.isFinite)) {
+    return 'Mounting rotation and offsets must be numbers';
+  }
+  if (rotation < 0 || rotation >= 360) return 'Mounting rotation must be 0 to under 360';
+  if (typeof panInvert !== 'boolean' || typeof tiltInvert !== 'boolean') {
+    return 'Mounting inverts must be true or false';
+  }
   return undefined;
 }
 
@@ -326,6 +391,21 @@ function span(universe: number, first: number, last: number): string {
 
 export function fixtureZone(patch: VenuePatch, fixture: PatchedFixture): Zone {
   return fixture.zone ?? suggestZone(patch.stage, fixture);
+}
+
+export function fixtureMounting(fixture: PatchedFixture): Mounting {
+  return fixture.mounting ?? DEFAULT_MOUNTING;
+}
+
+// A moving Fixture: its mode has a pan or tilt channel.
+export function isMovingFixture(patch: VenuePatch, fixture: PatchedFixture): boolean {
+  return fixtureMode(patch, fixture).channels.some(
+    (channel) =>
+      channel.kind === 'control' &&
+      channel.ranges.some(
+        ({ capability }) => capability.type === 'pan' || capability.type === 'tilt',
+      ),
+  );
 }
 
 export function fixtureRole(patch: VenuePatch, fixture: PatchedFixture): Role {

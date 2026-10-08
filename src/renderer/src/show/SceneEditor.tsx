@@ -1,7 +1,7 @@
 import { Play, Plus, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { ROLES, type Role } from '../../../shared/fixture-profile';
-import type { Rule, Scene, Show } from '../../../shared/show';
+import { DIRECTIONS, type Direction, type Rule, type Scene, type Show } from '../../../shared/show';
 import type { VenuePatch } from '../../../shared/venue-patch';
 import { Button, IconButton } from '../ui/Button';
 import { Checkbox } from '../ui/Checkbox';
@@ -143,10 +143,10 @@ function RuleCard({
   onPut(rule: Rule): void;
   onRemove(): void;
 }) {
-  const { target, intensity, colour } = rule;
+  const { target, intensity, colour, direction } = rule;
 
   // `undefined` leaves the attribute to earlier Rules.
-  function set<K extends 'intensity' | 'colour'>(key: K, value: Rule[K] | undefined) {
+  function set<K extends 'intensity' | 'colour' | 'direction'>(key: K, value: Rule[K] | undefined) {
     const next = { ...rule, [key]: value };
     if (value === undefined) delete next[key];
     onPut(next);
@@ -191,6 +191,15 @@ function RuleCard({
             )}
           </div>
           <ColourPicker colour={colour} onChange={(c) => set('colour', c)} />
+          <Select<Direction | ''>
+            label="Direction"
+            value={direction ?? ''}
+            options={[
+              { value: '', label: 'Not set' },
+              ...DIRECTIONS.map((d) => ({ value: d, label: d })),
+            ]}
+            onChange={(d) => set('direction', d || undefined)}
+          />
         </div>
       </div>
     </>
