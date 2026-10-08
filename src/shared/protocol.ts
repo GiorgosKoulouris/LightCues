@@ -1,5 +1,6 @@
 // The typed message contract between the UI and the engine process.
 // The UI sends EngineCommands; the engine sends EngineEvents.
+import type { AimAngles } from './aim';
 import type { FixtureProfile, UnsupportedFeature } from './fixture-profile';
 import type { Colour, Direction, Layer, MidiNote, Scene, Show, Trigger } from './show';
 import type {
@@ -59,6 +60,9 @@ export type EngineCommand =
   | { type: 'setMode'; mode: PlaybackMode }
   | { type: 'setGrandMaster'; level: number }
   | { type: 'setBlackout'; on: boolean }
+  // Freeze holds every movement Effect at its offset until turned off, when
+  // they jump to where the beat has got to. Directions and fades still apply.
+  | { type: 'setFreeze'; on: boolean }
   // Focus Check: every moving Fixture aims at `direction`, open at full in
   // white, on the Outputs in Blind too. Blackout still wins. Without a
   // Direction, it is off. Off on New and Open of a Venue Patch.
@@ -71,6 +75,10 @@ export type EngineCommand =
   // firing its Trigger.
   | { type: 'learnTrigger' }
   | { type: 'cancelLearn' }
+  // The current Tempo, sent as a `tempo` event.
+  | { type: 'getTempo' }
+  // Tap Tempo: the average of the last taps sets the Tempo.
+  | { type: 'tapTempo' }
   // Why the last Venue Patch or Show did not reopen on launch. Sent once;
   // later requests get an empty list.
   | { type: 'getReopenErrors' }
@@ -83,12 +91,14 @@ export type EngineCommand =
 export type PlaybackMode = 'monitor' | 'blind';
 
 // How a Fixture looks in the preview: its intensity, 0–1 after the Grand
-// Master, and the colour it shows at full, red, green and blue each 0–1.
+// Master, and the colour it shows at full, red, green and blue each 0–1. A
+// moving Fixture also has the pan and tilt it is sent.
 export interface FixtureLight {
   intensity: number;
   red: number;
   green: number;
   blue: number;
+  aim?: AimAngles;
 }
 
 // The active Scene id per Layer id. A Layer without an entry is clear.
@@ -156,6 +166,10 @@ export interface MidiInputStatus {
   error?: string;
 }
 
+// Where the Tempo comes from: nothing yet (120 BPM), the MIDI Input's MIDI
+// Clock, the clock's last Tempo held after it stopped, or Tap Tempo.
+export type TempoSource = 'default' | 'clock' | 'held' | 'tap';
+
 export interface ProfileLibraryEntry {
   profile: FixtureProfile;
   handEdited: boolean;
@@ -189,18 +203,22 @@ export type EngineEvent =
   // was done.
   | { type: 'showDone'; requestId: number; errors: string[] }
   // The active Scenes, the mode, the Grand Master (0–1), whether Blackout
-  // is on, and the Focus Check's Direction while it is on. Sent on request and
-  // after every change.
+  // and Freeze are on, and the Focus Check's Direction while it is on. Sent on
+  // request and after every change.
   | {
       type: 'playback';
       active: ActiveByLayer;
       mode: PlaybackMode;
       grandMaster: number;
       blackout: boolean;
+      freeze: boolean;
       focusCheck?: Direction;
     }
   // The MIDI input status. Sent on request and after every change.
   | { type: 'midiInput'; status: MidiInputStatus }
+  // The Tempo and where it comes from. Sent on request and after every change
+  // of its source or of its BPM to one decimal.
+  | { type: 'tempo'; bpm: number; source: TempoSource }
   // The note-on caught by MIDI learn.
   | { type: 'triggerLearned'; note: MidiNote }
   | { type: 'reopenErrors'; errors: string[] }

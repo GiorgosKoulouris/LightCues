@@ -12,6 +12,7 @@ import {
   clamp,
   clearLayer,
   focusCheckFrames,
+  focusCheckLights,
   resolveFrames,
   resolveLights,
   type ActiveScene,
@@ -29,6 +30,7 @@ export type PlaybackCommand = Extract<
       | 'setMode'
       | 'setGrandMaster'
       | 'setBlackout'
+      | 'setFreeze'
       | 'setFocusCheck';
   }
 >;
@@ -37,6 +39,8 @@ export interface PlaybackOptions {
   emit: (event: EngineEvent) => void;
   // Milliseconds.
   now: () => number;
+  // The Tempo's beat count, that movement Effects run to.
+  beat: () => number;
   show: () => Show;
   patch: () => VenuePatch;
 }
@@ -49,21 +53,25 @@ interface Flash {
   previous?: ActiveScene;
 }
 
-// The active Scenes, the mode, the Grand Master and Blackout. In Monitor the
+// The active Scenes, the mode, the Grand Master, Blackout and Freeze. In Monitor the
 // Outputs send the resolved Show; in Blind they hold the frames sent last
 // before switching, while the preview keeps showing the resolved Show.
 // Blackout resolves like a Grand Master at 0, so colours are kept for when it
 // is turned off. It reaches the Outputs in Blind too, as a safety control;
 // turned off there, they hold the frames from before again. The Focus Check
 // overrides the moving Fixtures on the Outputs in both modes, at full unless
-// Blackout is on. It is not part of the Show or the Venue Patch.
-export function createPlayback({ emit, now, show, patch }: PlaybackOptions) {
+// Blackout is on. Freeze holds the beat that movement Effects run to, so they
+// keep their offsets; turned off, they jump to where the beat has got to. None
+// of this is part of the Show or the Venue Patch.
+export function createPlayback({ emit, now, beat, show, patch }: PlaybackOptions) {
   let active: ActiveScenes = {};
   // By Layer id.
   const flashes = new Map<string, Flash>();
   let mode: PlaybackMode = 'monitor';
   let grandMaster = 1;
   let blackout = false;
+  // The beat movement Effects hold while Freeze is on.
+  let frozenBeat: number | undefined;
   let focusCheck: Direction | undefined;
   let sent = new Map<number, Uint8Array>();
 
@@ -77,6 +85,7 @@ export function createPlayback({ emit, now, show, patch }: PlaybackOptions) {
       mode,
       grandMaster,
       blackout,
+      freeze: frozenBeat !== undefined,
       ...(focusCheck === undefined ? {} : { focusCheck }),
     });
   }
@@ -84,6 +93,10 @@ export function createPlayback({ emit, now, show, patch }: PlaybackOptions) {
   // The Grand Master as resolved, Blackout included.
   function resolvedGrandMaster(): number {
     return blackout ? 0 : grandMaster;
+  }
+
+  function effectBeat(): number {
+    return frozenBeat ?? beat();
   }
 
   function layerOf(sceneId: string): string | undefined {
@@ -95,7 +108,7 @@ export function createPlayback({ emit, now, show, patch }: PlaybackOptions) {
   }
 
   function go(from: ActiveScenes, sceneId: string): ActiveScenes {
-    return activate(from, show(), patch(), sceneId, seconds(), resolvedGrandMaster());
+    return activate(from, show(), patch(), sceneId, seconds(), resolvedGrandMaster(), effectBeat());
   }
 
   return {
@@ -132,6 +145,10 @@ export function createPlayback({ emit, now, show, patch }: PlaybackOptions) {
           break;
         case 'setBlackout':
           blackout = command.on;
+          break;
+        case 'setFreeze':
+          if (command.on) frozenBeat ??= beat();
+          else frozenBeat = undefined;
           break;
         case 'setFocusCheck':
           focusCheck = command.direction;
@@ -178,6 +195,7 @@ export function createPlayback({ emit, now, show, patch }: PlaybackOptions) {
       active = Object.fromEntries(kept);
       emitPlayback();
     },
+    // Clears the active Scenes. Blackout and Freeze stay as they are.
     showReplaced(): void {
       active = {};
       flashes.clear();
@@ -192,19 +210,36 @@ export function createPlayback({ emit, now, show, patch }: PlaybackOptions) {
     // The frames to send now, one per Universe. Resolved once per call.
     frames(): Map<number, Uint8Array> {
       if (mode === 'monitor') {
-        sent = resolveFrames(show(), patch(), active, seconds(), resolvedGrandMaster());
+        sent = resolveFrames(
+          show(),
+          patch(),
+          active,
+          seconds(),
+          resolvedGrandMaster(),
+          effectBeat(),
+        );
       }
       let frames = sent;
       if (mode === 'blind' && blackout) {
-        frames = resolveFrames(show(), patch(), active, seconds(), 0);
+        frames = resolveFrames(show(), patch(), active, seconds(), 0, effectBeat());
       }
       if (focusCheck === undefined) return frames;
       return focusCheckFrames(patch(), frames, focusCheck, blackout ? 0 : 1);
     },
     // How each Fixture looks now, by Fixture id, in either mode. Resolved apart
-    // from `frames`, so Blind can preview what it does not send.
+    // from `frames`, so Blind can preview what it does not send. The Focus
+    // Check shows as it is sent.
     lights(): Record<string, FixtureLight> {
-      return resolveLights(show(), patch(), active, seconds(), resolvedGrandMaster());
+      const lights = resolveLights(
+        show(),
+        patch(),
+        active,
+        seconds(),
+        resolvedGrandMaster(),
+        effectBeat(),
+      );
+      if (focusCheck === undefined) return lights;
+      return focusCheckLights(patch(), lights, focusCheck, blackout ? 0 : 1);
     },
   };
 }

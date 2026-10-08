@@ -3,20 +3,29 @@ import { isActive } from '../show/scenes';
 import type { PlaybackState } from '../show/usePlayback';
 import { Button } from '../ui/Button';
 import { cx } from '../ui/cx';
-import { BaseLookButton, BlackoutButton, GrandMasterFader, Key } from './controls';
+import {
+  BaseLookButton,
+  BlackoutButton,
+  FreezeButton,
+  GrandMasterFader,
+  Key,
+  TapTempoButton,
+} from './controls';
 import styles from './FallbackPanel.module.css';
 import { runPanelAction } from './usePanelKeys';
+import type { TempoState } from './useTempo';
 
 interface FallbackPanelProps {
   show: Show | undefined;
   playback: PlaybackState | undefined;
+  tempo: TempoState | undefined;
 }
 
 // Manual control that needs no MIDI: Blackout, the Base Look, the Grand
-// Master and the Show's Scene buttons, each showing its keyboard shortcut
+// Master, Tap Tempo, Freeze and the Show's Scene buttons, each showing its keyboard shortcut
 // (`usePanelKeys`). Docked as a strip below every view but Perform; red while
 // Blackout is on.
-export function FallbackPanel({ show, playback }: FallbackPanelProps) {
+export function FallbackPanel({ show, playback, tempo }: FallbackPanelProps) {
   if (!show || !playback) {
     return (
       <section aria-label="Fallback Panel" className={styles.strip}>
@@ -36,6 +45,8 @@ export function FallbackPanel({ show, playback }: FallbackPanelProps) {
       <BlackoutButton show={show} playback={playback} />
       <BaseLookButton show={show} playback={playback} className={styles.baseLook} />
       <GrandMasterFader playback={playback} />
+      <TapTempoButton tempo={tempo} />
+      <FreezeButton show={show} playback={playback} />
       <div className={styles.scenes} role="group" aria-label="Scene buttons">
         {scenes.length === 0 ? (
           <p className={styles.note}>No Scene buttons: add them in the Show view.</p>

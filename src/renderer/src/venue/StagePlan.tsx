@@ -1,4 +1,5 @@
-import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { audienceY } from '../../../shared/aim';
 import {
   fixtureRole,
   fixtureZone,
@@ -30,6 +31,10 @@ interface StagePlanProps {
   // Resolves once the engine has answered, so the plan can stop showing the
   // dragged position.
   onMove(id: string, position: StagePosition): Promise<unknown>;
+  // Shows the plan out to the audience plane.
+  audience?: boolean;
+  // Drawn over the stage, under the Fixtures.
+  children?: ReactNode;
 }
 
 interface Drag {
@@ -47,7 +52,15 @@ interface Drag {
 // Top-down view of the stage and its Zone grid, seen with the audience at the
 // bottom: Stage Left is on the right. Fixtures can be dragged; the Zone they
 // would be in shows while dragging. Shift and Ctrl click select several.
-export function StagePlan({ patch, selectedIds, onSelect, onKeyDown, onMove }: StagePlanProps) {
+export function StagePlan({
+  patch,
+  selectedIds,
+  onSelect,
+  onKeyDown,
+  onMove,
+  audience = false,
+  children,
+}: StagePlanProps) {
   const svg = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag>();
 
@@ -110,14 +123,15 @@ export function StagePlan({ patch, selectedIds, onSelect, onKeyDown, onMove }: S
     <figure className={styles.figure}>
       <svg
         ref={svg}
-        viewBox={stageViewBox(patch.stage)}
+        viewBox={stageViewBox(patch.stage, { audience })}
         className={styles.plan}
         role="img"
         aria-label="Top-down stage plan"
         tabIndex={0}
         onKeyDown={onKeyDown}
       >
-        <StageGrid stage={patch.stage} />
+        <StageGrid stage={patch.stage} audience={audience} />
+        {children}
         {patch.fixtures.map((fixture) => {
           const shown = position(fixture);
           const overhead = fixtureZone(patch, shown).level === 'Overhead';
@@ -159,10 +173,24 @@ export function StagePlan({ patch, selectedIds, onSelect, onKeyDown, onMove }: S
 }
 
 // The stage, the Front row in front of it, the Zone grid and its labels,
-// top-down in SVG coordinates (see `stageViewBox`).
-export function StageGrid({ stage: { width, depth } }: { stage: StageBounds }) {
+// top-down in SVG coordinates (see `stageViewBox`). With `audience`, the
+// audience plane too.
+export function StageGrid({ stage, audience = false }: { stage: StageBounds; audience?: boolean }) {
+  const { width, depth } = stage;
   return (
     <>
+      {audience && (
+        <line
+          data-testid="audience-plane"
+          x1={-width / 2 - MARGIN}
+          x2={width / 2 + MARGIN}
+          y1={-audienceY(stage)}
+          y2={-audienceY(stage)}
+          className={styles.audiencePlane}
+          strokeWidth={0.03}
+          strokeDasharray="0.15 0.1"
+        />
+      )}
       <rect
         x={-width / 2}
         y={-depth}
@@ -224,9 +252,12 @@ export function StageGrid({ stage: { width, depth } }: { stage: StageBounds }) {
 }
 
 // SVG coordinates are metres with y flipped: stage y = -svg y. The view
-// shows the stage, the Front row and a margin.
-export function stageViewBox({ width, depth }: StageBounds): string {
-  return `${-width / 2 - MARGIN} ${-depth - MARGIN} ${width + 2 * MARGIN} ${depth + FRONT_DEPTH + 2 * MARGIN}`;
+// shows the stage, the Front row, or with `audience` out to the audience
+// plane, and a margin.
+export function stageViewBox(stage: StageBounds, { audience = false } = {}): string {
+  const { width, depth } = stage;
+  const front = audience ? -audienceY(stage) : FRONT_DEPTH;
+  return `${-width / 2 - MARGIN} ${-depth - MARGIN} ${width + 2 * MARGIN} ${depth + front + 2 * MARGIN}`;
 }
 
 // Each Zone row's top and bottom in SVG y, Front first.

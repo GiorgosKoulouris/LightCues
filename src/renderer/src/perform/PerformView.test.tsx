@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Scene, Show } from '../../../shared/show';
 import { emptyPatch } from '../../../shared/venue-patch';
+import type { TempoState } from '../panel/useTempo';
 import type { PlaybackState } from '../show/usePlayback';
 import { installFakeEngine, type FakeEngine } from '../test-engine';
 import { UiProvider } from '../ui/UiProvider';
@@ -37,9 +38,12 @@ const PLAYBACK: PlaybackState = {
   mode: 'monitor',
   grandMaster: 0.8,
   blackout: false,
+  freeze: false,
 };
 
 let engine: FakeEngine;
+
+const TEMPO: TempoState = { bpm: 128, source: 'clock' };
 
 function renderView(show: Show = SHOW, playback: PlaybackState = PLAYBACK, active = true) {
   render(
@@ -49,6 +53,7 @@ function renderView(show: Show = SHOW, playback: PlaybackState = PLAYBACK, activ
         show={show}
         patch={emptyPatch({ width: 10, depth: 6 })}
         playback={playback}
+        tempo={TEMPO}
       />
     </UiProvider>,
   );
@@ -101,6 +106,30 @@ describe('PerformView', () => {
       { type: 'setBlackout', on: true },
       { type: 'goBaseLook' },
     ]);
+  });
+
+  it('taps the Tempo and shows it', async () => {
+    renderView();
+    const tap = screen.getByRole('button', { name: /Tap/ });
+    expect(tap).toHaveTextContent('128 BPM');
+    await userEvent.click(tap);
+    expect(engine.sent.at(-1)).toEqual({ type: 'tapTempo' });
+  });
+
+  it('turns Freeze on', async () => {
+    renderView();
+    const freeze = screen.getByRole('button', { name: /Freeze/ });
+    expect(freeze).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(freeze);
+    expect(engine.sent.at(-1)).toEqual({ type: 'setFreeze', on: true });
+  });
+
+  it('turns Freeze off when on', async () => {
+    renderView(SHOW, { ...PLAYBACK, freeze: true });
+    const freeze = screen.getByRole('button', { name: /Freeze/ });
+    expect(freeze).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(freeze);
+    expect(engine.sent.at(-1)).toEqual({ type: 'setFreeze', on: false });
   });
 
   it('shows Blackout as on', () => {

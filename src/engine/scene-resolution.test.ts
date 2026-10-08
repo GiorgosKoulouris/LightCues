@@ -6,7 +6,7 @@ import type {
   Emitter,
   FixtureProfile,
 } from '../shared/fixture-profile';
-import type { Rule, Scene, Show, Swatch } from '../shared/show';
+import type { MovementEffect, Rule, Scene, Show, Spread, Swatch } from '../shared/show';
 import type { PatchedFixture, VenuePatch } from '../shared/venue-patch';
 import {
   activate,
@@ -501,6 +501,20 @@ describe('resolveFrames', () => {
       expect(aimed(s, playOn(rig, s, ['cross', 0], ['dim', 1]))).toEqual([...CROSS, 128]);
     });
 
+    it("gives the preview each mover's pan and tilt, as sent", () => {
+      const s = show(
+        scene('cross', [{ target: {}, intensity: 1, direction: 'Cross' }]),
+        scene('down', [{ target: {}, intensity: 1, direction: 'Down' }], { fadeIn: 2 }),
+      );
+      const active = playOn(rig, s, ['cross', 0], ['down', 10]);
+      const aimOf = (time: number) => resolveLights(s, rig, active, time).mover?.aim;
+
+      expect(aimOf(10)).toEqual({ pan: expect.closeTo(90), tilt: expect.closeTo(45) });
+      // Half way to Down, pan kept.
+      expect(aimOf(11)).toEqual({ pan: expect.closeTo(90), tilt: expect.closeTo(22.5) });
+      expect(resolveLights(s, rig, active, 11).par).not.toHaveProperty('aim');
+    });
+
     it('lets later Rules override earlier ones, and only aims Fixtures they target', () => {
       const s = show(
         scene('look', [
@@ -658,5 +672,262 @@ describe('resolveLights', () => {
       green: 0,
       blue: 0.5,
     });
+  });
+});
+
+describe('movement Effects', () => {
+  const mover = profile('test/mover', [
+    channel('Dimmer', { type: 'intensity' }),
+    channel('Pan', { type: 'pan', degrees: [-270, 270] }),
+    channel('Tilt', { type: 'tilt', degrees: [-135, 135] }),
+  ]);
+  // Hung 6 m up on Stage Left. Cross is pan 90°, tilt 45°.
+  const hung = fixture({ id: 'mover', profileId: mover.id, x: 3, y: 4, height: 6 });
+  const rig = patch([hung], [mover]);
+  const effect = (overrides: Partial<MovementEffect> = {}): MovementEffect => ({
+    shape: 'Pan sweep',
+    size: 10,
+    length: 4,
+    spread: 'In sync',
+    ...overrides,
+  });
+
+  // A mover's pan and tilt, in degrees, at `beat` of the Tempo.
+  function aimAtBeat(s: Show, active: ActiveScenes, beat: number, time = 0, r = rig, id = 'mover') {
+    const aim = resolveLights(s, r, active, time, 1, beat)[id]?.aim;
+    return [Math.round(aim?.pan ?? NaN), Math.round(aim?.tilt ?? NaN)];
+  }
+
+  it('sweeps pan around the base aim over its length in beats', () => {
+    const s = show(scene('sweep', [{ target: {}, direction: 'Cross', effect: effect() }]));
+    const active = playOn(rig, s, ['sweep', 0]);
+
+    expect([0, 1, 2, 3, 4].map((beat) => aimAtBeat(s, active, beat))).toEqual([
+      [90, 45],
+      [100, 45],
+      [90, 45],
+      [80, 45],
+      [90, 45],
+    ]);
+  });
+  it('sweeps tilt, and circles with tilt a quarter cycle ahead of pan', () => {
+    const s = show(
+      scene('tilt', [{ target: {}, direction: 'Cross', effect: effect({ shape: 'Tilt sweep' }) }]),
+      scene('circle', [{ target: {}, direction: 'Cross', effect: effect({ shape: 'Circle' }) }]),
+    );
+    const at = (id: string) => [0, 1, 2, 3].map((b) => aimAtBeat(s, playOn(rig, s, [id, 0]), b));
+
+    expect(at('tilt')).toEqual([
+      [90, 45],
+      [90, 55],
+      [90, 45],
+      [90, 35],
+    ]);
+    expect(at('circle')).toEqual([
+      [90, 55],
+      [100, 45],
+      [90, 35],
+      [80, 45],
+    ]);
+  });
+
+  it('wanders smoothly with Ballyhoo, within its size, the same each time for a Fixture', () => {
+    const ballyhoo = effect({ shape: 'Ballyhoo', size: 20, length: 8 });
+    const s = show(scene('wander', [{ target: {}, direction: 'Cross', effect: ballyhoo }]));
+    const twin = fixture({ id: 'twin', profileId: mover.id, x: 3, y: 4, height: 6, address: 4 });
+    const both = patch([hung, twin], [mover]);
+    const active = playOn(both, s, ['wander', 0]);
+    const angles = (beat: number, id: string) => {
+      const aim = resolveLights(s, both, active, 0, 1, beat)[id]!.aim!;
+      return [aim.pan! - 90, aim.tilt! - 45];
+    };
+    const beats = Array.from({ length: 64 }, (_, i) => i / 8);
+
+    for (const beat of beats) {
+      const [pan, tilt] = angles(beat, 'mover');
+      expect(Math.abs(pan!)).toBeLessThanOrEqual(20);
+      expect(Math.abs(tilt!)).toBeLessThanOrEqual(20);
+      // Smooth: an eighth of a beat moves it little.
+      const [nextPan, nextTilt] = angles(beat + 1 / 8, 'mover');
+      expect(Math.abs(nextPan! - pan!)).toBeLessThan(5);
+      expect(Math.abs(nextTilt! - tilt!)).toBeLessThan(5);
+    }
+    expect(angles(3, 'mover')).toEqual(angles(3, 'mover'));
+    // It repeats each cycle.
+    const [pan, tilt] = angles(3, 'mover');
+    expect(angles(11, 'mover')).toEqual([expect.closeTo(pan!), expect.closeTo(tilt!)]);
+    expect(angles(3, 'twin')).not.toEqual(angles(3, 'mover'));
+    // It wanders.
+    expect(new Set(beats.map((b) => Math.round(angles(b, 'mover')[0]!))).size).toBeGreaterThan(10);
+  });
+
+  it('clamps the turned aim to the Fixture range', () => {
+    // Down is tilt 0 of ±135°; Up is out of reach, at the end of the range.
+    const s = show(
+      scene('up', [{ target: {}, direction: 'Up', effect: effect({ shape: 'Tilt sweep' }) }]),
+    );
+    const active = playOn(rig, s, ['up', 0]);
+    const tilts = [1, 3].map((beat) => Math.abs(aimAtBeat(s, active, beat)[1]!));
+
+    // Turned 10° back into the range one way, held at its end the other.
+    expect(tilts.sort()).toEqual([125, 135]);
+  });
+
+  it('turns an inverted axis the other way, so mirrored rigging moves together', () => {
+    const inverted = fixture({
+      ...hung,
+      id: 'inverted',
+      address: 4,
+      mounting: {
+        mount: 'Hung',
+        rotation: 0,
+        panInvert: true,
+        tiltInvert: false,
+        panOffset: 0,
+        tiltOffset: 0,
+      },
+    });
+    const both = patch([hung, inverted], [mover]);
+    const s = show(scene('sweep', [{ target: {}, direction: 'Down', effect: effect() }]));
+    const active = playOn(both, s, ['sweep', 0]);
+
+    expect(aimAtBeat(s, active, 1, 0, both, 'mover')[0]).toBe(10);
+    expect(aimAtBeat(s, active, 1, 0, both, 'inverted')[0]).toBe(-10);
+  });
+
+  describe('Spread', () => {
+    // Movers across the stage, at x -4, -2, 2 and 4, a beat apart.
+    const at = (x: number, address: number) =>
+      fixture({ id: `x${x}`, profileId: mover.id, x, y: 4, height: 6, address });
+    const line = patch([at(4, 1), at(-2, 4), at(-4, 7), at(2, 10)], [mover]);
+    // Each mover's pan offset at beat 1, as the fraction of the size it is
+    // at: the sine of its phase.
+    function phases(spread: Spread): Record<string, number> {
+      const s = show(
+        scene('sweep', [{ target: {}, direction: 'Down', effect: effect({ size: 20, spread }) }]),
+      );
+      const lights = resolveLights(s, line, playOn(line, s, ['sweep', 0]), 0, 1, 1);
+      return Object.fromEntries(
+        Object.entries(lights).map(([id, light]) => [id, Math.round(light.aim!.pan! / 20)]),
+      );
+    }
+
+    it('runs every Fixture together In sync', () => {
+      expect(phases('In sync')).toEqual({ 'x-4': 1, 'x-2': 1, x2: 1, x4: 1 });
+    });
+
+    it('runs from the lowest x up, Left→Right', () => {
+      // A quarter of the cycle apart: at beat 1, phases 1/4, 0, -1/4, -1/2.
+      expect(phases('Left→Right')).toEqual({ 'x-4': 1, 'x-2': 0, x2: -1, x4: -0 });
+    });
+
+    it('runs from the centre out, Mirrored', () => {
+      // Half the cycle apart: phases 1/4 and -1/4.
+      expect(phases('Mirrored')).toEqual({ 'x-4': -1, 'x-2': 1, x2: 1, x4: -1 });
+    });
+
+    it('runs every other Fixture across half a cycle apart, Alternate', () => {
+      expect(phases('Alternate')).toEqual({ 'x-4': 1, 'x-2': -1, x2: 1, x4: -1 });
+    });
+
+    it('spreads across the Fixtures the Rule targets only', () => {
+      // Stage Left only: x 2 and 4.
+      const s = show(
+        scene('sweep', [
+          {
+            target: { zones: [{ row: 'Midstage', column: 'Stage Left', level: 'Overhead' }] },
+            effect: effect({ size: 20, spread: 'Left→Right' }),
+          },
+        ]),
+      );
+      const lights = resolveLights(s, line, playOn(line, s, ['sweep', 0]), 0, 1, 1);
+
+      expect(Math.round(lights.x2!.aim!.pan! / 20)).toBe(1);
+      expect(Math.round(lights.x4!.aim!.pan! / 20)).toBe(-1);
+    });
+  });
+
+  it('runs around a Direction from another Layer, each combined by last change', () => {
+    const s = show(
+      scene('cross', [{ target: {}, direction: 'Cross' }]),
+      scene('sweep', [{ target: {}, effect: effect() }], { layer: 'l2' }),
+      scene('tilt', [{ target: {}, direction: 'Cross', effect: effect({ shape: 'Tilt sweep' }) }]),
+    );
+
+    // The Effect runs around Cross, set on the other Layer.
+    expect(aimAtBeat(s, playOn(rig, s, ['cross', 0], ['sweep', 1]), 1)).toEqual([100, 45]);
+    expect(aimAtBeat(s, playOn(rig, s, ['sweep', 0], ['cross', 1]), 1)).toEqual([100, 45]);
+    // Without a Direction, around the Default Direction.
+    expect(aimAtBeat({ ...s, defaultDirection: 'Cross' }, playOn(rig, s, ['sweep', 0]), 1)).toEqual(
+      [100, 45],
+    );
+    // The Effect changed last wins.
+    const active = playOn(rig, s, ['cross', 0], ['sweep', 1], ['tilt', 2]);
+    expect(aimAtBeat(s, active, 1)).toEqual([90, 55]);
+  });
+
+  it("fades an Effect's size in with its Scene, and out with the one it replaces", () => {
+    const s = show(
+      scene('cross', [{ target: {}, direction: 'Cross' }]),
+      scene('sweep', [{ target: {}, direction: 'Cross', effect: effect() }], { fadeIn: 2 }),
+    );
+    const fadingIn = playOn(rig, s, ['cross', 0], ['sweep', 10]);
+    const fadingOut = playOn(rig, s, ['sweep', 0], ['cross', 10]);
+
+    expect([10, 11, 12].map((time) => aimAtBeat(s, fadingIn, 1, time)[0])).toEqual([90, 95, 100]);
+    // Cross has no fade-in: the Effect stops at once.
+    expect(aimAtBeat(s, fadingOut, 1, 10)[0]).toBe(90);
+    const slow = { ...s, scenes: [{ ...s.scenes[0]!, fadeIn: 2 }, s.scenes[1]!] };
+    const slowOut = playOn(rig, slow, ['sweep', 0], ['cross', 10]);
+    expect([10, 11, 12].map((time) => aimAtBeat(slow, slowOut, 1, time)[0])).toEqual([100, 95, 90]);
+  });
+
+  it('moves between Directions from the aim shown, turning it once', () => {
+    const s = show(
+      scene('sweep', [{ target: {}, effect: effect() }], { layer: 'l2' }),
+      scene('down', [{ target: {}, intensity: 1, direction: 'Down' }]),
+      scene('cross', [{ target: {}, intensity: 1, direction: 'Cross' }], { fadeIn: 2 }),
+    );
+    // At beat 1 the sweep turns pan 10°. Down keeps the pan of the range centre.
+    const active = playOn(rig, s, ['sweep', 0], ['down', 1]);
+    const moving = activate(active, s, rig, 'cross', 10, 1, 1);
+
+    expect(aimAtBeat(s, active, 1, 10)).toEqual([10, 0]);
+    expect(aimAtBeat(s, moving, 1, 10)).toEqual([10, 0]);
+    expect(aimAtBeat(s, moving, 1, 12)).toEqual([100, 45]);
+  });
+
+  it('fades an Effect in from the one it takes over from on another Layer', () => {
+    const s = show(
+      scene('sweep', [{ target: {}, direction: 'Cross', effect: effect() }]),
+      scene('tilt', [{ target: {}, effect: effect({ shape: 'Tilt sweep' }) }], {
+        layer: 'l2',
+        fadeIn: 2,
+      }),
+      scene('lit', [{ target: {}, intensity: 1 }], { layer: 'l2', fadeIn: 2 }),
+    );
+    const active = playOn(rig, s, ['sweep', 0], ['tilt', 10]);
+
+    expect([10, 11, 12].map((time) => aimAtBeat(s, active, 1, time))).toEqual([
+      [100, 45],
+      [95, 50],
+      [90, 55],
+    ]);
+    // A Scene without an Effect fades back to the one underneath.
+    const back = activate(active, s, rig, 'lit', 20, 1, 1);
+    expect([20, 21, 22].map((time) => aimAtBeat(s, back, 1, time))).toEqual([
+      [90, 55],
+      [95, 50],
+      [100, 45],
+    ]);
+  });
+
+  it('leaves Fixtures without pan or tilt alone', () => {
+    const par = fixture({ id: 'par', address: 4 });
+    const r = patch([hung, par], [mover, dimmer]);
+    const s = show(scene('sweep', [{ target: {}, intensity: 1, effect: effect() }]));
+
+    expect(channels(resolveFrames(s, r, playOn(r, s, ['sweep', 0]), 0, 1, 1), 4)[3]).toBe(255);
+    expect(resolveLights(s, r, playOn(r, s, ['sweep', 0]), 0, 1, 1).par).not.toHaveProperty('aim');
   });
 });

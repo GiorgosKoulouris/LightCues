@@ -40,6 +40,7 @@ describe('validateShow', () => {
       },
       { target: { roles: ['Effect'] }, colour: { swatch: 'UV' } },
       { target: {}, direction: 'Audience' },
+      { target: {}, effect: { shape: 'Ballyhoo', size: 25, length: 16, spread: 'Alternate' } },
     ];
 
     expect(validateShow(show(scene({ rules })))).toEqual([]);
@@ -58,6 +59,8 @@ describe('validateShow', () => {
         colour: { swatch: 'Teal' },
         direction: 'Sideways',
       },
+      { target: {}, effect: { shape: 'Figure 8', size: 0, length: 3, spread: 'Random' } },
+      { target: {}, effect: { shape: 'Circle', size: 181, length: 1, spread: 'In sync' } },
     ] as unknown as Rule[];
 
     expect(validateShow(show(scene({ name: 'Verse', rules })))).toEqual([
@@ -71,6 +74,11 @@ describe('validateShow', () => {
       'Scene "Verse" Rule 4: Role "Laser" is not a Role',
       'Scene "Verse" Rule 4: "Teal" is not a swatch',
       'Scene "Verse" Rule 4: "Sideways" is not a Direction',
+      'Scene "Verse" Rule 5: "Figure 8" is not a movement Effect shape',
+      'Scene "Verse" Rule 5: Effect size must be over 0 and at most 180 degrees',
+      'Scene "Verse" Rule 5: Effect length must be 1, 2, 4, 8 or 16 beats',
+      'Scene "Verse" Rule 5: "Random" is not a Spread',
+      'Scene "Verse" Rule 6: Effect size must be over 0 and at most 180 degrees',
     ]);
   });
 

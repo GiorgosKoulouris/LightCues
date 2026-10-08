@@ -78,7 +78,7 @@ The beats per minute that Effects run to. Taken from the MIDI Input's MIDI Clock
 _Avoid_: BPM, speed
 
 **Freeze**:
-Stops every movement Effect where it is, until turned off. Directions still apply.
+Stops every movement Effect where it is, until turned off; they then jump to where the beat has got to. Directions and fades still apply. It holds the beat Effects run to, so a Scene started while frozen holds its Effect where that beat puts it. Not saved, off on launch, and kept when a Show is replaced, like Blackout.
 
 **Layer**:
 A slot that holds at most one active Scene. Activating a Scene replaces the active Scene in its Layer; different Layers stack.

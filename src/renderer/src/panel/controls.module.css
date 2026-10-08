@@ -39,6 +39,21 @@
   text-align: right;
 }
 
+.tapTempo,
+.freeze {
+  flex-shrink: 0;
+}
+
+.bpm {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.source {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
 .key {
   padding: 0 var(--space-1);
   border: 1px solid var(--border-strong);

@@ -1,7 +1,15 @@
 import { useId, useState } from 'react';
 import type { Show } from '../../../shared/show';
 import type { VenuePatch } from '../../../shared/venue-patch';
-import { BaseLookButton, BlackoutButton, GrandMasterFader, Key } from '../panel/controls';
+import {
+  BaseLookButton,
+  BlackoutButton,
+  FreezeButton,
+  GrandMasterFader,
+  Key,
+  TapTempoButton,
+} from '../panel/controls';
+import type { TempoState } from '../panel/useTempo';
 import { ActiveDot } from '../show/ActiveDot';
 import { ClearLayerButton } from '../show/ClearLayerButton';
 import { ModeSwitch } from '../show/ModeSwitch';
@@ -21,13 +29,14 @@ interface PerformViewProps {
   show: Show | undefined;
   patch: VenuePatch | undefined;
   playback: PlaybackState | undefined;
+  tempo: TempoState | undefined;
 }
 
-// The gig view: Blackout, the Base Look and the Grand Master along the top,
+// The gig view: Blackout, the Base Look, the Grand Master, Tap Tempo and Freeze along the top,
 // every Scene as a large button grouped by Layer, each Layer with Clear, and
 // the Preview with Monitor/Blind. Nothing is edited here. It replaces the Fallback Panel strip,
 // whose keys still work.
-export function PerformView({ active, show, patch, playback }: PerformViewProps) {
+export function PerformView({ active, show, patch, playback, tempo }: PerformViewProps) {
   // The Preview column, below 1280px where it is hidden by default.
   const [sideOpen, setSideOpen] = useState(false);
 
@@ -46,6 +55,8 @@ export function PerformView({ active, show, patch, playback }: PerformViewProps)
           className={cx(styles.control, styles.baseLook)}
         />
         <GrandMasterFader playback={playback} className={styles.grandMaster} />
+        <TapTempoButton tempo={tempo} className={styles.control} />
+        <FreezeButton show={show} playback={playback} className={styles.control} />
         <div className={styles.toggle}>
           <SidePanelToggle
             label="Preview"

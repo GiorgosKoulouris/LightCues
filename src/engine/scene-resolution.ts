@@ -1,7 +1,7 @@
 // Scene resolution: the active Scenes of a Show, resolved against a Venue
 // Patch, as one DMX frame per Universe. Pure, so it is testable without
 // hardware.
-import { aimAt, aimDmx, type AimAngles } from '../shared/aim';
+import { aimAt, aimDmx, turnAim, type AimAngles, type Turn } from '../shared/aim';
 import { dmxByte, fixed, toDmx, type Point } from '../shared/dmx-point';
 import type { CapabilityRange, Channel, Emitter } from '../shared/fixture-profile';
 import type { FixtureLight } from '../shared/protocol';
@@ -14,6 +14,7 @@ import {
   type Show,
   type Swatch,
 } from '../shared/show';
+import { effectTurn, spreadDelay } from './movement-effects';
 import {
   DMX_CHANNELS,
   fixtureMode,
@@ -46,7 +47,7 @@ export type ActiveScenes = Record<string, ActiveScene>;
 
 // Activates a Scene at `time`, replacing the active Scene in its Layer. It
 // keeps what each moving Fixture in the Venue Patch shows then, under the
-// Grand Master.
+// Grand Master and at `beat` of the Tempo.
 export function activate(
   active: ActiveScenes,
   show: Show,
@@ -54,6 +55,7 @@ export function activate(
   sceneId: string,
   time: number,
   grandMaster = 1,
+  beat = 0,
 ): ActiveScenes {
   const scene = findScene(show, sceneId);
   if (!scene) return active;
@@ -61,7 +63,7 @@ export function activate(
   const entry: ActiveScene = {
     scene: sceneId,
     since: time,
-    shown: shownAims(show, patch, active, time, grandMaster),
+    shown: shownAims(show, patch, active, time, grandMaster, beat),
   };
   // A finished fade no longer needs what it faded from.
   if (from) entry.from = fading(show, from, time) ? from : { scene: from.scene, since: from.since };
@@ -75,10 +77,11 @@ function shownAims(
   active: ActiveScenes,
   time: number,
   grandMaster: number,
+  beat: number,
 ): Record<string, ShownAim> {
   const shown: Record<string, ShownAim> = {};
   for (const fixture of patch.fixtures) {
-    const { output } = fixtureOutput(show, patch, active, fixture, time, grandMaster);
+    const { output } = fixtureOutput(show, patch, active, fixture, time, grandMaster, beat);
     const { aim, direction, intensity } = output;
     if (aim && direction) shown[fixture.id] = { ...aim, direction, dark: intensity === 0 };
   }
@@ -111,16 +114,19 @@ export function clamp(value: number): number {
 
 // One frame per Universe in the patch, channel 1 first, at `time` (seconds).
 // The Grand Master (0–1) scales intensity after the Layers are combined.
+// Movement Effects run at `beat`, the Tempo's beat count.
 export function resolveFrames(
   show: Show,
   patch: VenuePatch,
   active: ActiveScenes,
   time: number,
   grandMaster = 1,
+  beat = 0,
 ): Map<number, Uint8Array> {
   const frames = new Map(patch.universes.map((u) => [u.number, new Uint8Array(DMX_CHANNELS)]));
   for (const fixture of patch.fixtures) {
-    const { channels, output } = fixtureOutput(show, patch, active, fixture, time, grandMaster);
+    const resolved = fixtureOutput(show, patch, active, fixture, time, grandMaster, beat);
+    const { channels, output } = resolved;
     frames.get(fixture.universe)!.set(encodeChannels(channels, output), fixture.address - 1);
   }
   return frames;
@@ -134,18 +140,25 @@ export function resolveLights(
   active: ActiveScenes,
   time: number,
   grandMaster = 1,
+  beat = 0,
 ): Record<string, FixtureLight> {
   return Object.fromEntries(
     patch.fixtures.map((fixture) => {
-      const { channels, output } = fixtureOutput(show, patch, active, fixture, time, grandMaster);
-      const { red, green, blue } = shownColour(channels, output);
-      return [fixture.id, { intensity: output.intensity, red, green, blue }];
+      const resolved = fixtureOutput(show, patch, active, fixture, time, grandMaster, beat);
+      const { channels, output } = resolved;
+      return [fixture.id, fixtureLight(channels, output)];
     }),
   );
 }
 
+// How a Fixture set to `output` looks in the preview.
+function fixtureLight(channels: Channel[], output: FixtureOutput): FixtureLight {
+  const { red, green, blue } = shownColour(channels, output);
+  return { intensity: output.intensity, red, green, blue, ...(output.aim && { aim: output.aim }) };
+}
+
 // What a Fixture is set to once the Layers are combined, and the channels of
-// its mode.
+// its mode. A movement Effect turns a moving Fixture from its aim.
 function fixtureOutput(
   show: Show,
   patch: VenuePatch,
@@ -153,23 +166,26 @@ function fixtureOutput(
   fixture: PatchedFixture,
   time: number,
   grandMaster: number,
+  beat: number,
 ): { channels: Channel[]; output: FixtureOutput } {
   let intensity = 0;
   let colour: ColourLevels | undefined;
   let direction: Direction | undefined;
+  let turn: Turn | undefined;
   const entries = byChange(show, active);
   for (const entry of entries) {
-    const look = layerLook(show, patch, fixture, entry, time);
+    const look = layerLook(show, patch, fixture, entry, time, beat);
     intensity = Math.max(intensity, look.intensity ?? 0);
     colour = look.colour ?? colour;
     direction = look.direction ?? direction;
+    turn = combinedTurn(turn, look);
   }
   colour ??= show.defaultColour ? colourLevels(show.defaultColour) : WHITE;
   const { channels } = fixtureMode(patch, fixture);
   const output = levelOutput(channels, intensity * grandMaster, colour);
   if (isMovingFixture(patch, fixture)) {
     output.direction = direction ?? show.defaultDirection ?? DEFAULT_DIRECTION;
-    output.aim = fixtureAim(show, patch, fixture, channels, output.direction, entries, time);
+    output.aim = fixtureAim(show, patch, fixture, channels, output.direction, entries, time, turn);
   }
   return { channels, output };
 }
@@ -201,30 +217,57 @@ export function focusCheckFrames(
 ): Map<number, Uint8Array> {
   const focused = new Map([...frames].map(([number, frame]) => [number, frame.slice()]));
   for (const fixture of patch.fixtures) {
-    if (!isMovingFixture(patch, fixture)) continue;
-    const { channels } = fixtureMode(patch, fixture);
-    const output = levelOutput(channels, intensity, WHITE);
-    const aim = aimAt({
-      position: fixture,
-      mounting: fixtureMounting(fixture),
-      channels,
-      stage: patch.stage,
-      direction,
-    });
-    if (aim) output.aim = { pan: aim.pan, tilt: aim.tilt };
+    const focus = focusCheckOutput(patch, fixture, direction, intensity);
+    if (!focus) continue;
     let frame = focused.get(fixture.universe);
     if (!frame) focused.set(fixture.universe, (frame = new Uint8Array(DMX_CHANNELS)));
-    frame.set(encodeChannels(channels, output), fixture.address - 1);
+    frame.set(encodeChannels(focus.channels, focus.output), fixture.address - 1);
   }
   return focused;
 }
 
-// A moving Fixture's pan and tilt at `time`, aimed at `direction`. The
-// activation that last changed its Direction times the move: the aim moves
-// from the one shown then, over that Scene's fade-in, in degrees, to the pan
-// nearest the one shown then. A Fixture dark then snaps. With no such
-// activation, the pan is the one nearest the pan shown at the last
-// activation, or the centre of its range.
+// The Focus Check over `lights`, as `focusCheckFrames` over frames.
+export function focusCheckLights(
+  patch: VenuePatch,
+  lights: Record<string, FixtureLight>,
+  direction: Direction,
+  intensity: number,
+): Record<string, FixtureLight> {
+  const focused = { ...lights };
+  for (const fixture of patch.fixtures) {
+    const focus = focusCheckOutput(patch, fixture, direction, intensity);
+    if (focus) focused[fixture.id] = fixtureLight(focus.channels, focus.output);
+  }
+  return focused;
+}
+
+// What the Focus Check sets a Fixture to; undefined unless it moves.
+function focusCheckOutput(
+  patch: VenuePatch,
+  fixture: PatchedFixture,
+  direction: Direction,
+  intensity: number,
+): { channels: Channel[]; output: FixtureOutput } | undefined {
+  if (!isMovingFixture(patch, fixture)) return undefined;
+  const { channels } = fixtureMode(patch, fixture);
+  const output = levelOutput(channels, intensity, WHITE);
+  const aim = aimAt({
+    position: fixture,
+    mounting: fixtureMounting(fixture),
+    channels,
+    stage: patch.stage,
+    direction,
+  });
+  if (aim) output.aim = { pan: aim.pan, tilt: aim.tilt };
+  return { channels, output };
+}
+
+// A moving Fixture's pan and tilt at `time`, aimed at `direction` and turned
+// by `turn`. The activation that last changed its Direction times the move:
+// the aim moves from the one shown then, over that Scene's fade-in, in
+// degrees, to the pan nearest the one shown then. A Fixture dark then snaps.
+// With no such activation, the pan is the one nearest the pan shown at the
+// last activation, or the centre of its range.
 function fixtureAim(
   show: Show,
   patch: VenuePatch,
@@ -233,6 +276,7 @@ function fixtureAim(
   direction: Direction,
   entries: ActiveScene[],
   time: number,
+  turn: Turn | undefined,
 ): AimAngles | undefined {
   const shownBy = (entry: ActiveScene) => entry.shown?.[fixture.id];
   const movedBy = entries.findLast((entry) => {
@@ -241,15 +285,18 @@ function fixtureAim(
   });
   const latest = movedBy ?? entries.at(-1);
   const shown = latest && shownBy(latest);
-  const aim = aimAt({
+  const mounting = fixtureMounting(fixture);
+  const aimed = aimAt({
     position: fixture,
-    mounting: fixtureMounting(fixture),
+    mounting,
     channels,
     stage: patch.stage,
     direction,
     ...(shown?.pan !== undefined ? { currentPan: shown.pan } : {}),
   });
-  if (!aim || !movedBy || !shown || shown.dark) return aim && { pan: aim.pan, tilt: aim.tilt };
+  if (!aimed) return undefined;
+  const aim = turnAim(channels, mounting, aimed, turn ?? STILL);
+  if (!movedBy || !shown || shown.dark) return aim;
   const p = progress(show, movedBy.scene, movedBy.since, time);
   const move = (from?: number, to?: number) =>
     from === undefined || to === undefined ? to : lerp(from, to, p);
@@ -285,29 +332,53 @@ function byChange(show: Show, active: ActiveScenes): ActiveScene[] {
 }
 
 // What one Scene sets on a Fixture. An absent attribute is left to other
-// Scenes.
+// Scenes. `turn` is a moving Fixture's turn by a movement Effect. While a
+// Layer crossfades, `turnFade` holds its turn instead.
 interface Look {
   intensity?: number;
   colour?: ColourLevels;
   direction?: Direction;
+  turn?: Turn;
+  turnFade?: TurnFade;
 }
 
-// What a Layer sets on a Fixture at `time`. While crossfading, intensity
-// fades between the two looks, an absent one counting as 0; colour fades
-// between them when both set it, or else holds the one that does. The
-// Direction is the new look's at once; `fixtureAim` times the move.
+// A turn fading `p` (0–1) of the way between two looks' turns. An absent one
+// is the turn the Layers below give.
+interface TurnFade {
+  from?: Turn;
+  to?: Turn;
+  p: number;
+}
+
+const STILL: Turn = { pan: 0, tilt: 0 };
+
+// The turn once a look is combined over `below`, the turn the Layers below
+// give.
+function combinedTurn(below: Turn | undefined, { turn, turnFade }: Look): Turn | undefined {
+  if (!turnFade) return turn ?? below;
+  const { from = below ?? STILL, to = below ?? STILL, p } = turnFade;
+  return { pan: lerp(from.pan, to.pan, p), tilt: lerp(from.tilt, to.tilt, p) };
+}
+
+// What a Layer sets on a Fixture at `time` and `beat`. While crossfading,
+// intensity fades between the two looks, an absent one counting as 0; colour
+// fades between them when both set it, or else holds the one that does. The
+// Direction is the new look's at once; `fixtureAim` times the move. A
+// movement Effect's turn fades from the one before, or the one below, so its
+// size fades in with the Scene. Both looks' Effects keep running to `beat`.
 function layerLook(
   show: Show,
   patch: VenuePatch,
   fixture: PatchedFixture,
   { scene: id, since, from }: ActiveScene,
   time: number,
+  beat: number,
 ): Look {
   const scene = findScene(show, id);
-  const target = scene ? sceneLook(patch, fixture, scene) : {};
+  const target = scene ? sceneLook(patch, fixture, scene, beat) : {};
   const p = progress(show, id, since, time);
   if (p === 1) return target;
-  const before = from ? layerLook(show, patch, fixture, from, since) : {};
+  const before = from ? layerLook(show, patch, fixture, from, since, beat) : {};
   const look: Look = {};
   if (before.intensity !== undefined || target.intensity !== undefined) {
     look.intensity = lerp(before.intensity ?? 0, target.intensity ?? 0, p);
@@ -318,16 +389,34 @@ function layerLook(
       : (target.colour ?? before.colour);
   if (colour) look.colour = colour;
   if (target.direction) look.direction = target.direction;
+  // A fade underway before is taken as over the Fixture held still.
+  const beforeTurn = before.turnFade ? combinedTurn(STILL, before) : before.turn;
+  if (beforeTurn || target.turn) {
+    look.turnFade = {
+      p,
+      ...(beforeTurn && { from: beforeTurn }),
+      ...(target.turn && { to: target.turn }),
+    };
+  }
   return look;
 }
 
-function sceneLook(patch: VenuePatch, fixture: PatchedFixture, scene: Scene): Look {
+// What a Scene sets on a Fixture, its movement Effect at `beat`.
+function sceneLook(patch: VenuePatch, fixture: PatchedFixture, scene: Scene, beat: number): Look {
   const look: Look = {};
+  const moving = isMovingFixture(patch, fixture);
   for (const rule of scene.rules) {
     if (!ruleTargets(patch, fixture, rule)) continue;
     if (rule.intensity !== undefined) look.intensity = rule.intensity;
     if (rule.colour !== undefined) look.colour = colourLevels(rule.colour);
     if (rule.direction !== undefined) look.direction = rule.direction;
+    if (rule.effect !== undefined && moving) {
+      const targeted = patch.fixtures.filter(
+        (other) => isMovingFixture(patch, other) && ruleTargets(patch, other, rule),
+      );
+      const delay = spreadDelay(rule.effect.spread, fixture, targeted);
+      look.turn = effectTurn(rule.effect, beat, delay, fixture.id);
+    }
   }
   return look;
 }

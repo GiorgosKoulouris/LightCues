@@ -1,6 +1,8 @@
+import { BEAM_UP_LENGTH } from '../../../shared/aim';
 import type { FixtureLight } from '../../../shared/protocol';
 import { fixtureZone, type PatchedFixture, type VenuePatch } from '../../../shared/venue-patch';
 import { StageGrid, stageViewBox } from '../venue/StagePlan';
+import { BeamLines, lightColour } from './BeamLines';
 import styles from './Preview.module.css';
 import { usePreview } from './usePreview';
 
@@ -8,8 +10,6 @@ const FIXTURE_RADIUS = 0.25;
 const MARGIN = 1;
 // Half the angle of a drawn beam.
 const BEAM_HALF_ANGLE = (12 * Math.PI) / 180;
-// How far a beam from a Floor Fixture is drawn up, in metres.
-const UP_BEAM_LENGTH = 3;
 // The front elevation shows at least this height, in metres.
 const MIN_VIEW_HEIGHT = 4;
 
@@ -23,7 +23,7 @@ export function Preview({ patch }: { patch: VenuePatch }) {
 
   return (
     <div className={styles.views}>
-      <TopDown patch={patch} light={light} />
+      <TopDown patch={patch} lights={lights} light={light} />
       <FrontElevation patch={patch} light={light} />
     </div>
   );
@@ -34,16 +34,18 @@ interface ViewProps {
   light(fixture: PatchedFixture): FixtureLight;
 }
 
-// The stage plan, each Fixture filled with its light.
-function TopDown({ patch, light }: ViewProps) {
+// The stage plan out to the audience plane, each Fixture filled with its
+// light, and each lit moving Fixture's beam drawn to where it lands.
+function TopDown({ patch, lights, light }: ViewProps & { lights: Record<string, FixtureLight> }) {
   return (
     <svg
-      viewBox={stageViewBox(patch.stage)}
+      viewBox={stageViewBox(patch.stage, { audience: true })}
       className={styles.view}
       role="img"
       aria-label="Top-down preview"
     >
-      <StageGrid stage={patch.stage} />
+      <StageGrid stage={patch.stage} audience />
+      <BeamLines patch={patch} lights={lights} />
       {patch.fixtures.map((fixture) => (
         <g key={fixture.id} transform={`translate(${fixture.x} ${-fixture.y})`}>
           <title>{fixture.name}</title>
@@ -93,7 +95,7 @@ function FrontElevation({ patch, light }: ViewProps) {
             {shown.intensity > 0 && (
               <polygon
                 points={beam(patch, fixture)}
-                fill={colour(shown)}
+                fill={lightColour(shown)}
                 fillOpacity={0.55 * shown.intensity}
               />
             )}
@@ -112,7 +114,7 @@ function FixtureMarker({ light }: { light: FixtureLight }) {
   return (
     <>
       <circle r={FIXTURE_RADIUS} className={styles.body} strokeWidth={0.04} />
-      <circle r={FIXTURE_RADIUS} fill={colour(light)} fillOpacity={light.intensity} />
+      <circle r={FIXTURE_RADIUS} fill={lightColour(light)} fillOpacity={light.intensity} />
     </>
   );
 }
@@ -122,12 +124,7 @@ function FixtureMarker({ light }: { light: FixtureLight }) {
 function beam(patch: VenuePatch, fixture: PatchedFixture): string {
   const { x, height } = fixture;
   const overhead = fixtureZone(patch, fixture).level === 'Overhead';
-  const end = overhead ? 0 : height + UP_BEAM_LENGTH;
+  const end = overhead ? 0 : height + BEAM_UP_LENGTH;
   const spread = Math.abs(end - height) * Math.tan(BEAM_HALF_ANGLE);
   return `${x},${-height} ${x - spread},${-end} ${x + spread},${-end}`;
-}
-
-function colour({ red, green, blue }: FixtureLight): string {
-  const byte = (level: number) => Math.round(level * 255);
-  return `rgb(${byte(red)} ${byte(green)} ${byte(blue)})`;
 }

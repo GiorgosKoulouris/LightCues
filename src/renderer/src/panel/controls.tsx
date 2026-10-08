@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { TempoSource } from '../../../shared/protocol';
 import type { Show } from '../../../shared/show';
 import { isActive } from '../show/scenes';
 import type { PlaybackState } from '../show/usePlayback';
@@ -7,6 +8,7 @@ import { cx } from '../ui/cx';
 import styles from './controls.module.css';
 import { runPanelAction } from './usePanelKeys';
 import { SHORTCUTS } from './shortcuts';
+import type { TempoState } from './useTempo';
 
 // The Fallback Panel's controls, shared by its strip and the Perform view,
 // which sizes them with `className`. The container sets `--wide-control`, the
@@ -38,6 +40,21 @@ export function BlackoutButton({ show, playback, className }: ControlProps) {
   );
 }
 
+// Turns Freeze on or off, which holds every movement Effect where it is.
+export function FreezeButton({ show, playback, className }: ControlProps) {
+  return (
+    <Button
+      size="lg"
+      variant={playback.freeze ? 'primary' : 'secondary'}
+      className={cx(styles.freeze, className)}
+      aria-pressed={playback.freeze}
+      onClick={() => runPanelAction({ type: 'freeze' }, show, playback)}
+    >
+      Freeze <Key>{SHORTCUTS.freeze}</Key>
+    </Button>
+  );
+}
+
 // Goes to the Base Look, which clears every other Layer. Disabled until the
 // Show has one.
 export function BaseLookButton({ show, playback, className }: ControlProps) {
@@ -53,6 +70,37 @@ export function BaseLookButton({ show, playback, className }: ControlProps) {
     >
       <span className={styles.name}>Base Look{baseLook && `: ${baseLook.name}`}</span>
       <Key>{SHORTCUTS.baseLook}</Key>
+    </Button>
+  );
+}
+
+const TEMPO_SOURCES: Record<TempoSource, string | undefined> = {
+  default: undefined,
+  clock: 'Clock',
+  held: 'Clock lost',
+  tap: 'Tapped',
+};
+
+// Tap Tempo, showing the Tempo in whole BPM and whether it comes from the MIDI
+// Clock, is held since the clock was lost, or comes from taps. Taps are sent
+// as they come; the engine averages them.
+export function TapTempoButton({
+  tempo,
+  className,
+}: {
+  tempo: TempoState | undefined;
+  className?: string;
+}) {
+  const source = tempo && TEMPO_SOURCES[tempo.source];
+  return (
+    <Button
+      size="lg"
+      className={cx(styles.tapTempo, className)}
+      onClick={() => window.engine.send({ type: 'tapTempo' })}
+    >
+      Tap <Key>{SHORTCUTS.tapTempo}</Key>
+      {tempo && <span className={styles.bpm}>{Math.round(tempo.bpm)} BPM</span>}
+      {source && <span className={styles.source}>{source}</span>}
     </Button>
   );
 }

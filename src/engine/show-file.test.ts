@@ -35,6 +35,10 @@ const show: Show = {
       rules: [
         { target: { roles: ['Blinder'] }, intensity: 1 },
         { target: { roles: ['Spot/Beam'] }, direction: 'Audience' },
+        {
+          target: { roles: ['Spot/Beam'] },
+          effect: { shape: 'Circle', size: 12, length: 4, spread: 'Left→Right' },
+        },
       ],
     },
   ],
@@ -49,14 +53,16 @@ const show: Show = {
   panelScenes: ['hit', 'verse'],
 };
 
-// `show` as an older version had it, without Directions.
+// `show` as an older version had it, without Directions or movement Effects.
 function withoutDirections({ defaultDirection, ...rest }: Show): Show {
   void defaultDirection;
   return {
     ...rest,
     scenes: rest.scenes.map((scene) => ({
       ...scene,
-      rules: scene.rules.filter((rule) => rule.direction === undefined),
+      rules: scene.rules.filter(
+        (rule) => rule.direction === undefined && rule.effect === undefined,
+      ),
     })),
   };
 }
@@ -98,12 +104,12 @@ describe('.lcshow file', () => {
     );
   });
 
-  it('loads a version 3 file, which has no Directions', () => {
+  it('loads a version 3 file, which has no Directions or movement Effects', () => {
     const v3 = withoutDirections(show);
 
     expect(loadShowFile(JSON.stringify({ version: 3, ...v3 }))).toEqual(v3);
     expect(() => loadShowFile(JSON.stringify({ version: 3, ...show }))).toThrow(
-      'Invalid Show:\nunknown field "defaultDirection"\nunknown field "scenes[1].rules[1].direction"',
+      'Invalid Show:\nunknown field "defaultDirection"\nunknown field "scenes[1].rules[1].direction"\nunknown field "scenes[1].rules[2].effect"',
     );
   });
 
@@ -152,6 +158,7 @@ describe('.lcshow file', () => {
     const saved = JSON.parse(saveShowFile(show));
     saved.scenes[0].rules[1].fixtureId = 'par-1';
     saved.scenes[0].rules[1].target.zones[0].dmx = 255;
+    saved.scenes[1].rules[2].effect.phase = 0.5;
     saved.triggers[2].velocity = 100;
     saved.defaultColour.value = 1;
     saved.author = 'someone';
@@ -163,6 +170,7 @@ describe('.lcshow file', () => {
         'unknown field "defaultColour.value"',
         'unknown field "scenes[0].rules[1].fixtureId"',
         'unknown field "scenes[0].rules[1].target.zones[0].dmx"',
+        'unknown field "scenes[1].rules[2].effect.phase"',
         'unknown field "triggers[2].velocity"',
       ].join('\n'),
     );

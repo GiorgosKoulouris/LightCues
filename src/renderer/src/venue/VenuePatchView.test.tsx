@@ -118,6 +118,7 @@ function playbackEvent(): EngineEvent {
     mode: 'monitor',
     grandMaster: 1,
     blackout: false,
+    freeze: false,
     ...(focusCheck === undefined ? {} : { focusCheck }),
   };
 }
@@ -675,5 +676,29 @@ describe('Focus Check', () => {
     rerender(view(false));
     expect(focusChecks()).toEqual(['Audience', undefined]);
     await vi.waitFor(() => expect(control).toHaveValue(''));
+  });
+
+  it("draws the movers' beams on the stage plan while it is on", async () => {
+    await renderView();
+    const control = await screen.findByRole('combobox', { name: 'Focus Check' });
+    const beam = () => screen.queryByTestId('beam-spot');
+    const plan = screen.getByRole('img', { name: 'Top-down stage plan' });
+    const viewBox = plan.getAttribute('viewBox');
+
+    await userEvent.setup().selectOptions(control, 'Audience');
+    await vi.waitFor(() => expect(engine.sent).toContainEqual({ type: 'startPreview' }));
+    const aim = { pan: 0, tilt: 90 };
+    engine.emit({
+      type: 'preview',
+      lights: { spot: { intensity: 1, red: 1, green: 1, blue: 1, aim } },
+    });
+    expect(beam()).not.toBeNull();
+    // Out to the audience plane.
+    expect(plan.getAttribute('viewBox')).not.toEqual(viewBox);
+
+    await userEvent.setup().selectOptions(control, '');
+    await vi.waitFor(() => expect(beam()).toBeNull());
+    expect(engine.sent.at(-1)).toEqual({ type: 'stopPreview' });
+    expect(plan.getAttribute('viewBox')).toEqual(viewBox);
   });
 });

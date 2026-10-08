@@ -17,6 +17,10 @@ import { dmxByte, toDmx } from './dmx-point';
 const HEAD_HEIGHT = 1.7;
 const AUDIENCE_DISTANCE = 5;
 
+// How far a beam that lands on neither the floor nor the audience plane is
+// drawn, in metres.
+export const BEAM_UP_LENGTH = 3;
+
 // The degrees assumed across a channel whose Profile gives none.
 export const ASSUMED_DEGREES = { pan: 540, tilt: 270 };
 
@@ -70,14 +74,11 @@ export function aimAt(input: AimInput): Aim | undefined {
 
   const frame = fixtureFrame(mounting);
   const target = unit(targetVector(input));
-  const panSign = mounting.panInvert ? -1 : 1;
-  const tiltSign = mounting.tiltInvert ? -1 : 1;
   const currentPan = input.currentPan ?? 0;
-  // Physical angles from channel angles, and back.
-  const physicalPan = (channel: number) => panSign * channel + mounting.panOffset;
-  const physicalTilt = (channel: number) => tiltSign * channel + mounting.tiltOffset;
-  const channelPan = (physical: number) => panSign * (physical - mounting.panOffset);
-  const channelTilt = (physical: number) => tiltSign * (physical - mounting.tiltOffset);
+  const physicalPan = (channel: number) => physicalAngle(mounting, 'pan', channel);
+  const physicalTilt = (channel: number) => physicalAngle(mounting, 'tilt', channel);
+  const channelPan = (physical: number) => channelAngle(mounting, 'pan', physical);
+  const channelTilt = (physical: number) => channelAngle(mounting, 'tilt', physical);
 
   const solutions = physicalSolutions(frame, target, {
     pan: pan ? undefined : physicalPan(0),
@@ -140,6 +141,86 @@ export function aimDmx(channels: Channel[], { pan, tilt }: AimAngles): Map<numbe
   if (panAxis && pan !== undefined) setDmx(dmx, panAxis, pan);
   if (tiltAxis && tilt !== undefined) setDmx(dmx, tiltAxis, tilt);
   return dmx;
+}
+
+// Degrees to turn pan and tilt by, physically: as the Fixture moves, before
+// its Mounting's inversion.
+export interface Turn {
+  pan: number;
+  tilt: number;
+}
+
+// Channel angles, as `Aim.pan` and `Aim.tilt`, turned by physical degrees on
+// each axis, as the Mounting's inversion turns them, then clamped to each
+// axis's range. An axis the Fixture lacks, or one not given, is left out.
+export function turnAim(
+  channels: Channel[],
+  mounting: Mounting,
+  angles: AimAngles,
+  by: Turn,
+): AimAngles {
+  const turned: AimAngles = {};
+  for (const axis of ['pan', 'tilt'] as const) {
+    const found = findAxis(channels, axis);
+    const angle = angles[axis];
+    if (!found || angle === undefined) continue;
+    turned[axis] = clampTo(found, angle + mountingAxis(mounting, axis).sign * by[axis]);
+  }
+  return turned;
+}
+
+export interface BeamInput {
+  position: StagePosition;
+  mounting: Mounting;
+  stage: StageBounds;
+  // Channel angles, as `Aim.pan` and `Aim.tilt`. An axis not given is at 0.
+  angles: AimAngles;
+}
+
+// Where a beam lands: the floor, else the audience plane, whichever it meets
+// first, else `BEAM_UP_LENGTH` along it.
+export function beamLanding({ position, mounting, stage, angles }: BeamInput): StagePosition {
+  const beam = beamVector(
+    fixtureFrame(mounting),
+    physicalAngle(mounting, 'pan', angles.pan ?? 0),
+    physicalAngle(mounting, 'tilt', angles.tilt ?? 0),
+  );
+  const { x, y, height } = position;
+  // How far along the beam each surface is, where it heads toward it.
+  const distances = [
+    beam[2] < -1e-9 ? height / -beam[2] : -1,
+    beam[1] < -1e-9 ? (y - audienceY(stage)) / -beam[1] : -1,
+  ].filter((d) => d >= 0);
+  const distance = distances.length > 0 ? Math.min(...distances) : BEAM_UP_LENGTH;
+  return {
+    x: x + beam[0] * distance,
+    y: y + beam[1] * distance,
+    height: height + beam[2] * distance,
+  };
+}
+
+// A physical angle from a channel angle: after inversion and offset.
+function physicalAngle(mounting: Mounting, axis: keyof AimAngles, channel: number): number {
+  const { sign, offset } = mountingAxis(mounting, axis);
+  return sign * channel + offset;
+}
+
+// A channel angle from a physical angle: the inverse of `physicalAngle`.
+function channelAngle(mounting: Mounting, axis: keyof AimAngles, physical: number): number {
+  const { sign, offset } = mountingAxis(mounting, axis);
+  return sign * (physical - offset);
+}
+
+// How a Mounting turns one axis: -1 when inverted, and its offset.
+function mountingAxis(mounting: Mounting, axis: keyof AimAngles) {
+  return axis === 'pan'
+    ? { sign: mounting.panInvert ? -1 : 1, offset: mounting.panOffset }
+    : { sign: mounting.tiltInvert ? -1 : 1, offset: mounting.tiltOffset };
+}
+
+// The y of the audience plane, where Audience and Out aim.
+export function audienceY(stage: StageBounds): number {
+  return -(stage.depth + AUDIENCE_DISTANCE);
 }
 
 // Channel pan and tilt, and how far off target they aim, in degrees.
@@ -241,7 +322,7 @@ function beamVector({ axis, front, side }: Frame, pan: number, tilt: number): Ve
 // From the Fixture toward where a Direction aims.
 function targetVector({ position, stage, direction }: AimInput): Vector {
   const { x, y, height } = position;
-  const audienceY = -(stage.depth + AUDIENCE_DISTANCE);
+  const audience = audienceY(stage);
   const toward = (tx: number, ty: number, tz: number): Vector => [tx - x, ty - y, tz - height];
   switch (direction) {
     case 'Down':
@@ -249,13 +330,13 @@ function targetVector({ position, stage, direction }: AimInput): Vector {
     case 'Up':
       return [0, 0, 1];
     case 'Audience':
-      return toward(x, audienceY, HEAD_HEIGHT);
+      return toward(x, audience, HEAD_HEIGHT);
     case 'Cross':
       return toward(-x, y, 0);
     case 'Centre':
       return toward(0, stage.depth / 2, HEAD_HEIGHT);
     case 'Out':
-      return toward(x + Math.sign(x) * (stage.width / 2), audienceY, HEAD_HEIGHT);
+      return toward(x + Math.sign(x) * (stage.width / 2), audience, HEAD_HEIGHT);
   }
 }
 

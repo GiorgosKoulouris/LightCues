@@ -3,6 +3,8 @@ import type { MidiNote } from '../shared/show';
 
 // How often MIDI input ports are listed to find a lost port and its return.
 const SCAN_INTERVAL_MS = 1000;
+// The MIDI Clock tick. Start, Continue and Stop are ignored.
+const CLOCK_TICK = 0xf8;
 
 interface MidiConnection {
   close(): void;
@@ -33,11 +35,13 @@ interface MidiInputOptions {
   storage?: MidiInputStorage;
   emit: (event: EngineEvent) => void;
   onNote: (message: NoteMessage) => void;
+  // Each MIDI Clock tick, 24 per beat.
+  onClock: () => void;
 }
 
 // Listens to the selected MIDI input port. A port that disappears is lost and
 // reopened when a scan finds it again. The selection is kept between runs.
-export function createMidiInput({ ports, storage, emit, onNote }: MidiInputOptions) {
+export function createMidiInput({ ports, storage, emit, onNote, onClock }: MidiInputOptions) {
   let listed: string[] = [];
   let selected = savedSelection(storage);
   let connection: MidiConnection | undefined;
@@ -78,6 +82,7 @@ export function createMidiInput({ ports, storage, emit, onNote }: MidiInputOptio
   function connect(name: string): void {
     try {
       connection = ports.open(name, (message) => {
+        if (message[0] === CLOCK_TICK) return onClock();
         const note = parseNote(message);
         if (note) onNote(note);
       });

@@ -10,6 +10,7 @@ import { Select } from '../ui/Select';
 import { useToast } from '../ui/Toast';
 import { moveItem, SortableList, useItemKeys } from '../ui/SortableList';
 import { ColourPicker } from './ColourPicker';
+import { EffectPicker } from './EffectPicker';
 import styles from './SceneEditor.module.css';
 import { parseTags } from './scenes';
 import { ZonePicker } from './ZonePicker';
@@ -143,10 +144,10 @@ function RuleCard({
   onPut(rule: Rule): void;
   onRemove(): void;
 }) {
-  const { target, intensity, colour, direction } = rule;
+  const { target, intensity, colour, direction, effect } = rule;
 
   // `undefined` leaves the attribute to earlier Rules.
-  function set<K extends 'intensity' | 'colour' | 'direction'>(key: K, value: Rule[K] | undefined) {
+  function set<K extends Exclude<keyof Rule, 'target'>>(key: K, value: Rule[K] | undefined) {
     const next = { ...rule, [key]: value };
     if (value === undefined) delete next[key];
     onPut(next);
@@ -200,6 +201,7 @@ function RuleCard({
             ]}
             onChange={(d) => set('direction', d || undefined)}
           />
+          <EffectPicker effect={effect} onChange={(e) => set('effect', e)} />
         </div>
       </div>
     </>

@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ActiveByLayer, EngineEvent, MidiInputStatus, ShowEdit } from '../shared/protocol';
+import type {
+  ActiveByLayer,
+  EngineEvent,
+  MidiInputStatus,
+  ShowEdit,
+  TempoSource,
+} from '../shared/protocol';
 import type { Scene, Trigger } from '../shared/show';
 import { createEngine } from './engine';
 import type { MidiPorts } from './midi-input';
@@ -86,6 +92,12 @@ function midiEngine(midi = fakeMidi(), saved: { json?: string } = {}) {
     triggers(): Trigger[] {
       const event = events.findLast((e) => e.type === 'show');
       return event?.type === 'show' ? event.show.triggers : [];
+    },
+    // The Tempo the engine reported last.
+    tempo(): { bpm: number; source: TempoSource } | undefined {
+      engine.handle({ type: 'getTempo' });
+      const event = events.findLast((e) => e.type === 'tempo');
+      return event?.type === 'tempo' ? { bpm: event.bpm, source: event.source } : undefined;
     },
     // The MIDI input status the engine reported last.
     status(): MidiInputStatus | undefined {
@@ -360,5 +372,38 @@ describe('engine MIDI Triggers', () => {
   it('starts without a MIDI input when the saved one is unreadable', () => {
     const { status } = midiEngine(fakeMidi(), { json: '{not json' });
     expect(status()).toEqual({ ports: [], state: 'none' });
+  });
+});
+
+describe('engine Tempo', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('takes the Tempo from MIDI Clock on the MIDI Input, ignoring Start and Stop', async () => {
+    const { midi, select, tempo } = midiEngine();
+    midi.plug('DAW');
+    select('DAW');
+    expect(tempo()).toEqual({ bpm: 120, source: 'default' });
+
+    midi.send('DAW', [0xfa]);
+    // Two beats at 125 BPM: 20 ms a tick.
+    for (let i = 0; i < 49; i++) {
+      midi.send('DAW', [0xf8]);
+      await vi.advanceTimersByTimeAsync(20);
+    }
+    midi.send('DAW', [0xfc]);
+
+    expect(tempo()?.source).toBe('clock');
+    expect(tempo()?.bpm).toBeCloseTo(125, 6);
+  });
+
+  it('sets the Tempo from Tap Tempo', async () => {
+    const { engine, tempo } = midiEngine();
+    engine.handle({ type: 'tapTempo' });
+    await vi.advanceTimersByTimeAsync(400);
+    engine.handle({ type: 'tapTempo' });
+
+    expect(tempo()?.source).toBe('tap');
+    expect(tempo()?.bpm).toBeCloseTo(150, 6);
   });
 });

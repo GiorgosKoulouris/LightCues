@@ -381,6 +381,7 @@ describe('engine Scene playback', () => {
       mode: 'monitor',
       grandMaster: 1,
       blackout: false,
+      freeze: false,
     });
   });
 
@@ -689,6 +690,11 @@ async function focusEngine() {
     moverChannels: () => [...(serial.port('COM3')?.writes.at(-1)?.subarray(5, 12) ?? [])],
     // The dimmer's level in the latest frame sent.
     dimmer: () => serial.port('COM3')?.writes.at(-1)?.[14],
+    // A Fixture's light in the latest preview the engine sent.
+    light(id: string) {
+      const event = events.findLast((e) => e.type === 'preview');
+      return event?.type === 'preview' ? event.lights[id] : undefined;
+    },
     // The Focus Check the engine reported last.
     focusCheck() {
       const event = events.findLast((e) => e.type === 'playback');
@@ -800,6 +806,28 @@ describe('engine Focus Check', () => {
     });
     await vi.advanceTimersByTimeAsync(100);
     expect(moverChannels().slice(5)).toEqual([128, 89]);
+  });
+
+  it('shows in the preview, in Blind and under Blackout too', async () => {
+    const { send, light } = await focusEngine();
+    send({ type: 'startPreview' });
+    const dimmer = light('d1');
+
+    send({ type: 'setFocusCheck', direction: 'Down' });
+    await vi.advanceTimersByTimeAsync(100);
+    const white = { red: 1, green: 1, blue: 1 };
+    expect(light('m1')).toEqual({ intensity: 1, ...white, aim: { pan: 0, tilt: 0 } });
+    expect(light('d1')).toEqual(dimmer);
+
+    send({ type: 'setMode', mode: 'blind' });
+    send({ type: 'setBlackout', on: true });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(light('m1')).toEqual({ intensity: 0, ...white, aim: { pan: 0, tilt: 0 } });
+
+    send({ type: 'setFocusCheck' });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(light('m1')?.red).toBe(1);
+    expect(light('m1')?.green).toBe(0);
   });
 
   it('ends on New and Open of a Venue Patch', async () => {

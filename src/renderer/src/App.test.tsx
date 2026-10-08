@@ -21,6 +21,7 @@ const playback = (more: Partial<Extract<EngineEvent, { type: 'playback' }>> = {}
   mode: 'monitor',
   grandMaster: 1,
   blackout: false,
+  freeze: false,
   ...more,
 });
 
@@ -51,6 +52,8 @@ function answer(command: EngineCommand): EngineEvent[] {
       ];
     case 'getPlayback':
       return [playback()];
+    case 'getTempo':
+      return [{ type: 'tempo', bpm: 120, source: 'default' }];
     case 'listMidiInputs':
       return [midi({ state: 'none', ports: [] })];
     case 'listProfiles':
@@ -81,7 +84,9 @@ async function renderApp() {
 
 const panelCommands = () =>
   engine.sent.filter((c) =>
-    ['goScene', 'goBaseLook', 'setBlackout', 'setGrandMaster'].includes(c.type),
+    ['goScene', 'goBaseLook', 'setBlackout', 'setGrandMaster', 'tapTempo', 'setFreeze'].includes(
+      c.type,
+    ),
   );
 const currentView = () => screen.getByRole('button', { current: 'page' });
 
@@ -157,6 +162,23 @@ describe('App shortcuts', () => {
     expect(panelCommands()).toEqual([{ type: 'setBlackout', on: true }]);
   });
 
+  it('taps the Tempo with T', async () => {
+    await renderApp();
+    await userEvent.keyboard('t');
+    expect(panelCommands()).toEqual([{ type: 'tapTempo' }]);
+  });
+
+  it('toggles Freeze with F', async () => {
+    await renderApp();
+    await userEvent.keyboard('f');
+    engine.emit(playback({ freeze: true }));
+    await userEvent.keyboard('f');
+    expect(panelCommands()).toEqual([
+      { type: 'setFreeze', on: true },
+      { type: 'setFreeze', on: false },
+    ]);
+  });
+
   it('commits a field being typed in before Ctrl+S saves', async () => {
     await renderApp();
     await userEvent.keyboard('{Control>}1{/Control}');
@@ -201,6 +223,23 @@ describe('App top bar and strip', () => {
       'aria-pressed',
       'true',
     );
+  });
+
+  it('shows the Tempo and where it comes from on the strip', async () => {
+    await renderApp();
+    const tap = screen.getByRole('button', { name: /Tap/ });
+    expect(tap).toHaveTextContent('120 BPM');
+    expect(tap).not.toHaveTextContent('Clock');
+    engine.emit({ type: 'tempo', bpm: 127.6, source: 'clock' });
+    expect(tap).toHaveTextContent('128 BPM');
+    expect(tap).toHaveTextContent('Clock');
+    engine.emit({ type: 'tempo', bpm: 127.6, source: 'held' });
+    expect(tap).toHaveTextContent('Clock lost');
+    engine.emit({ type: 'tempo', bpm: 140, source: 'tap' });
+    expect(tap).toHaveTextContent('140 BPM');
+    expect(tap).toHaveTextContent('Tapped');
+    await userEvent.click(tap);
+    expect(panelCommands()).toEqual([{ type: 'tapTempo' }]);
   });
 
   it('shows a lost MIDI Input as an alert in the top bar', async () => {

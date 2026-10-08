@@ -23,6 +23,7 @@ import {
   type RecentKind,
 } from './recent-files';
 import { createShowSession, type ShowFiles } from './show-session';
+import { createTempo } from './tempo';
 import { createVenueSession, type VenueFiles } from './venue-session';
 
 // Where the Profile Library is kept between runs.
@@ -84,7 +85,14 @@ export function createEngine({
     edited: () => playback.showEdited(),
     replaced: () => playback.showReplaced(),
   });
-  const playback = createPlayback({ emit, now, show: show.show, patch: venue.patch });
+  const tempo = createTempo({ now, emit });
+  const playback = createPlayback({
+    emit,
+    now,
+    beat: tempo.beat,
+    show: show.show,
+    patch: venue.patch,
+  });
   const outputs =
     serialPorts &&
     createOutputs({
@@ -98,7 +106,13 @@ export function createEngine({
 
   const midiInput =
     midiPorts &&
-    createMidiInput({ ports: midiPorts, storage: midiInputStorage, emit, onNote: noteReceived });
+    createMidiInput({
+      ports: midiPorts,
+      storage: midiInputStorage,
+      emit,
+      onNote: noteReceived,
+      onClock: () => tempo.clockTick(),
+    });
   // While MIDI learn waits, the next note-on is reported instead of fired.
   // Note-offs still release held Flashes.
   let learning = false;
@@ -202,6 +216,7 @@ export function createEngine({
         case 'setMode':
         case 'setGrandMaster':
         case 'setBlackout':
+        case 'setFreeze':
         case 'setFocusCheck':
           playback.handle(command);
           break;
@@ -219,6 +234,12 @@ export function createEngine({
           break;
         case 'cancelLearn':
           learning = false;
+          break;
+        case 'getTempo':
+          tempo.emitTempo();
+          break;
+        case 'tapTempo':
+          tempo.tap();
           break;
         case 'getReopenErrors':
           emit({ type: 'reopenErrors', errors: reopenErrors });

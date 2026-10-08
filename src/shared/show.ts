@@ -43,6 +43,35 @@ export type Direction = (typeof DIRECTIONS)[number];
 // Where moving Fixtures aim when neither a Rule nor the Show sets a Direction.
 export const DEFAULT_DIRECTION: Direction = 'Down';
 
+// Movement Effects, run around a moving Fixture's base aim to the Tempo.
+// Ballyhoo is a smooth random wander, the same each time for a Fixture.
+export const EFFECT_SHAPES = ['Circle', 'Pan sweep', 'Tilt sweep', 'Ballyhoo'] as const;
+export type EffectShape = (typeof EFFECT_SHAPES)[number];
+
+// Beats per cycle.
+export const EFFECT_LENGTHS = [1, 2, 4, 8, 16] as const;
+export type EffectLength = (typeof EFFECT_LENGTHS)[number];
+
+// The largest Effect size, in degrees.
+export const MAX_EFFECT_SIZE = 180;
+
+// Quick picks for an Effect's size, in degrees.
+export const EFFECT_SIZES = { Small: 5, Medium: 12, Large: 25 } as const;
+
+// How an Effect is offset across the Fixtures it targets, by stage position:
+// Left→Right as the audience sees it, from Stage Right; Mirrored from centre
+// out; Alternate every other Fixture across.
+export const SPREADS = ['In sync', 'Left→Right', 'Mirrored', 'Alternate'] as const;
+export type Spread = (typeof SPREADS)[number];
+
+export interface MovementEffect {
+  shape: EffectShape;
+  // Degrees from the base aim: over 0, at most `MAX_EFFECT_SIZE`.
+  size: number;
+  length: EffectLength;
+  spread: Spread;
+}
+
 // The Fixtures a Rule applies to: those in one of `zones` with one of
 // `roles`. An absent list means every Zone or every Role.
 export interface RuleTarget {
@@ -59,6 +88,8 @@ export interface Rule {
   colour?: Colour;
   // Aims the moving Fixtures targeted.
   direction?: Direction;
+  // Moves the moving Fixtures targeted around their aim.
+  effect?: MovementEffect;
 }
 
 // A slot that holds at most one active Scene.
@@ -307,7 +338,7 @@ function hasScene(show: Show, id: string): boolean {
   return show.scenes.some((s) => s.id === id);
 }
 
-function ruleProblems({ target, intensity, colour, direction }: Rule): string[] {
+function ruleProblems({ target, intensity, colour, direction, effect }: Rule): string[] {
   const problems: string[] = [];
   const { zones, roles } = target;
   if (zones?.length === 0) problems.push('Zone list is empty');
@@ -325,6 +356,27 @@ function ruleProblems({ target, intensity, colour, direction }: Rule): string[] 
   }
   if (colour !== undefined) problems.push(...colourProblems(colour));
   if (direction !== undefined) problems.push(...directionProblems(direction));
+  if (effect !== undefined) problems.push(...effectProblems(effect));
+  return problems;
+}
+
+// Whether `size` is a movement Effect size: over 0, at most
+// `MAX_EFFECT_SIZE`.
+export function isEffectSize(size: number): boolean {
+  return inRange(size, 0, MAX_EFFECT_SIZE) && size > 0;
+}
+
+function effectProblems({ shape, size, length, spread }: MovementEffect): string[] {
+  const problems: string[] = [];
+  if (!EFFECT_SHAPES.includes(shape)) problems.push(`"${shape}" is not a movement Effect shape`);
+  if (!isEffectSize(size)) {
+    problems.push(`Effect size must be over 0 and at most ${MAX_EFFECT_SIZE} degrees`);
+  }
+  if (!EFFECT_LENGTHS.includes(length)) {
+    const lengths = EFFECT_LENGTHS.join(', ').replace(/, (\d+)$/, ' or $1');
+    problems.push(`Effect length must be ${lengths} beats`);
+  }
+  if (!SPREADS.includes(spread)) problems.push(`"${spread}" is not a Spread`);
   return problems;
 }
 

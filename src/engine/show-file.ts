@@ -2,7 +2,8 @@ import { validateShow, type Colour, type Show } from '../shared/show';
 
 // The .lcshow file: a Show as versioned JSON. Version 2 added the default
 // colour, version 3 the Fallback Panel's Scene buttons and version 4 Rule
-// Directions and the Default Direction; older files load without them.
+// Directions, movement Effects and the Default Direction; older files load
+// without them.
 
 const VERSION = 4;
 const VERSIONS = [1, 2, 3, VERSION];
@@ -84,12 +85,15 @@ function unknownFields(file: ShowFile): string[] {
     allow(scene, ['id', 'name', 'tags', 'layer', 'fadeIn', 'rules'], `scenes[${i}].`);
     scene.rules.forEach(({ target, colour, ...rest }, j) => {
       const at = `scenes[${i}].rules[${j}].`;
-      allow(rest, file.version >= 4 ? ['intensity', 'direction'] : ['intensity'], at);
+      allow(rest, file.version >= 4 ? ['intensity', 'direction', 'effect'] : ['intensity'], at);
       allow(target, ['zones', 'roles'], `${at}target.`);
       target.zones?.forEach((zone, k) => {
         allow(zone, ['row', 'column', 'level'], `${at}target.zones[${k}].`);
       });
       if (colour !== undefined) allowColour(colour, `${at}colour.`);
+      if (rest.effect !== undefined && file.version >= 4) {
+        allow(rest.effect, ['shape', 'size', 'length', 'spread'], `${at}effect.`);
+      }
     });
   });
   file.triggers.forEach((trigger, i) => {

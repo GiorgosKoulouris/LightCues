@@ -1,13 +1,19 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { VenueEdit } from '../../../shared/protocol';
 import { DIRECTIONS, type Direction } from '../../../shared/show';
-import { fixturesInUniverse, type PatchedFixture } from '../../../shared/venue-patch';
+import {
+  fixturesInUniverse,
+  type PatchedFixture,
+  type VenuePatch,
+} from '../../../shared/venue-patch';
 import { useProfileLibrary } from '../profiles/useProfileLibrary';
 import { FileButtons } from '../shell/FileButtons';
 import { HistoryButtons } from '../shell/HistoryButtons';
 import { useFileCommands } from '../shell/useFileCommands';
 import { useFileShortcuts, useFindShortcut, useHistoryShortcuts } from '../shell/useShortcuts';
+import { BeamLines } from '../show/BeamLines';
 import { usePlayback } from '../show/usePlayback';
+import { usePreview } from '../show/usePreview';
 import { useShow } from '../show/useShow';
 import type { SelectModifiers } from '../ui/List';
 import { namedCount, removedMessage } from '../ui/removed';
@@ -48,7 +54,8 @@ const FOCUS_CHECK_OPTIONS = [
 // Rig setup: stage size, Universes and Outputs. Removing is instant, and
 // undone with Undo. While `active`, Ctrl+N, O, S and Shift+S act on its file,
 // Ctrl+Z and Ctrl+Shift+Z undo and redo, and Ctrl+F searches the Fixtures.
-// The Focus Check, on either tab, ends when the view is left.
+// The Focus Check, on either tab, ends when the view is left. While it is on,
+// the plan shows the beams out to the audience plane.
 export function VenuePatchView({ active }: { active: boolean }) {
   const { venue, edit, newVenue, undo, redo, open, save } = useVenuePatch();
   const focusCheck = usePlayback()?.focusCheck;
@@ -185,7 +192,10 @@ export function VenuePatchView({ active }: { active: boolean }) {
             onSelect={select(sortFixtures(patch, patch.fixtures, filter.grouping))}
             onKeyDown={onDelete}
             onMove={(id, position) => change({ type: 'moveFixture', id, position })}
-          />
+            audience={focusCheck !== undefined}
+          >
+            {focusCheck !== undefined && <FocusCheckBeams patch={patch} />}
+          </StagePlan>
           <SidePanel label="Inspector" open={sideOpen} onClose={() => setSideOpen(false)}>
             {selected.length > 0 ? (
               <FixtureInspector
@@ -226,6 +236,12 @@ export function VenuePatchView({ active }: { active: boolean }) {
       )}
     </Tabs>
   );
+}
+
+// The beams of the moving Fixtures, as the engine sends them. Mounted only
+// during the Focus Check, so the preview runs only then.
+function FocusCheckBeams({ patch }: { patch: VenuePatch }) {
+  return <BeamLines patch={patch} lights={usePreview()} />;
 }
 
 function names(fixtures: PatchedFixture[]): string[] {

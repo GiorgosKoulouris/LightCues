@@ -19,6 +19,18 @@ describe('panelAction', () => {
     expect(panelAction(press('9'))).toEqual({ type: 'scene', index: 8 });
   });
 
+  it('maps T to Tap Tempo, not while held', () => {
+    expect(panelAction(press('t'))).toEqual({ type: 'tapTempo' });
+    expect(panelAction(press('T'))).toEqual({ type: 'tapTempo' });
+    expect(panelAction(press('t', { repeat: true }))).toBeUndefined();
+  });
+
+  it('maps F to Freeze, not while held', () => {
+    expect(panelAction(press('f'))).toEqual({ type: 'freeze' });
+    expect(panelAction(press('F'))).toEqual({ type: 'freeze' });
+    expect(panelAction(press('f', { repeat: true }))).toBeUndefined();
+  });
+
   it('steps the Grand Master down with - and up with = or +, also while held', () => {
     expect(panelAction(press('-'))).toEqual({ type: 'grandMaster', step: -0.1 });
     expect(panelAction(press('='))).toEqual({ type: 'grandMaster', step: 0.1 });

@@ -29,6 +29,12 @@ export function runPanelAction(action: PanelAction, show: Show, playback: Playba
     case 'baseLook':
       window.engine.send({ type: 'goBaseLook' });
       break;
+    case 'tapTempo':
+      window.engine.send({ type: 'tapTempo' });
+      break;
+    case 'freeze':
+      window.engine.send({ type: 'setFreeze', on: !playback.freeze });
+      break;
     case 'scene': {
       const sceneId = show.panelScenes?.[action.index];
       if (sceneId !== undefined) window.engine.send({ type: 'goScene', sceneId });

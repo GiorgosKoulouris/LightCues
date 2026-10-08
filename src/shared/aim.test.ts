@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Capability, Channel } from './fixture-profile';
 import type { Direction } from './show';
 import { DEFAULT_MOUNTING, type Mounting, type StagePosition } from './venue-patch';
-import { aimAt, aimDmx, type Aim } from './aim';
+import { aimAt, aimDmx, beamLanding, BEAM_UP_LENGTH, type Aim, type AimAngles } from './aim';
 
 const stage = { width: 10, depth: 8 };
 
@@ -347,5 +347,76 @@ describe('aimDmx', () => {
 
     expect(aimDmx(spot, cross)).toEqual(cross.dmx);
     expect(aimDmx(spot, { tilt: 0 })).toEqual(new Map([[2, 128]]));
+  });
+});
+
+describe('beamLanding', () => {
+  function landing(
+    angles: AimAngles,
+    {
+      position = rigged,
+      mounting = {},
+    }: { position?: StagePosition; mounting?: Partial<Mounting> },
+  ) {
+    return beamLanding({ position, mounting: { ...DEFAULT_MOUNTING, ...mounting }, stage, angles });
+  }
+
+  function expectPoint(actual: StagePosition, x: number, y: number, height: number) {
+    expect(actual.x).toBeCloseTo(x, 6);
+    expect(actual.y).toBeCloseTo(y, 6);
+    expect(actual.height).toBeCloseTo(height, 6);
+  }
+
+  it('lands straight below a Hung Fixture at tilt 0', () => {
+    expectPoint(landing({ pan: 0, tilt: 0 }, {}), 0, 4, 0);
+  });
+
+  it('lands on the floor toward the front of the base when tilted', () => {
+    // 45° from 6 m up: 6 m toward the audience.
+    expectPoint(landing({ pan: 0, tilt: 45 }, {}), 0, -2, 0);
+  });
+
+  it('lands on the audience plane when the beam is level', () => {
+    expectPoint(landing({ pan: 0, tilt: 90 }, {}), 0, AUDIENCE_Y, 6);
+  });
+
+  it('lands where the beam hits first, the audience plane before the floor beyond it', () => {
+    // 6 m up, 17 m to the plane: dropping 1 m per 17 m, it is at 5 m there.
+    const tilt = 90 - degrees(Math.atan2(1, 17));
+    expectPoint(landing({ pan: 0, tilt }, {}), 0, AUDIENCE_Y, 5);
+  });
+
+  it('draws a fixed length for a beam that hits neither', () => {
+    const standing = { mount: 'Standing' as const };
+    expectPoint(landing({ pan: 0, tilt: 0 }, { mounting: standing }), 0, 4, 6 + BEAM_UP_LENGTH);
+    // Upstage and level, from the floor: away from the audience.
+    const position = { x: 0, y: 4, height: 0 };
+    expectPoint(
+      landing({ pan: 180, tilt: 90 }, { position, mounting: standing }),
+      0,
+      4 + BEAM_UP_LENGTH,
+      0,
+    );
+  });
+
+  it('applies pan, inversion and offsets as the aim does', () => {
+    // Hung, positive pan turns clockwise seen from above: from the audience
+    // toward Stage Right (-x).
+    expectPoint(landing({ pan: 90, tilt: 45 }, {}), -6, 4, 0);
+    expectPoint(landing({ pan: 90, tilt: 45 }, { mounting: { panInvert: true } }), 6, 4, 0);
+    expectPoint(landing({ pan: 0, tilt: 0 }, { mounting: { tiltOffset: 45 } }), 0, -2, 0);
+  });
+
+  it('lands where each Direction aims', () => {
+    const position = { x: 3, y: 4, height: 6 };
+    const at = (direction: Direction) => {
+      const { pan, tilt } = aim(direction, { position });
+      return landing({ pan, tilt }, { position });
+    };
+    expectPoint(at('Down'), 3, 4, 0);
+    expectPoint(at('Cross'), -3, 4, 0);
+    // Through head height over centre stage, then on to the floor beyond.
+    expectPoint(at('Centre'), 3 - (3 * 6) / (6 - HEAD), 4, 0);
+    expectPoint(at('Audience'), 3, AUDIENCE_Y, HEAD);
   });
 });

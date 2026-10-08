@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FallbackPanel } from './panel/FallbackPanel';
 import { usePanelKeys } from './panel/usePanelKeys';
+import { useTempo } from './panel/useTempo';
 import { PerformView } from './perform/PerformView';
 import { ProfileLibraryView } from './profiles/ProfileLibraryView';
 import styles from './App.module.css';
@@ -25,6 +26,7 @@ export function App() {
   const venue = useVenuePatch().venue;
   const playback = usePlayback();
   const midiInput = useMidiInput();
+  const tempo = useTempo();
   useViewShortcuts(setView);
   useReopenErrors();
   usePanelKeys(show?.show, playback);
@@ -57,10 +59,13 @@ export function App() {
               show={show?.show}
               patch={venue?.patch}
               playback={playback}
+              tempo={tempo}
             />
           </div>
         </main>
-        {view !== 'perform' && <FallbackPanel show={show?.show} playback={playback} />}
+        {view !== 'perform' && (
+          <FallbackPanel show={show?.show} playback={playback} tempo={tempo} />
+        )}
       </div>
     </div>
   );

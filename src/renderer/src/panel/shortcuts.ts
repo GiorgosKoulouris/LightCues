@@ -5,6 +5,8 @@ import { MAX_PANEL_SCENES } from '../../../shared/show';
 export type PanelAction =
   | { type: 'blackout' }
   | { type: 'baseLook' }
+  | { type: 'tapTempo' }
+  | { type: 'freeze' }
   // The Scene button at `index`, 0 first.
   | { type: 'scene'; index: number }
   // Changes the Grand Master by `step`.
@@ -24,6 +26,8 @@ export interface KeyPress {
 export const SHORTCUTS = {
   blackout: 'B',
   baseLook: '0',
+  tapTempo: 'T',
+  freeze: 'F',
   grandMasterDown: '-',
   grandMasterUp: '+',
 } as const;
@@ -32,7 +36,7 @@ const GRAND_MASTER_STEP = 0.1;
 
 // The action a key press runs, or undefined. Keys with Ctrl, Alt or Meta are
 // left to the app and the system. Holding a key repeats only Grand Master
-// steps, so Blackout does not flicker.
+// steps, so Blackout and Freeze do not flicker and a held T is one tap.
 export function panelAction({
   key,
   ctrlKey,
@@ -47,6 +51,8 @@ export function panelAction({
     return { type: 'grandMaster', step: GRAND_MASTER_STEP };
   if (repeat) return undefined;
   if (key.toUpperCase() === SHORTCUTS.blackout) return { type: 'blackout' };
+  if (key.toUpperCase() === SHORTCUTS.tapTempo) return { type: 'tapTempo' };
+  if (key.toUpperCase() === SHORTCUTS.freeze) return { type: 'freeze' };
   if (key === SHORTCUTS.baseLook) return { type: 'baseLook' };
   const digit = /^\d$/.test(key) ? Number(key) : 0;
   if (digit >= 1 && digit <= MAX_PANEL_SCENES) return { type: 'scene', index: digit - 1 };

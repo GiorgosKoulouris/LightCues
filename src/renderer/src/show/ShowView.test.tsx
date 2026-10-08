@@ -79,6 +79,7 @@ function answer(command: EngineCommand): EngineEvent[] {
           mode: 'monitor',
           grandMaster: 1,
           blackout: false,
+          freeze: false,
         },
       ];
     case 'listMidiInputs':
@@ -292,6 +293,53 @@ describe('Scene editor', () => {
     const put = edits().at(-1);
     if (put?.type !== 'putScene') throw new Error('No Scene put');
     expect(put.scene.rules[0]).toEqual({ target: {}, intensity: 0.5 });
+  });
+
+  it("sets a Rule's movement Effect: shape, size with quick picks, length and Spread", async () => {
+    await selectWarm();
+    const rule = () => {
+      const put = edits().at(-1);
+      if (put?.type !== 'putScene') throw new Error('No Scene put');
+      return put.scene.rules[0];
+    };
+    const effect = screen.getAllByLabelText('Movement Effect')[0]!;
+    expect(effect).toHaveValue('');
+    expect(screen.queryByRole('textbox', { name: 'Size (°)' })).toBeNull();
+
+    await userEvent.selectOptions(effect, 'Circle');
+    expect(rule()).toEqual({
+      target: {},
+      intensity: 0.5,
+      effect: { shape: 'Circle', size: 12, length: 4, spread: 'In sync' },
+    });
+
+    const sizes = within(screen.getByRole('group', { name: 'Quick sizes' }));
+    expect(sizes.getByRole('button', { name: 'Medium 12°' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await userEvent.click(sizes.getByRole('button', { name: 'Large 25°' }));
+    expect(rule()?.effect?.size).toBe(25);
+    const size = screen.getByRole('textbox', { name: 'Size (°)' });
+    await userEvent.clear(size);
+    await userEvent.type(size, '7.5');
+    expect(rule()?.effect?.size).toBe(7.5);
+
+    await userEvent.selectOptions(screen.getByLabelText('Length (beats)'), '16');
+    expect(rule()?.effect?.length).toBe(16);
+    await userEvent.selectOptions(screen.getByLabelText('Spread'), 'Mirrored');
+    expect(rule()?.effect).toEqual({ shape: 'Circle', size: 7.5, length: 16, spread: 'Mirrored' });
+
+    // A new shape keeps the rest.
+    await userEvent.selectOptions(effect, 'Ballyhoo');
+    expect(rule()?.effect).toEqual({
+      shape: 'Ballyhoo',
+      size: 7.5,
+      length: 16,
+      spread: 'Mirrored',
+    });
+    await userEvent.selectOptions(effect, 'Not set');
+    expect(rule()).toEqual({ target: {}, intensity: 0.5 });
   });
 
   it('shows an engine error as a toast', async () => {
