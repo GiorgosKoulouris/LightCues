@@ -7,9 +7,14 @@ import type {
   FixtureProfile,
   Role,
   Span,
-  UnsupportedFeature,
 } from '../shared/fixture-profile';
 import { profileId } from '../shared/profile-edit';
+import {
+  createImportReport,
+  unsupported,
+  type FixtureImport,
+  type ImportReport,
+} from './import-report';
 
 // The subset of the Open Fixture Library fixture format we read.
 // https://github.com/OpenLightingProject/open-fixture-library/blob/master/docs/fixture-format.md
@@ -55,18 +60,12 @@ interface OflFixture {
   modes: { name: string; channels: unknown[] }[];
 }
 
-export interface OflImport {
-  profile: FixtureProfile;
-  // Everything the Profile cannot represent. Never silently dropped.
-  unsupported: UnsupportedFeature[];
-}
-
 // Imports one OFL fixture JSON. OFL files do not name their manufacturer (it
 // is the parent directory), so the caller passes it.
-export function importOflFixture(json: unknown, manufacturer: string): OflImport {
+export function importOflFixture(json: unknown, manufacturer: string): FixtureImport {
   if (!isOflFixture(json)) throw new Error('Not an Open Fixture Library fixture');
   const fixture = json;
-  const report = createReport();
+  const report = createImportReport();
   const channels = new Map<string, Channel>();
   for (const [key, channel] of Object.entries(fixture.availableChannels ?? {})) {
     for (const [modeKey, imported] of importChannel(key, channel, fixture, report)) {
@@ -110,33 +109,9 @@ function isOflFixture(json: unknown): json is OflFixture {
   );
 }
 
-interface Report {
-  readonly features: UnsupportedFeature[];
-  add(feature: UnsupportedFeature): void;
-}
-
-// Collects unsupported features once each, in the order found.
-function createReport(): Report {
-  const features: UnsupportedFeature[] = [];
-  const seen = new Set<string>();
-  return {
-    features,
-    add(feature) {
-      const key = JSON.stringify([feature.channel, feature.mode, feature.feature]);
-      if (seen.has(key)) return;
-      seen.add(key);
-      features.push(feature);
-    },
-  };
-}
-
-function unsupported(feature: string): Capability {
-  return { type: 'unsupported', feature };
-}
-
 // A mode key that is neither a channel nor a fine alias: a switching channel
 // alias or a resolved matrix (pixel) channel. It keeps its DMX slot.
-function unresolvedChannel(key: string, fixture: OflFixture, report: Report): Channel {
+function unresolvedChannel(key: string, fixture: OflFixture, report: ImportReport): Channel {
   const switching = Object.values(fixture.availableChannels ?? {}).some((channel) =>
     channel.capabilities?.some((cap) => cap.switchChannels && key in cap.switchChannels),
   );
@@ -155,7 +130,7 @@ function importChannel(
   key: string,
   channel: OflChannel,
   fixture: OflFixture,
-  report: Report,
+  report: ImportReport,
 ): [string, Channel][] {
   const name = channel.name ?? key;
   const aliases = channel.fineChannelAliases ?? [];

@@ -22,6 +22,8 @@ export type EngineCommand =
       manufacturer: string;
       overwrite: boolean;
     }
+  // `bytes` is a .gdtf file, imported like an OFL fixture.
+  | { type: 'importGdtf'; requestId: number; bytes: Uint8Array; overwrite: boolean }
   // `replaces` is the id of the Profile being edited; absent for a new one.
   | { type: 'saveProfile'; requestId: number; profile: FixtureProfile; replaces?: string }
   | { type: 'deleteProfile'; id: string }
@@ -151,7 +153,7 @@ export interface ProfileLibraryEntry {
 }
 
 // `name` is the Profile's manufacturer and model, as shown in messages.
-export type OflImportResult =
+export type FixtureImportResult =
   | { status: 'imported'; profileId: string; name: string; unsupported: UnsupportedFeature[] }
   | { status: 'conflict'; profileId: string; name: string }
   | { status: 'failed'; error: string };
@@ -160,7 +162,7 @@ export type EngineEvent =
   | { type: 'pong'; id: number; uptimeMs: number }
   // The whole Profile Library, sent on request and after every change.
   | { type: 'profiles'; entries: ProfileLibraryEntry[] }
-  | { type: 'oflImported'; requestId: number; result: OflImportResult }
+  | { type: 'fixtureImported'; requestId: number; result: FixtureImportResult }
   // An empty `errors` list means the Profile was saved.
   | { type: 'profileSaved'; requestId: number; errors: string[] }
   // The current Venue Patch, sent on request and after every change. `unsaved`

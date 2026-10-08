@@ -1,46 +1,53 @@
 import { useState } from 'react';
 import type { UnsupportedFeature } from '../../../shared/fixture-profile';
-import type { OflImportResult } from '../../../shared/protocol';
+import type { FixtureImportResult } from '../../../shared/protocol';
 import { Button } from '../ui/Button';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { Dialog } from '../ui/Dialog';
 import { FieldFrame, InlineInput, parseName, useInlineEdit } from '../ui/fields';
-import styles from './OflImportDialog.module.css';
+import styles from './FixtureImportDialog.module.css';
 
 type ImportOfl = (
   json: unknown,
   manufacturer: string,
   overwrite?: boolean,
-) => Promise<OflImportResult>;
+) => Promise<FixtureImportResult>;
+type ImportGdtf = (bytes: Uint8Array, overwrite?: boolean) => Promise<FixtureImportResult>;
 
-interface OflImportDialogProps {
+interface FixtureImportDialogProps {
   open: boolean;
   onOpenChange(open: boolean): void;
   importOfl: ImportOfl;
+  importGdtf: ImportGdtf;
   // After a Profile was imported, by id and name.
   onImported(id: string, name: string): void;
 }
 
-// Imports a fixture file from the Open Fixture Library. Overwriting a
-// hand-edited Profile asks first. Unsupported features are listed before the
-// dialog closes.
-export function OflImportDialog({ open, onOpenChange, ...rest }: OflImportDialogProps) {
+// Imports an Open Fixture Library .json or a GDTF .gdtf fixture file, told
+// apart by extension. GDTF names its manufacturer; OFL files do not, so the
+// user gives it. Overwriting a hand-edited Profile asks first. Unsupported
+// features are listed before the dialog closes.
+export function FixtureImportDialog({ open, onOpenChange, ...rest }: FixtureImportDialogProps) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} title="Import from Open Fixture Library">
+    <Dialog open={open} onOpenChange={onOpenChange} title="Import fixture file">
       {/* Mounted while open, so each opening starts afresh. */}
-      {open && <OflImportForm {...rest} onClose={() => onOpenChange(false)} />}
+      {open && <FixtureImportForm {...rest} onClose={() => onOpenChange(false)} />}
     </Dialog>
   );
 }
 
+// Imports the chosen file, overwriting a hand-edited Profile or not.
+type ImportFile = (overwrite: boolean) => Promise<FixtureImportResult>;
+
 // What the last attempt left to say: a problem, or what was imported.
 type Report = { error: string } | { imported: string; unsupported: string[] } | { kept: string };
 
-function OflImportForm({
+function FixtureImportForm({
   importOfl,
+  importGdtf,
   onImported,
   onClose,
-}: Omit<OflImportDialogProps, 'open' | 'onOpenChange'> & { onClose(): void }) {
+}: Omit<FixtureImportDialogProps, 'open' | 'onOpenChange'> & { onClose(): void }) {
   const confirm = useConfirm();
   const [file, setFile] = useState<File>();
   const [typedManufacturer, setTypedManufacturer] = useState('');
@@ -54,6 +61,8 @@ function OflImportForm({
   });
   // Undefined until the user types one.
   const manufacturerName = manufacturer.parsed || undefined;
+  const isGdtf = file?.name.toLowerCase().endsWith('.gdtf') ?? false;
+  const ready = file !== undefined && (isGdtf || manufacturerName !== undefined);
 
   if (report && 'imported' in report) {
     return (
@@ -73,7 +82,13 @@ function OflImportForm({
     );
   }
 
-  async function importFile(chosen: File, chosenManufacturer: string) {
+  // Reads the file and returns how to import it, or undefined after
+  // reporting why it cannot be read.
+  async function readFile(chosen: File): Promise<ImportFile | undefined> {
+    if (isGdtf) {
+      const bytes = new Uint8Array(await chosen.arrayBuffer());
+      return (overwrite) => importGdtf(bytes, overwrite);
+    }
     let json: unknown;
     try {
       json = JSON.parse(await chosen.text());
@@ -81,18 +96,24 @@ function OflImportForm({
       setReport({ error: `${chosen.name} is not valid JSON.` });
       return;
     }
-    let result = await importOfl(json, chosenManufacturer);
+    return (overwrite) => importOfl(json, manufacturerName!, overwrite);
+  }
+
+  async function importFile(chosen: File) {
+    const run = await readFile(chosen);
+    if (!run) return;
+    let result = await run(false);
     if (
       result.status === 'conflict' &&
       (await confirm({
         title: 'Overwrite the hand-edited Profile?',
-        message: `${result.name} was edited by hand. Overwrite it with the OFL version?`,
+        message: `${result.name} was edited by hand. Overwrite it with the imported version?`,
         confirmLabel: 'Overwrite',
         cancelLabel: 'Keep it',
         destructive: true,
       }))
     ) {
-      result = await importOfl(json, chosenManufacturer, true);
+      result = await run(true);
     }
     switch (result.status) {
       case 'imported':
@@ -114,26 +135,26 @@ function OflImportForm({
       className={styles.form}
       onSubmit={(event) => {
         event.preventDefault();
-        if (!file || !manufacturerName) return;
+        if (!ready) return;
         setBusy(true);
-        void importFile(file, manufacturerName)
+        void importFile(file)
           .catch((error: Error) => setReport({ error: `Import failed: ${error.message}` }))
           .finally(() => setBusy(false));
       }}
     >
-      <FieldFrame label="Fixture file" hint="An OFL fixture .json file">
+      <FieldFrame label="Fixture file" hint="An OFL .json or GDTF .gdtf fixture file">
         {({ inputId, describedBy }) => (
           <input
             id={inputId}
             type="file"
-            accept=".json"
+            accept=".json,.gdtf"
             aria-describedby={describedBy}
             className={styles.file}
             onChange={(event) => setFile(event.target.files?.[0])}
           />
         )}
       </FieldFrame>
-      <InlineInput label="Manufacturer" edit={manufacturer} />
+      {!isGdtf && <InlineInput label="Manufacturer" edit={manufacturer} />}
       {report && 'error' in report && (
         <p role="alert" className={styles.error}>
           {report.error}
@@ -144,7 +165,7 @@ function OflImportForm({
       )}
       <footer className={styles.footer}>
         <Button onClick={onClose}>Cancel</Button>
-        <Button type="submit" variant="primary" disabled={!file || !manufacturerName || busy}>
+        <Button type="submit" variant="primary" disabled={!ready || busy}>
           Import
         </Button>
       </footer>

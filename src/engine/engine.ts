@@ -1,4 +1,4 @@
-import type { EngineCommand, EngineEvent, OflImportResult } from '../shared/protocol';
+import type { EngineCommand, EngineEvent, FixtureImportResult } from '../shared/protocol';
 import { findTrigger } from '../shared/show';
 import { profileName } from '../shared/profile-edit';
 import {
@@ -10,7 +10,7 @@ import {
 import { createOutputs, type SerialPorts } from './outputs';
 import { createPlayback } from './playback';
 import { createPreview } from './preview';
-import { createProfileLibrary, type ProfileLibrary } from './profile-library';
+import { createProfileLibrary, type ImportResult, type ProfileLibrary } from './profile-library';
 import { createShowSession, type ShowFiles } from './show-session';
 import { createVenueSession, type VenueFiles } from './venue-session';
 
@@ -108,11 +108,10 @@ export function createEngine({
     emit({ type: 'profiles', entries });
   }
 
-  function importOfl(json: unknown, manufacturer: string, overwrite: boolean): OflImportResult {
+  // Runs a Profile Library import and describes its result for the UI.
+  function importFixture(run: () => ImportResult): FixtureImportResult {
     try {
-      const { status, profile, unsupported } = library.importOfl(json, manufacturer, {
-        overwrite,
-      });
+      const { status, profile, unsupported } = run();
       if (status === 'conflict')
         return { status, profileId: profile.id, name: profileName(profile) };
       libraryChanged();
@@ -133,8 +132,14 @@ export function createEngine({
           break;
         case 'importOfl': {
           const { requestId, json, manufacturer, overwrite } = command;
-          const result = importOfl(json, manufacturer, overwrite);
-          emit({ type: 'oflImported', requestId, result });
+          const result = importFixture(() => library.importOfl(json, manufacturer, { overwrite }));
+          emit({ type: 'fixtureImported', requestId, result });
+          break;
+        }
+        case 'importGdtf': {
+          const { requestId, bytes, overwrite } = command;
+          const result = importFixture(() => library.importGdtf(bytes, { overwrite }));
+          emit({ type: 'fixtureImported', requestId, result });
           break;
         }
         case 'saveProfile': {

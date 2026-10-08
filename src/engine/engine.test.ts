@@ -4,6 +4,7 @@ import type { EngineCommand, EngineEvent, ShowEdit, VenueEdit } from '../shared/
 import type { Scene } from '../shared/show';
 import { fixtureZone, type PatchedFixture, type VenuePatch } from '../shared/venue-patch';
 import { createEngine } from './engine';
+import { gdtfDimmer } from './gdtf-test-files';
 
 describe('engine', () => {
   it('replies to a ping with a pong carrying the same id', () => {
@@ -693,10 +694,7 @@ describe('engine OFL import', () => {
   it('names the Profile it imported, and the hand-edited one it kept', () => {
     const events: EngineEvent[] = [];
     const engine = createEngine({ emit: (e) => events.push(e) });
-    const imported = (requestId: number) => {
-      const reply = events.find((e) => e.type === 'oflImported' && e.requestId === requestId);
-      return reply?.type === 'oflImported' ? reply.result : undefined;
-    };
+    const imported = (requestId: number) => importResult(events, requestId);
 
     engine.handle({
       type: 'importOfl',
@@ -725,3 +723,41 @@ describe('engine OFL import', () => {
     expect(imported(3)).toEqual({ status: 'conflict', profileId: 'acme/par', name: 'Acme Par' });
   });
 });
+
+describe('engine GDTF import', () => {
+  it('imports a .gdtf file and reports a file it cannot read', () => {
+    const events: EngineEvent[] = [];
+    const engine = createEngine({ emit: (e) => events.push(e) });
+    const imported = (requestId: number) => importResult(events, requestId);
+
+    engine.handle({
+      type: 'importGdtf',
+      requestId: 1,
+      bytes: gdtfDimmer('Acme', 'Par'),
+      overwrite: false,
+    });
+    engine.handle({
+      type: 'importGdtf',
+      requestId: 2,
+      bytes: new TextEncoder().encode('not a zip'),
+      overwrite: false,
+    });
+
+    expect(imported(1)).toEqual({
+      status: 'imported',
+      profileId: 'acme/par',
+      name: 'Acme Par',
+      unsupported: [],
+    });
+    expect(events.findLast((e) => e.type === 'profiles')).toMatchObject({
+      entries: [{ profile: { id: 'acme/par' }, handEdited: false }],
+    });
+    expect(imported(2)).toEqual({ status: 'failed', error: 'Not a GDTF file' });
+  });
+});
+
+// The engine's answer to an import request.
+function importResult(events: EngineEvent[], requestId: number) {
+  const reply = events.find((e) => e.type === 'fixtureImported' && e.requestId === requestId);
+  return reply?.type === 'fixtureImported' ? reply.result : undefined;
+}

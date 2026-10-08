@@ -57,14 +57,14 @@ export function ProfileList({
         onDelete={onRemove}
         className={styles.list}
         empty={
-          libraryEmpty ? 'No Profiles yet. Import one from OFL or make one.' : 'No Profiles match'
+          libraryEmpty ? 'No Profiles yet. Import a fixture file or make one.' : 'No Profiles match'
         }
         renderItem={({ profile, handEdited }) => (
           <span className={styles.item}>
             <span className={styles.top}>
               <span className={styles.name}>{profileName(profile)}</span>
               <Badge tone={handEdited ? 'accent' : 'neutral'} className={styles.badge}>
-                {handEdited ? 'Edited' : 'OFL'}
+                {handEdited ? 'Edited' : 'Imported'}
               </Badge>
             </span>
             <span className={styles.summary}>{modeSummary(profile)}</span>
@@ -76,7 +76,7 @@ export function ProfileList({
           New Profile
         </Button>
         <Button icon={<FileUp />} onClick={onImport}>
-          Import OFL
+          Import fixture
         </Button>
       </div>
     </div>

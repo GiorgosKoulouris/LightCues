@@ -7,7 +7,7 @@ import type {
   CloseGuardBridge,
   EngineCommand,
   EngineEvent,
-  OflImportResult,
+  FixtureImportResult,
   ProfileLibraryEntry,
 } from '../../../shared/protocol';
 import { installFakeEngine, type FakeEngine } from '../test-engine';
@@ -36,7 +36,7 @@ const closeGuard = {
 let entries: ProfileLibraryEntry[];
 // What the engine answers to the next save and imports.
 let saveErrors: string[];
-let importResults: OflImportResult[];
+let importResults: FixtureImportResult[];
 
 function answer(command: EngineCommand): EngineEvent[] {
   const profiles = (): EngineEvent => ({ type: 'profiles', entries });
@@ -57,8 +57,9 @@ function answer(command: EngineCommand): EngineEvent[] {
       entries = entries.filter((e) => e.profile.id !== command.id);
       return [profiles()];
     case 'importOfl':
+    case 'importGdtf':
       return [
-        { type: 'oflImported', requestId: command.requestId, result: importResults.shift()! },
+        { type: 'fixtureImported', requestId: command.requestId, result: importResults.shift()! },
       ];
     default:
       return [];
@@ -108,7 +109,7 @@ describe('Profile list', () => {
     await renderView();
     const user = userEvent.setup();
 
-    expect(option('Acme Par')).toHaveTextContent('OFL');
+    expect(option('Acme Par')).toHaveTextContent('Imported');
     expect(option('Acme Par')).toHaveTextContent('2 modes · 3–6ch');
     expect(option('Beamco Spot')).toHaveTextContent('Edited');
 
@@ -249,9 +250,9 @@ describe('unsaved Profile edits', () => {
     expect(editor().queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('asks before an OFL import, which may replace the Profile', async () => {
+  it('asks before an import, which may replace the Profile', async () => {
     const user = await editPar();
-    await user.click(screen.getByRole('button', { name: 'Import OFL' }));
+    await user.click(screen.getByRole('button', { name: 'Import fixture' }));
     expect(alertDialog().getByRole('heading')).toHaveTextContent('Discard changes to Acme Par?');
     await user.click(alertDialog().getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -328,9 +329,9 @@ describe('deleting a Profile', () => {
   });
 });
 
-describe('OFL import', () => {
+describe('fixture import', () => {
   async function importPar(user: ReturnType<typeof userEvent.setup>) {
-    await user.click(screen.getByRole('button', { name: 'Import OFL' }));
+    await user.click(screen.getByRole('button', { name: 'Import fixture' }));
     const file = new File(['{"name":"Par"}'], 'par.json', { type: 'application/json' });
     await user.upload(dialog().getByLabelText('Fixture file'), file);
     await user.type(dialog().getByRole('textbox', { name: 'Manufacturer' }), 'Acme');
@@ -358,7 +359,7 @@ describe('OFL import', () => {
   it('keeps Import disabled until a file and a manufacturer are given', async () => {
     await renderView();
     const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: 'Import OFL' }));
+    await user.click(screen.getByRole('button', { name: 'Import fixture' }));
     const manufacturer = dialog().getByRole('textbox', { name: 'Manufacturer' });
     await user.type(manufacturer, 'x');
     await user.clear(manufacturer);
@@ -420,5 +421,26 @@ describe('OFL import', () => {
     await importPar(user);
 
     expect(await dialog().findByRole('alert')).toHaveTextContent('Import failed: No modes');
+  });
+  it('imports a .gdtf file, which names its own manufacturer', async () => {
+    importResults = [
+      { status: 'conflict', profileId: 'acme/par', name: 'Acme Par' },
+      { status: 'imported', profileId: 'acme/par', name: 'Acme Par', unsupported: [] },
+    ];
+    await renderView();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Import fixture' }));
+    const bytes = new Uint8Array([0x50, 0x4b, 3, 4]);
+    await user.upload(dialog().getByLabelText('Fixture file'), new File([bytes], 'par.gdtf'));
+
+    expect(dialog().queryByRole('textbox', { name: 'Manufacturer' })).not.toBeInTheDocument();
+    await user.click(dialog().getByRole('button', { name: 'Import' }));
+    await user.click(await alertDialog().findByRole('button', { name: 'Overwrite' }));
+
+    const imports = sent('importGdtf');
+    expect(imports.map((c) => c.overwrite)).toEqual([false, true]);
+    expect([...imports[0]!.bytes]).toEqual([...bytes]);
+    expect(sent('importOfl')).toEqual([]);
+    expect(await screen.findByText('Imported Acme Par')).toBeInTheDocument();
   });
 });

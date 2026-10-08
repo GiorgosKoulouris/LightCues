@@ -14,8 +14,12 @@ _Avoid_: Figure, light, device
 The manufacturer/model definition of a fixture type: its modes, channels and capabilities.
 _Avoid_: Fixture definition, personality
 
+**Cell**:
+One repeated section of a multi-cell Fixture (a pixel, a wash section). A Fixture Profile has no cell model: each Cell's channels are flattened into the mode, named e.g. "Red (Cell 2)". Not a Zone.
+_Avoid_: Pixel, segment
+
 **Profile Library**:
-The app-level collection of Fixture Profiles, imported from the Open Fixture Library or made by hand. A Venue Patch embeds copies of the Profiles it uses, so it does not depend on the library.
+The app-level collection of Fixture Profiles, imported from Open Fixture Library or GDTF files, or made by hand. A Venue Patch embeds copies of the Profiles it uses, so it does not depend on the library.
 _Avoid_: Fixture library, catalogue
 
 **Universe**:

@@ -5,7 +5,7 @@
 ## Flow
 
 1. **Check `dev` is clean.** `git status` on `dev` shows nothing. Commit or ask first.
-2. **Create `stage` from `dev`.** If `stage` already exists from a past round, delete and recreate it.
+2. **Create `stage` from `dev`.**
    ```sh
    git branch -f stage dev
    ```
@@ -27,4 +27,4 @@
    git log --format=%B main..stage | grep -i co-authored   # must be empty
    git log --oneline main..stage      # 4-5 commits
    ```
-7. **Merge.** Fast-forward `main` to `stage` (`git checkout main && git merge --ff-only stage`) when the user asks. Then reset `dev` to `main` so the next round starts clean.
+7. **Merge and clean up.** When the user asks: fast-forward `main` to `stage` (`git checkout main && git merge --ff-only stage`), push `main`, reset `dev` to `main`, then delete `stage` (`git branch -d stage`). `stage` exists only for the squash.

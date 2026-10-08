@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FixtureProfile } from '../../../shared/fixture-profile';
-import type { OflImportResult, ProfileLibraryEntry } from '../../../shared/protocol';
+import type { FixtureImportResult, ProfileLibraryEntry } from '../../../shared/protocol';
 import { request } from '../engine-request';
 
 // The engine's Profile Library, kept in step through engine events.
@@ -17,13 +17,18 @@ export function useProfileLibrary() {
   }, []);
 
   const importOfl = useCallback(
-    async (json: unknown, manufacturer: string, overwrite = false): Promise<OflImportResult> => {
-      const reply = await request((requestId) =>
+    (json: unknown, manufacturer: string, overwrite = false) =>
+      requestImport((requestId) =>
         window.engine.send({ type: 'importOfl', requestId, json, manufacturer, overwrite }),
-      );
-      if (reply.type !== 'oflImported') throw new Error(`Unexpected engine reply: ${reply.type}`);
-      return reply.result;
-    },
+      ),
+    [],
+  );
+
+  const importGdtf = useCallback(
+    (bytes: Uint8Array, overwrite = false) =>
+      requestImport((requestId) =>
+        window.engine.send({ type: 'importGdtf', requestId, bytes, overwrite }),
+      ),
     [],
   );
 
@@ -43,5 +48,12 @@ export function useProfileLibrary() {
     window.engine.send({ type: 'deleteProfile', id });
   }, []);
 
-  return { entries, importOfl, saveProfile, deleteProfile };
+  return { entries, importOfl, importGdtf, saveProfile, deleteProfile };
+}
+
+// Sends an import command and resolves to the engine's result.
+async function requestImport(send: (requestId: number) => void): Promise<FixtureImportResult> {
+  const reply = await request(send);
+  if (reply.type !== 'fixtureImported') throw new Error(`Unexpected engine reply: ${reply.type}`);
+  return reply.result;
 }

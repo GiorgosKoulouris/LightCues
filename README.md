@@ -21,7 +21,7 @@ Full glossary: [CONTEXT.md](CONTEXT.md). Design decisions: [docs/adr/](docs/adr/
 | --- | --- |
 | DMX Outputs | Enttec DMX USB Pro and DMXking ultraDMX (Enttec protocol over USB serial) |
 | MIDI | Any Windows MIDI port. [rtpMIDI](https://www.tobias-erichsen.de/software/rtpmidi.html) for network MIDI from a DAW laptop, [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html) for local virtual ports |
-| Fixture Profiles | Imported from the [Open Fixture Library](https://open-fixture-library.org/) or made in the app |
+| Fixture Profiles | Imported from [Open Fixture Library](https://open-fixture-library.org/) or [GDTF](https://gdtf-share.com/) files, or made in the app |
 
 ## Where to run what
 

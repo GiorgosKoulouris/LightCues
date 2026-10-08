@@ -1,5 +1,7 @@
 import type { FixtureProfile } from '../shared/fixture-profile';
-import { importOflFixture, type OflImport } from './ofl-import';
+import { importGdtfFixture } from './gdtf-import';
+import type { FixtureImport } from './import-report';
+import { importOflFixture } from './ofl-import';
 import { validateProfile } from './validate-profile';
 
 // The app-level collection of Fixture Profiles available to any Venue Patch.
@@ -8,6 +10,8 @@ export interface ProfileLibrary {
   // Profile is only replaced with `overwrite`; otherwise nothing is saved and
   // the result is a `conflict`.
   importOfl(json: unknown, manufacturer: string, options?: { overwrite?: boolean }): ImportResult;
+  // A `.gdtf` file's bytes, imported by the same rules as `importOfl`.
+  importGdtf(bytes: Uint8Array, options?: { overwrite?: boolean }): ImportResult;
   // Saves a Profile made or edited by hand. An edit passes the id it
   // `replaces`, so the id may change; a new Profile may not take an existing
   // id. Returns validation errors; an empty list means it was saved.
@@ -21,7 +25,7 @@ export interface ProfileLibrary {
   save(): string;
 }
 
-export interface ImportResult extends OflImport {
+export interface ImportResult extends FixtureImport {
   status: 'imported' | 'conflict';
 }
 
@@ -50,15 +54,19 @@ export function createProfileLibrary(saved?: string): ProfileLibrary {
     handEdited.delete(id);
   }
 
+  // Adds an imported fixture unless that would overwrite a hand-edited one.
+  function add(result: FixtureImport, overwrite: boolean): ImportResult {
+    const { id } = result.profile;
+    if (handEdited.has(id) && !overwrite) return { ...result, status: 'conflict' };
+    profiles.set(id, result.profile);
+    handEdited.delete(id);
+    return { ...result, status: 'imported' };
+  }
+
   return {
-    importOfl(json, manufacturer, { overwrite = false } = {}) {
-      const result = importOflFixture(json, manufacturer);
-      const { id } = result.profile;
-      if (handEdited.has(id) && !overwrite) return { ...result, status: 'conflict' };
-      profiles.set(id, result.profile);
-      handEdited.delete(id);
-      return { ...result, status: 'imported' };
-    },
+    importOfl: (json, manufacturer, { overwrite = false } = {}) =>
+      add(importOflFixture(json, manufacturer), overwrite),
+    importGdtf: (bytes, { overwrite = false } = {}) => add(importGdtfFixture(bytes), overwrite),
     put(profile, { replaces } = {}) {
       const errors = validateProfile(profile);
       if (profile.id !== replaces && profiles.has(profile.id)) {

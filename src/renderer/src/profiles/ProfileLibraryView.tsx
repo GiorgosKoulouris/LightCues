@@ -4,7 +4,7 @@ import { blankProfile, profileName } from '../../../shared/profile-edit';
 import { useFindShortcut } from '../shell/useShortcuts';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
-import { OflImportDialog } from './OflImportDialog';
+import { FixtureImportDialog } from './FixtureImportDialog';
 import { ProfileEditor } from './ProfileEditor';
 import styles from './ProfileLibraryView.module.css';
 import { ProfileList } from './ProfileList';
@@ -21,7 +21,7 @@ const BLANK = blankProfile();
 // first, and closing the window offers to save them. While `active`, Ctrl+F
 // searches the Profiles.
 export function ProfileLibraryView({ active }: { active: boolean }) {
-  const { entries, importOfl, saveProfile, deleteProfile } = useProfileLibrary();
+  const { entries, importOfl, importGdtf, saveProfile, deleteProfile } = useProfileLibrary();
   const confirm = useConfirm();
   const toast = useToast();
   const [query, setQuery] = useState('');
@@ -164,10 +164,11 @@ export function ProfileLibraryView({ active }: { active: boolean }) {
       ) : (
         <p className={styles.empty}>Select a Profile to edit it, or make a new one.</p>
       )}
-      <OflImportDialog
+      <FixtureImportDialog
         open={importing}
         onOpenChange={setImporting}
         importOfl={importOfl}
+        importGdtf={importGdtf}
         onImported={(id, name) => {
           toast({ tone: 'success', message: `Imported ${name}` });
           select({ id });

@@ -5,6 +5,7 @@ import type {
   FixtureMode,
   FixtureProfile,
 } from '../shared/fixture-profile';
+import { gdtfDimmer } from './gdtf-test-files';
 import { createProfileLibrary } from './profile-library';
 
 const meta = { authors: ['test'], createDate: '2026-01-01', lastModifyDate: '2026-01-01' };
@@ -160,6 +161,36 @@ describe('Profile Library: hand-made Profiles', () => {
     );
 
     const result = library.importOfl(oflDimmer('Par 64'), 'Showtec', { overwrite: true });
+
+    expect(result.status).toBe('imported');
+    expect(library.get('showtec/par-64')?.defaultRole).toBe('Wash');
+    expect(library.isHandEdited('showtec/par-64')).toBe(false);
+  });
+
+  it('replaces an OFL Profile with a GDTF import of the same fixture', () => {
+    const library = createProfileLibrary();
+    library.importOfl(oflDimmer('Par 64', 'OFL'), 'Showtec');
+
+    const result = library.importGdtf(gdtfDimmer('Showtec', 'Par 64', 'GDTF'));
+
+    expect(result.status).toBe('imported');
+    expect(library.list().map((p) => [p.id, p.modes[0]?.name])).toEqual([
+      ['showtec/par-64', 'GDTF'],
+    ]);
+  });
+
+  it('asks before a GDTF import overwrites a hand-edited Profile', () => {
+    const library = createProfileLibrary();
+    library.importGdtf(gdtfDimmer('Showtec', 'Par 64'));
+    library.put(
+      { ...library.get('showtec/par-64')!, defaultRole: 'Blinder' },
+      { replaces: 'showtec/par-64' },
+    );
+
+    expect(library.importGdtf(gdtfDimmer('Showtec', 'Par 64')).status).toBe('conflict');
+    expect(library.get('showtec/par-64')?.defaultRole).toBe('Blinder');
+
+    const result = library.importGdtf(gdtfDimmer('Showtec', 'Par 64'), { overwrite: true });
 
     expect(result.status).toBe('imported');
     expect(library.get('showtec/par-64')?.defaultRole).toBe('Wash');
