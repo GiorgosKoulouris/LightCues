@@ -12,8 +12,8 @@ export function useVenuePatch() {
   useEffect(() => {
     const unsubscribe = window.engine.onEvent((event) => {
       if (event.type !== 'venue') return;
-      const { patch, path, unsaved, canUndo, canRedo } = event;
-      setVenue({ patch, path, unsaved, canUndo, canRedo });
+      const { patch, path, folder, unsaved, canUndo, canRedo } = event;
+      setVenue({ patch, path, folder, unsaved, canUndo, canRedo });
     });
     window.engine.send({ type: 'getVenue' });
     return unsubscribe;
@@ -33,17 +33,17 @@ export function useVenuePatch() {
 
   // Resolves to undefined when the user cancels the dialog.
   const open = useCallback(async (): Promise<string[] | undefined> => {
-    const path = await window.dialogs.chooseVenueToOpen();
+    const path = await window.dialogs.chooseVenueToOpen(venue?.folder);
     if (path === undefined) return undefined;
     return venueRequest((requestId) => window.engine.send({ type: 'openVenue', requestId, path }));
-  }, []);
+  }, [venue?.folder]);
 
   // Saves in place, or asks for a file when there is none or `as` is set.
   const save = useCallback(
     async ({ as = false } = {}): Promise<string[] | undefined> => {
       let path = venue?.path;
       if (as || path === undefined) {
-        path = await window.dialogs.chooseVenueToSave(path);
+        path = await window.dialogs.chooseVenueToSave(path, venue?.folder);
         if (path === undefined) return undefined;
       }
       const to = path;
@@ -51,7 +51,7 @@ export function useVenuePatch() {
         window.engine.send({ type: 'saveVenue', requestId, path: to }),
       );
     },
-    [venue?.path],
+    [venue?.path, venue?.folder],
   );
 
   return { venue, edit, newVenue, undo, redo, open, save };

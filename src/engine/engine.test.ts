@@ -236,6 +236,7 @@ describe('engine Venue Patch', () => {
         type: 'venue',
         patch: first.patch(),
         path: 'C:/gigs/club.lcvenue',
+        folder: 'C:/gigs',
         unsaved: false,
         canUndo: false,
         canRedo: false,
@@ -277,7 +278,7 @@ describe('engine Venue Patch', () => {
     expect(patch()).toEqual(before);
   });
 
-  it('starts a new patch, forgetting the file', () => {
+  it('starts a new patch, forgetting the file but not its folder', () => {
     const { engine, edit, save, venue } = venueEngine();
     edit({ type: 'putFixture', fixture: fixture() });
     save('club.lcvenue');
@@ -292,6 +293,7 @@ describe('engine Venue Patch', () => {
         fixtures: [],
         profiles: [],
       },
+      folder: '.',
       unsaved: false,
       canUndo: false,
       canRedo: false,
@@ -506,6 +508,7 @@ describe('engine Show', () => {
       type: 'show',
       show: first.show().show,
       path: 'C:/shows/tour.lcshow',
+      folder: 'C:/shows',
       unsaved: false,
       canUndo: false,
       canRedo: false,
@@ -541,7 +544,7 @@ describe('engine Show', () => {
     expect(show()).toMatchObject({ show: { scenes: [wash] }, unsaved: true });
   });
 
-  it('starts a new Show, forgetting the file', () => {
+  it('starts a new Show, forgetting the file but not its folder', () => {
     const { engine, edit, save, show } = showEngine();
     edit({ type: 'putScene', scene: wash });
     save('tour.lcshow');
@@ -551,6 +554,7 @@ describe('engine Show', () => {
     expect(show()).toEqual({
       type: 'show',
       show: { layers: [{ id: 'layer-1', name: 'Layer 1' }], scenes: [], triggers: [] },
+      folder: '.',
       unsaved: false,
       canUndo: false,
       canRedo: false,

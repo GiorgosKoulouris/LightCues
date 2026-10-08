@@ -15,6 +15,7 @@ import {
   type VenuePatch,
 } from '../shared/venue-patch';
 import { createHistory } from './history';
+import type { RecentFile } from './recent-files';
 import { loadVenueFile, saveVenueFile } from './venue-file';
 
 // A new patch's stage until the user sets the venue's.
@@ -39,6 +40,8 @@ export interface VenueSessionOptions {
   // Times edits, so quick ones to the same thing undo as one.
   now: () => number;
   files?: VenueFiles;
+  // Kept up to date with the file the patch was opened from or last saved to.
+  recent?: RecentFile;
   // Called after the patch is replaced, edited, undone or redone.
   changed?: () => void;
   // A Profile from the Profile Library, for Fixtures the patch has no copy of.
@@ -50,6 +53,7 @@ export function createVenueSession({
   emit,
   now,
   files,
+  recent,
   changed,
   libraryProfile,
 }: VenueSessionOptions) {
@@ -62,8 +66,15 @@ export function createVenueSession({
       type: 'venue',
       patch: history.current(),
       ...(path === undefined ? {} : { path }),
+      ...folder(),
       ...history.state(),
     });
+  }
+
+  // The folder file dialogs start in, when one is known.
+  function folder(): { folder?: string } {
+    const known = recent?.folder();
+    return known === undefined ? {} : { folder: known };
   }
 
   function open(from: string): string[] {
@@ -74,6 +85,7 @@ export function createVenueSession({
       return [`Could not open ${from}: ${(error as Error).message}`];
     }
     path = from;
+    recent?.set(path);
     emitVenue();
     changed?.();
     return [];
@@ -88,6 +100,7 @@ export function createVenueSession({
       return [`Could not save ${to}: ${(error as Error).message}`];
     }
     path = to;
+    recent?.set(path);
     history.markSaved();
     emitVenue();
     return [];
@@ -132,6 +145,8 @@ export function createVenueSession({
 
   return {
     patch: () => history.current(),
+    // Opens a file. An empty list of errors means it opened.
+    open,
     handle(command: VenueCommand): void {
       switch (command.type) {
         case 'getVenue':
@@ -140,6 +155,7 @@ export function createVenueSession({
         case 'newVenue':
           history.reset(emptyPatch(DEFAULT_STAGE));
           path = undefined;
+          recent?.set(undefined);
           emitVenue();
           changed?.();
           break;

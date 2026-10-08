@@ -1,4 +1,9 @@
-import type { EngineCommand, EngineEvent, FixtureImportResult } from '../shared/protocol';
+import {
+  DOCUMENTS,
+  type EngineCommand,
+  type EngineEvent,
+  type FixtureImportResult,
+} from '../shared/protocol';
 import { findTrigger } from '../shared/show';
 import { profileName } from '../shared/profile-edit';
 import {
@@ -11,6 +16,12 @@ import { createOutputs, type SerialPorts } from './outputs';
 import { createPlayback } from './playback';
 import { createPreview } from './preview';
 import { createProfileLibrary, type ImportResult, type ProfileLibrary } from './profile-library';
+import {
+  createRecentFiles,
+  type RecentFile,
+  type RecentFilesStorage,
+  type RecentKind,
+} from './recent-files';
 import { createShowSession, type ShowFiles } from './show-session';
 import { createVenueSession, type VenueFiles } from './venue-session';
 
@@ -34,6 +45,8 @@ export interface EngineOptions {
   // Without them, no Trigger fires.
   midiPorts?: MidiPorts;
   midiInputStorage?: MidiInputStorage;
+  // Without it, nothing is reopened on launch.
+  recentFilesStorage?: RecentFilesStorage;
 }
 
 export interface Engine {
@@ -49,20 +62,24 @@ export function createEngine({
   serialPorts,
   midiPorts,
   midiInputStorage,
+  recentFilesStorage,
 }: EngineOptions): Engine {
   const startedAt = now();
   const library = openLibrary(storage);
+  const recentFiles = createRecentFiles(recentFilesStorage);
   const venue = createVenueSession({
     emit,
     now,
     changed: () => outputs?.patchChanged(),
     files: venueFiles,
+    recent: recentFiles.of('venue'),
     libraryProfile: (id) => library.get(id),
   });
   const show = createShowSession({
     emit,
     now,
     files: showFiles,
+    recent: recentFiles.of('show'),
     edited: () => playback.showEdited(),
     replaced: () => playback.showReplaced(),
   });
@@ -120,6 +137,13 @@ export function createEngine({
       return { status: 'failed', error: (error as Error).message };
     }
   }
+
+  // Reopens the last Venue Patch and Show. Failures wait for the UI to ask,
+  // once, since no UI is connected yet.
+  let reopenErrors = [
+    ...reopen('venue', venue, recentFiles.of('venue')),
+    ...reopen('show', show, recentFiles.of('show')),
+  ];
 
   return {
     handle(command) {
@@ -194,6 +218,10 @@ export function createEngine({
         case 'cancelLearn':
           learning = false;
           break;
+        case 'getReopenErrors':
+          emit({ type: 'reopenErrors', errors: reopenErrors });
+          reopenErrors = [];
+          break;
         case 'startPreview':
           preview.start();
           break;
@@ -203,6 +231,20 @@ export function createEngine({
       }
     },
   };
+}
+
+// Opens a document's last file, if any. One that fails is forgotten.
+function reopen(
+  kind: RecentKind,
+  session: { open(path: string): string[] },
+  recent: RecentFile,
+): string[] {
+  const file = recent.file();
+  if (file === undefined) return [];
+  const errors = session.open(file);
+  if (errors.length === 0) return [];
+  recent.set(undefined);
+  return errors.map((error) => `The last ${DOCUMENTS[kind]} was not reopened. ${error}`);
 }
 
 function openLibrary(storage: LibraryStorage | undefined): ProfileLibrary {

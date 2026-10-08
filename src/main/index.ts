@@ -9,6 +9,7 @@ import {
   type IpcMainEvent,
   type UtilityProcess,
 } from 'electron';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   CHOOSE_SHOW_TO_OPEN_CHANNEL,
@@ -18,6 +19,7 @@ import {
   DOCUMENTS,
   ENGINE_PORT_CHANNEL,
   MIDI_INPUT_ARG,
+  RECENT_FILES_ARG,
   PROFILE_LIBRARY_ARG,
   SAVE_BEFORE_CLOSE_CHANNEL,
   SAVED_BEFORE_CLOSE_CHANNEL,
@@ -37,6 +39,7 @@ function startEngine(): UtilityProcess {
     [
       PROFILE_LIBRARY_ARG + join(userData, 'profile-library.json'),
       MIDI_INPUT_ARG + join(userData, 'midi-input.json'),
+      RECENT_FILES_ARG + join(userData, 'recent-files.json'),
     ],
     {
       serviceName: 'LightCues Engine',
@@ -61,22 +64,31 @@ function connectWindowToEngine(window: BrowserWindow, engine: UtilityProcess): v
 // Native Open/Save dialogs for one kind of file. The engine reads and writes
 // the chosen path.
 function handleFileDialogs(openChannel: string, saveChannel: string, filters: FileFilter[]): void {
-  ipcMain.handle(openChannel, async (event) => {
+  ipcMain.handle(openChannel, async (event, folder?: string) => {
     const window = BrowserWindow.fromWebContents(event.sender);
-    const options = { filters, properties: ['openFile' as const] };
+    const options = {
+      filters,
+      defaultPath: existingFolder(folder),
+      properties: ['openFile' as const],
+    };
     const result = await (window
       ? dialog.showOpenDialog(window, options)
       : dialog.showOpenDialog(options));
     return result.canceled ? undefined : result.filePaths[0];
   });
-  ipcMain.handle(saveChannel, async (event, current?: string) => {
+  ipcMain.handle(saveChannel, async (event, current?: string, folder?: string) => {
     const window = BrowserWindow.fromWebContents(event.sender);
-    const options = { filters, defaultPath: current };
+    const options = { filters, defaultPath: current ?? existingFolder(folder) };
     const result = await (window
       ? dialog.showSaveDialog(window, options)
       : dialog.showSaveDialog(options));
     return result.canceled ? undefined : result.filePath;
   });
+}
+
+// A remembered folder that is gone falls back to the OS default.
+function existingFolder(folder: string | undefined): string | undefined {
+  return folder !== undefined && existsSync(folder) ? folder : undefined;
 }
 
 // Asks before closing a window whose Show or Venue Patch has unsaved

@@ -4,7 +4,7 @@ import { diskShowFiles, diskVenueFiles, fileStorage } from '../engine/file-stora
 import { nodeMidiPorts } from '../engine/midi-ports';
 import { nodeSerialPorts } from '../engine/serial-ports';
 import { serve } from '../engine/serve';
-import { MIDI_INPUT_ARG, PROFILE_LIBRARY_ARG } from '../shared/protocol';
+import { MIDI_INPUT_ARG, PROFILE_LIBRARY_ARG, RECENT_FILES_ARG } from '../shared/protocol';
 
 // The file named by `<arg><path>` among the process arguments.
 function fileArg(arg: string) {
@@ -19,4 +19,5 @@ serve(process.parentPort, {
   serialPorts: nodeSerialPorts,
   midiPorts: nodeMidiPorts,
   midiInputStorage: fileArg(MIDI_INPUT_ARG),
+  recentFilesStorage: fileArg(RECENT_FILES_ARG),
 });

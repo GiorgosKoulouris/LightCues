@@ -16,6 +16,7 @@ import {
   type ShowResult,
 } from '../shared/show';
 import { createHistory } from './history';
+import type { RecentFile } from './recent-files';
 import { loadShowFile, saveShowFile } from './show-file';
 
 export type ShowCommand = Extract<
@@ -34,6 +35,8 @@ export interface ShowSessionOptions {
   // Times edits, so quick ones to the same thing undo as one.
   now: () => number;
   files?: ShowFiles;
+  // Kept up to date with the file the Show was opened from or last saved to.
+  recent?: RecentFile;
   // Called after an edit, undo or redo changed the Show.
   edited?: () => void;
   // Called after the Show is replaced by a new or opened one.
@@ -41,7 +44,14 @@ export interface ShowSessionOptions {
 }
 
 // The engine's current Show.
-export function createShowSession({ emit, now, files, edited, replaced }: ShowSessionOptions) {
+export function createShowSession({
+  emit,
+  now,
+  files,
+  recent,
+  edited,
+  replaced,
+}: ShowSessionOptions) {
   const history = createHistory(emptyShow(), { now });
   // The file the Show was opened from or last saved to.
   let path: string | undefined;
@@ -51,8 +61,15 @@ export function createShowSession({ emit, now, files, edited, replaced }: ShowSe
       type: 'show',
       show: history.current(),
       ...(path === undefined ? {} : { path }),
+      ...folder(),
       ...history.state(),
     });
+  }
+
+  // The folder file dialogs start in, when one is known.
+  function folder(): { folder?: string } {
+    const known = recent?.folder();
+    return known === undefined ? {} : { folder: known };
   }
 
   function open(from: string): string[] {
@@ -63,6 +80,7 @@ export function createShowSession({ emit, now, files, edited, replaced }: ShowSe
       return [`Could not open ${from}: ${(error as Error).message}`];
     }
     path = from;
+    recent?.set(path);
     emitShow();
     replaced?.();
     return [];
@@ -77,6 +95,7 @@ export function createShowSession({ emit, now, files, edited, replaced }: ShowSe
       return [`Could not save ${to}: ${(error as Error).message}`];
     }
     path = to;
+    recent?.set(path);
     history.markSaved();
     emitShow();
     return [];
@@ -126,6 +145,8 @@ export function createShowSession({ emit, now, files, edited, replaced }: ShowSe
 
   return {
     show: () => history.current(),
+    // Opens a file. An empty list of errors means it opened.
+    open,
     handle(command: ShowCommand): void {
       switch (command.type) {
         case 'getShow':
@@ -134,6 +155,7 @@ export function createShowSession({ emit, now, files, edited, replaced }: ShowSe
         case 'newShow':
           history.reset(emptyShow());
           path = undefined;
+          recent?.set(undefined);
           emitShow();
           replaced?.();
           break;

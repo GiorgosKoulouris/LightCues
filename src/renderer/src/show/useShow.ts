@@ -12,8 +12,8 @@ export function useShow() {
   useEffect(() => {
     const unsubscribe = window.engine.onEvent((event) => {
       if (event.type !== 'show') return;
-      const { show, path, unsaved, canUndo, canRedo } = event;
-      setShow({ show, path, unsaved, canUndo, canRedo });
+      const { show, path, folder, unsaved, canUndo, canRedo } = event;
+      setShow({ show, path, folder, unsaved, canUndo, canRedo });
     });
     window.engine.send({ type: 'getShow' });
     return unsubscribe;
@@ -31,17 +31,17 @@ export function useShow() {
 
   // Resolves to undefined when the user cancels the dialog.
   const open = useCallback(async (): Promise<string[] | undefined> => {
-    const path = await window.dialogs.chooseShowToOpen();
+    const path = await window.dialogs.chooseShowToOpen(show?.folder);
     if (path === undefined) return undefined;
     return showRequest((requestId) => window.engine.send({ type: 'openShow', requestId, path }));
-  }, []);
+  }, [show?.folder]);
 
   // Saves in place, or asks for a file when there is none or `as` is set.
   const save = useCallback(
     async ({ as = false } = {}): Promise<string[] | undefined> => {
       let path = show?.path;
       if (as || path === undefined) {
-        path = await window.dialogs.chooseShowToSave(path);
+        path = await window.dialogs.chooseShowToSave(path, show?.folder);
         if (path === undefined) return undefined;
       }
       const to = path;
@@ -49,7 +49,7 @@ export function useShow() {
         window.engine.send({ type: 'saveShow', requestId, path: to }),
       );
     },
-    [show?.path],
+    [show?.path, show?.folder],
   );
 
   return { show, edit, newShow, undo, redo, open, save };

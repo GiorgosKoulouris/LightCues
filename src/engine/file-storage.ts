@@ -18,7 +18,10 @@ export function fileStorage(path: string): LibraryStorage {
 
 // .lcvenue files wherever the user chose to keep them.
 export const diskVenueFiles: VenueFiles = {
-  read: (path) => readFileSync(path, 'utf8'),
+  read(path) {
+    if (!existsSync(path)) throw new Error('File not found');
+    return readFileSync(path, 'utf8');
+  },
   write: writeSafely,
 };
 

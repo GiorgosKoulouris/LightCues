@@ -142,7 +142,7 @@ describe('App shortcuts', () => {
 
     await userEvent.keyboard('{Control>}1{/Control}');
     await userEvent.keyboard('{Control>}{Shift>}S{/Shift}{/Control}');
-    expect(dialogs.chooseShowToSave).toHaveBeenCalledWith('C:\\Shows\\Tour.lcshow');
+    expect(dialogs.chooseShowToSave).toHaveBeenCalledWith('C:\\Shows\\Tour.lcshow', undefined);
     expect(dialogs.chooseVenueToSave).toHaveBeenCalledTimes(1);
     expect(panelCommands()).toEqual([]);
   });

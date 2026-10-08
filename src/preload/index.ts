@@ -44,10 +44,12 @@ const bridge: EngineBridge = {
 contextBridge.exposeInMainWorld('engine', bridge);
 
 const dialogs: DialogBridge = {
-  chooseVenueToOpen: () => ipcRenderer.invoke(CHOOSE_VENUE_TO_OPEN_CHANNEL),
-  chooseVenueToSave: (current) => ipcRenderer.invoke(CHOOSE_VENUE_TO_SAVE_CHANNEL, current),
-  chooseShowToOpen: () => ipcRenderer.invoke(CHOOSE_SHOW_TO_OPEN_CHANNEL),
-  chooseShowToSave: (current) => ipcRenderer.invoke(CHOOSE_SHOW_TO_SAVE_CHANNEL, current),
+  chooseVenueToOpen: (folder) => ipcRenderer.invoke(CHOOSE_VENUE_TO_OPEN_CHANNEL, folder),
+  chooseVenueToSave: (current, folder) =>
+    ipcRenderer.invoke(CHOOSE_VENUE_TO_SAVE_CHANNEL, current, folder),
+  chooseShowToOpen: (folder) => ipcRenderer.invoke(CHOOSE_SHOW_TO_OPEN_CHANNEL, folder),
+  chooseShowToSave: (current, folder) =>
+    ipcRenderer.invoke(CHOOSE_SHOW_TO_SAVE_CHANNEL, current, folder),
 };
 
 contextBridge.exposeInMainWorld('dialogs', dialogs);

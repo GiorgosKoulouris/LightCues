@@ -6,6 +6,7 @@ import { ProfileLibraryView } from './profiles/ProfileLibraryView';
 import styles from './App.module.css';
 import { Sidebar } from './shell/Sidebar';
 import { TopBar } from './shell/TopBar';
+import { useReopenErrors } from './shell/useReopenErrors';
 import { useViewShortcuts } from './shell/useShortcuts';
 import type { View } from './shell/views';
 import { ShowView } from './show/ShowView';
@@ -25,6 +26,7 @@ export function App() {
   const playback = usePlayback();
   const midiInput = useMidiInput();
   useViewShortcuts(setView);
+  useReopenErrors();
   usePanelKeys(show?.show, playback);
 
   return (

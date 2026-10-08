@@ -67,6 +67,9 @@ export type EngineCommand =
   // firing its Trigger.
   | { type: 'learnTrigger' }
   | { type: 'cancelLearn' }
+  // Why the last Venue Patch or Show did not reopen on launch. Sent once;
+  // later requests get an empty list.
+  | { type: 'getReopenErrors' }
   // While started, the engine sends `preview` events.
   | { type: 'startPreview' }
   | { type: 'stopPreview' };
@@ -166,15 +169,16 @@ export type EngineEvent =
   // An empty `errors` list means the Profile was saved.
   | { type: 'profileSaved'; requestId: number; errors: string[] }
   // The current Venue Patch, sent on request and after every change. `unsaved`
-  // is true when it differs from what was last written to a file.
-  | ({ type: 'venue'; patch: VenuePatch; path?: string } & DocumentState)
+  // is true when it differs from what was last written to a file. `folder` is
+  // where its Open and Save As dialogs start.
+  | ({ type: 'venue'; patch: VenuePatch; path?: string; folder?: string } & DocumentState)
   // Reply to openVenue, saveVenue and editVenue. An empty `errors` list means
   // it was done.
   | { type: 'venueDone'; requestId: number; errors: string[] }
   // All Outputs, sent on request and after every change.
   | { type: 'outputs'; outputs: OutputStatus[] }
   // The current Show, sent on request and after every change.
-  | ({ type: 'show'; show: Show; path?: string } & DocumentState)
+  | ({ type: 'show'; show: Show; path?: string; folder?: string } & DocumentState)
   // Reply to openShow, saveShow and editShow. An empty `errors` list means it
   // was done.
   | { type: 'showDone'; requestId: number; errors: string[] }
@@ -191,6 +195,7 @@ export type EngineEvent =
   | { type: 'midiInput'; status: MidiInputStatus }
   // The note-on caught by MIDI learn.
   | { type: 'triggerLearned'; note: MidiNote }
+  | { type: 'reopenErrors'; errors: string[] }
   // How every Fixture in the Venue Patch looks now, by Fixture id. In Monitor
   // it is what the Outputs send; in Blind, what they would send. Sent while
   // the preview is started, on start and after every change.
@@ -223,12 +228,13 @@ export const CHOOSE_SHOW_TO_OPEN_CHANNEL = 'dialog:chooseShowToOpen';
 export const CHOOSE_SHOW_TO_SAVE_CHANNEL = 'dialog:chooseShowToSave';
 
 // What the preload script exposes to the renderer as `window.dialogs`. Each
-// resolves to the chosen path, or undefined when the user cancels.
+// resolves to the chosen path, or undefined when the user cancels. A dialog
+// starts at the `current` file, else in `folder` when it still exists.
 export interface DialogBridge {
-  chooseVenueToOpen(): Promise<string | undefined>;
-  chooseVenueToSave(current?: string): Promise<string | undefined>;
-  chooseShowToOpen(): Promise<string | undefined>;
-  chooseShowToSave(current?: string): Promise<string | undefined>;
+  chooseVenueToOpen(folder?: string): Promise<string | undefined>;
+  chooseVenueToSave(current?: string, folder?: string): Promise<string | undefined>;
+  chooseShowToOpen(folder?: string): Promise<string | undefined>;
+  chooseShowToSave(current?: string, folder?: string): Promise<string | undefined>;
 }
 
 // IPC channels guarding the window against closing with unsaved changes.
@@ -265,3 +271,7 @@ export const PROFILE_LIBRARY_ARG = '--profile-library=';
 // Engine process argument naming the file that keeps the selected MIDI input
 // on this machine: `<arg><path>`.
 export const MIDI_INPUT_ARG = '--midi-input=';
+
+// Engine process argument naming the file that keeps the last Venue Patch and
+// Show files on this machine: `<arg><path>`.
+export const RECENT_FILES_ARG = '--recent-files=';
