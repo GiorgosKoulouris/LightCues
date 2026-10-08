@@ -2,6 +2,9 @@
 // saved Venue Patches all carry Profiles. All DMX values are 8-bit (0–255);
 // 16/24-bit channels are split into a control channel and fine channels.
 
+// The highest 8-bit DMX value.
+export const DMX_MAX_VALUE = 255;
+
 export const ROLES = ['Wash', 'Spot/Beam', 'Blinder', 'Strobe', 'Pixel/Bar', 'Effect'] as const;
 export type Role = (typeof ROLES)[number];
 

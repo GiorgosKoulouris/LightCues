@@ -54,8 +54,8 @@ function fixture(overrides: Partial<PatchedFixture> = {}): PatchedFixture {
 }
 
 // An engine whose Profile Library holds `dimmer`.
-// `files` stands in for the disk, by path.
-function venueEngine(files = new Map<string, string>()) {
+// `files` stands in for the disk, by path. `clock` is the engine's time in ms.
+function venueEngine(files = new Map<string, string>(), clock = { now: 0 }) {
   const events: EngineEvent[] = [];
   const venueFiles = {
     read(path: string) {
@@ -65,7 +65,7 @@ function venueEngine(files = new Map<string, string>()) {
     },
     write: (path: string, json: string) => void files.set(path, json),
   };
-  const engine = createEngine({ emit: (e) => events.push(e), venueFiles });
+  const engine = createEngine({ emit: (e) => events.push(e), venueFiles, now: () => clock.now });
   engine.handle({ type: 'saveProfile', requestId: 0, profile: dimmer });
   let nextRequestId = 1;
 
@@ -82,6 +82,8 @@ function venueEngine(files = new Map<string, string>()) {
     edit: (edit: VenueEdit) => request((requestId) => ({ type: 'editVenue', requestId, edit })),
     save: (path?: string) => request((requestId) => ({ type: 'saveVenue', requestId, path })),
     open: (path: string) => request((requestId) => ({ type: 'openVenue', requestId, path })),
+    undo: () => engine.handle({ type: 'undoVenue' }),
+    redo: () => engine.handle({ type: 'redoVenue' }),
     // The last Venue Patch state the engine sent.
     venue() {
       const venue = events.findLast((e) => e.type === 'venue');
@@ -117,6 +119,8 @@ describe('engine Venue Patch', () => {
           profiles: [],
         },
         unsaved: false,
+        canUndo: false,
+        canRedo: false,
       },
     ]);
   });
@@ -184,9 +188,31 @@ describe('engine Venue Patch', () => {
     edit({ type: 'putFixture', fixture: fixture() });
 
     expect(edit({ type: 'setStage', stage: { width: 14, depth: 10 } })).toEqual([]);
-    expect(edit({ type: 'removeFixture', id: 'f1' })).toEqual([]);
+    expect(edit({ type: 'removeFixtures', ids: ['f1'] })).toEqual([]);
 
     expect(patch()).toMatchObject({ stage: { width: 14, depth: 10 }, fixtures: [] });
+  });
+
+  it('changes several Fixtures in one edit, or none when one does not fit', () => {
+    const { edit, patch } = venueEngine();
+    edit({ type: 'putFixture', fixture: fixture() });
+    edit({ type: 'putFixture', fixture: fixture({ id: 'f2', address: 2 }) });
+
+    expect(
+      edit({
+        type: 'putFixtures',
+        fixtures: [fixture({ role: 'Strobe' }), fixture({ id: 'f2', address: 2, role: 'Strobe' })],
+      }),
+    ).toEqual([]);
+    expect(patch().fixtures.map((f) => f.role)).toEqual(['Strobe', 'Strobe']);
+
+    expect(
+      edit({
+        type: 'putFixtures',
+        fixtures: [fixture({ role: 'Wash' }), fixture({ id: 'f2', address: 1 })],
+      }),
+    ).not.toEqual([]);
+    expect(patch().fixtures.map((f) => f.role)).toEqual(['Strobe', 'Strobe']);
   });
 
   it('saves the patch to a file that another engine opens, without its library', () => {
@@ -205,7 +231,14 @@ describe('engine Venue Patch', () => {
     second.handle({ type: 'openVenue', requestId: 1, path: 'C:/gigs/club.lcvenue' });
 
     expect(events).toEqual([
-      { type: 'venue', patch: first.patch(), path: 'C:/gigs/club.lcvenue', unsaved: false },
+      {
+        type: 'venue',
+        patch: first.patch(),
+        path: 'C:/gigs/club.lcvenue',
+        unsaved: false,
+        canUndo: false,
+        canRedo: false,
+      },
       { type: 'venueDone', requestId: 1, errors: [] },
     ]);
   });
@@ -259,6 +292,8 @@ describe('engine Venue Patch', () => {
         profiles: [],
       },
       unsaved: false,
+      canUndo: false,
+      canRedo: false,
     });
   });
 
@@ -267,7 +302,7 @@ describe('engine Venue Patch', () => {
     engine.handle({ type: 'getVenue' });
 
     expect(edit({ type: 'removeUniverse', number: 7 })).toEqual(['Universe 7 is not in the patch']);
-    expect(edit({ type: 'removeFixture', id: 'nope' })).toEqual([
+    expect(edit({ type: 'removeFixtures', ids: ['nope'] })).toEqual([
       'Fixture id "nope" is not in the patch',
     ]);
     expect(venue().unsaved).toBe(false);
@@ -286,6 +321,23 @@ describe('engine Venue Patch', () => {
   });
 });
 
+describe('engine Venue Patch undo', () => {
+  it('undoes removing Fixtures as one step, and redoes it', () => {
+    const { edit, undo, redo, venue } = venueEngine();
+    edit({ type: 'putFixture', fixture: fixture() });
+    edit({ type: 'putFixture', fixture: fixture({ id: 'f2', address: 2 }) });
+    edit({ type: 'removeFixtures', ids: ['f1', 'f2'] });
+
+    undo();
+    expect(venue().patch.fixtures.map((f) => f.id)).toEqual(['f1', 'f2']);
+    expect(venue()).toMatchObject({ unsaved: true, canUndo: true, canRedo: true });
+
+    redo();
+    expect(venue().patch.fixtures).toEqual([]);
+    expect(venue()).toMatchObject({ canRedo: false });
+  });
+});
+
 const wash: Scene = {
   id: 'wash',
   name: 'Wash',
@@ -295,8 +347,9 @@ const wash: Scene = {
   rules: [{ target: {}, intensity: 1 }],
 };
 
-// An engine with Show files. `files` stands in for the disk, by path.
-function showEngine(files = new Map<string, string>()) {
+// An engine with Show files. `files` stands in for the disk, by path. `clock`
+// is the engine's time in ms; tests move it on.
+function showEngine(files = new Map<string, string>(), clock = { now: 0 }) {
   const events: EngineEvent[] = [];
   const showFiles = {
     read(path: string) {
@@ -306,7 +359,7 @@ function showEngine(files = new Map<string, string>()) {
     },
     write: (path: string, json: string) => void files.set(path, json),
   };
-  const engine = createEngine({ emit: (e) => events.push(e), showFiles });
+  const engine = createEngine({ emit: (e) => events.push(e), showFiles, now: () => clock.now });
   let nextRequestId = 1;
 
   // Sends a command and returns the engine's reply to it.
@@ -322,6 +375,8 @@ function showEngine(files = new Map<string, string>()) {
     edit: (edit: ShowEdit) => request((requestId) => ({ type: 'editShow', requestId, edit })),
     save: (path?: string) => request((requestId) => ({ type: 'saveShow', requestId, path })),
     open: (path: string) => request((requestId) => ({ type: 'openShow', requestId, path })),
+    undo: () => engine.handle({ type: 'undoShow' }),
+    redo: () => engine.handle({ type: 'redoShow' }),
     // The last Show state the engine sent.
     show() {
       const show = events.findLast((e) => e.type === 'show');
@@ -345,6 +400,8 @@ describe('engine Show', () => {
         type: 'show',
         show: { layers: [{ id: 'layer-1', name: 'Layer 1' }], scenes: [], triggers: [] },
         unsaved: false,
+        canUndo: false,
+        canRedo: false,
       },
     ]);
   });
@@ -449,6 +506,8 @@ describe('engine Show', () => {
       show: first.show().show,
       path: 'C:/shows/tour.lcshow',
       unsaved: false,
+      canUndo: false,
+      canRedo: false,
     });
   });
 
@@ -492,6 +551,177 @@ describe('engine Show', () => {
       type: 'show',
       show: { layers: [{ id: 'layer-1', name: 'Layer 1' }], scenes: [], triggers: [] },
       unsaved: false,
+      canUndo: false,
+      canRedo: false,
     });
+  });
+});
+
+describe('engine Show undo', () => {
+  it('undoes an edit and redoes it', () => {
+    const { edit, undo, redo, show } = showEngine();
+    edit({ type: 'putScene', scene: wash });
+
+    undo();
+    expect(show()).toMatchObject({
+      show: { scenes: [] },
+      unsaved: false,
+      canUndo: false,
+      canRedo: true,
+    });
+
+    redo();
+    expect(show()).toMatchObject({
+      show: { scenes: [wash] },
+      unsaved: true,
+      canUndo: true,
+      canRedo: false,
+    });
+  });
+
+  it('undoes quick edits to the same Scene as one step', () => {
+    const clock = { now: 0 };
+    const { edit, undo, show } = showEngine(undefined, clock);
+    edit({ type: 'putScene', scene: wash });
+    for (const name of ['W', 'Wa', 'War', 'Warm']) {
+      clock.now += 400;
+      edit({ type: 'putScene', scene: { ...wash, name } });
+    }
+
+    undo();
+    expect(show().show.scenes).toEqual([wash]);
+    undo();
+    expect(show().show.scenes).toEqual([]);
+  });
+
+  it('keeps edits apart after a pause, or to different things', () => {
+    const clock = { now: 0 };
+    const { edit, undo, show } = showEngine(undefined, clock);
+    edit({ type: 'putScene', scene: wash });
+    edit({ type: 'putScene', scene: { ...wash, name: 'Warm' } });
+    edit({ type: 'setDefaultColour', colour: { swatch: 'Amber' } });
+    edit({ type: 'putScene', scene: { ...wash, name: 'Hot' } });
+    clock.now += 1500;
+    edit({ type: 'putScene', scene: { ...wash, name: 'Cold' } });
+
+    undo();
+    expect(show().show.scenes[0]?.name).toBe('Hot');
+    undo();
+    expect(show().show.defaultColour).toEqual({ swatch: 'Amber' });
+    undo();
+    expect(show().show.defaultColour).toBeUndefined();
+    expect(show().show.scenes[0]?.name).toBe('Warm');
+  });
+
+  it('keeps adding, removing and reordering Rules apart from quick Scene edits', () => {
+    const { edit, undo, show } = showEngine();
+    const two = { ...wash, rules: [...wash.rules, { target: {}, intensity: 0.5 }] };
+    edit({ type: 'putScene', scene: wash });
+    edit({ type: 'putScene', scene: { ...wash, name: 'Warm' } });
+    edit({ type: 'putScene', scene: { ...two, name: 'Warm' } });
+    edit({ type: 'putScene', scene: { ...two, name: 'Warm', rules: [...two.rules].reverse() } });
+    edit({ type: 'putScene', scene: { ...wash, name: 'Warm' } });
+
+    const rules = () => show().show.scenes[0]?.rules.map((r) => r.intensity);
+    undo();
+    expect(rules()).toEqual([0.5, 1]);
+    undo();
+    expect(rules()).toEqual([1, 0.5]);
+    undo();
+    expect(show().show.scenes[0]).toEqual({ ...wash, name: 'Warm' });
+  });
+
+  it('is saved again when undo or redo returns to the saved Show', () => {
+    const { edit, save, undo, redo, show } = showEngine();
+    edit({ type: 'putScene', scene: wash });
+    save('tour.lcshow');
+    edit({ type: 'removeScene', id: 'wash' });
+
+    undo();
+    expect(show()).toMatchObject({ show: { scenes: [wash] }, unsaved: false });
+    undo();
+    expect(show()).toMatchObject({ show: { scenes: [] }, unsaved: true });
+    redo();
+    expect(show().unsaved).toBe(false);
+  });
+
+  it('forgets the history on New and Open', () => {
+    const files = new Map<string, string>();
+    const { engine, edit, save, open, undo, show } = showEngine(files);
+    edit({ type: 'putScene', scene: wash });
+    save('tour.lcshow');
+    edit({ type: 'removeScene', id: 'wash' });
+
+    expect(open('tour.lcshow')).toEqual([]);
+    expect(show()).toMatchObject({ canUndo: false, canRedo: false });
+
+    edit({ type: 'removeScene', id: 'wash' });
+    engine.handle({ type: 'newShow' });
+    undo();
+    expect(show()).toMatchObject({ show: { scenes: [] }, canUndo: false });
+  });
+
+  it('sends nothing when there is nothing to undo or redo', () => {
+    const { undo, redo, events } = showEngine();
+
+    undo();
+    redo();
+
+    expect(events).toEqual([]);
+  });
+
+  it('clears an undone Scene from its Layer', () => {
+    const { engine, edit, undo, events } = showEngine();
+    edit({ type: 'putScene', scene: wash });
+    engine.handle({ type: 'goScene', sceneId: 'wash' });
+
+    undo();
+
+    expect(events.findLast((e) => e.type === 'playback')).toMatchObject({ active: {} });
+  });
+});
+
+describe('engine OFL import', () => {
+  const par = {
+    name: 'Par',
+    categories: ['Dimmer'],
+    meta: { authors: ['Test'], createDate: '2024-01-01', lastModifyDate: '2024-01-01' },
+    availableChannels: { Dimmer: { capability: { type: 'Intensity' } } },
+    modes: [{ name: '1ch', channels: ['Dimmer'] }],
+  };
+
+  it('names the Profile it imported, and the hand-edited one it kept', () => {
+    const events: EngineEvent[] = [];
+    const engine = createEngine({ emit: (e) => events.push(e) });
+    const imported = (requestId: number) => {
+      const reply = events.find((e) => e.type === 'oflImported' && e.requestId === requestId);
+      return reply?.type === 'oflImported' ? reply.result : undefined;
+    };
+
+    engine.handle({
+      type: 'importOfl',
+      requestId: 1,
+      json: par,
+      manufacturer: 'Acme',
+      overwrite: false,
+    });
+    expect(imported(1)).toEqual({
+      status: 'imported',
+      profileId: 'acme/par',
+      name: 'Acme Par',
+      unsupported: [],
+    });
+
+    const [entry] = events.flatMap((e) => (e.type === 'profiles' ? e.entries : []));
+    const edited = { ...entry!.profile, defaultRole: 'Strobe' as const };
+    engine.handle({ type: 'saveProfile', requestId: 2, profile: edited, replaces: edited.id });
+    engine.handle({
+      type: 'importOfl',
+      requestId: 3,
+      json: par,
+      manufacturer: 'Acme',
+      overwrite: false,
+    });
+    expect(imported(3)).toEqual({ status: 'conflict', profileId: 'acme/par', name: 'Acme Par' });
   });
 });

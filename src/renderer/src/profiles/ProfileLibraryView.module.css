@@ -1,0 +1,14 @@
+.view {
+  --profile-list-width: 300px;
+
+  display: grid;
+  grid-template-columns: var(--profile-list-width) minmax(0, 1fr);
+  gap: var(--space-4);
+  height: 100%;
+}
+
+.empty {
+  padding: var(--space-6);
+  color: var(--text-faint);
+  text-align: center;
+}

@@ -1,135 +1,147 @@
-import { useState } from 'react';
+import { Play, Plus, Trash2 } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { ROLES, type Role } from '../../../shared/fixture-profile';
 import type { Rule, Scene, Show } from '../../../shared/show';
 import type { VenuePatch } from '../../../shared/venue-patch';
+import { Button, IconButton } from '../ui/Button';
+import { Checkbox } from '../ui/Checkbox';
+import { NumberField, parseName, TextField } from '../ui/fields';
+import { Select } from '../ui/Select';
+import { useToast } from '../ui/Toast';
+import { moveItem, SortableList, useItemKeys } from '../ui/SortableList';
 import { ColourPicker } from './ColourPicker';
+import styles from './SceneEditor.module.css';
+import { parseTags } from './scenes';
 import { ZonePicker } from './ZonePicker';
+
+// Arrow Up/Down step of the fade-in, in seconds.
+const FADE_STEP = 0.5;
 
 interface SceneEditorProps {
   scene: Scene;
   show: Show;
   patch: VenuePatch;
-  // Every change is sent at once, so an active Scene updates live.
-  onPut(scene: Scene): void;
+  // Every change is sent at once, so an active Scene updates live. Resolves
+  // to whether it was done.
+  onPut(scene: Scene): Promise<boolean>;
+  onGo(): void;
+  onRemove(): void;
 }
 
-// Edits one Scene: name, tags, Layer, fade-in and Rules. Key it by Scene id,
-// so its text fields start from the Scene shown.
-export function SceneEditor({ scene, show, patch, onPut }: SceneEditorProps) {
-  const [name, setName] = useState(scene.name);
-  const [tags, setTags] = useState(scene.tags.join(', '));
-  const [fadeIn, setFadeIn] = useState(String(scene.fadeIn));
+// Edits one Scene: name, tags, Layer and fade-in in a header, and its Rules as
+// cards, reordered by dragging their handle.
+export function SceneEditor({ scene, show, patch, onPut, onGo, onRemove }: SceneEditorProps) {
+  const toast = useToast();
+  // Rules have no ids; these keep focus with a Rule as it moves.
+  const ruleKeys = useItemKeys(scene.rules.length);
+  const putRules = (rules: Rule[]) => onPut({ ...scene, rules });
 
-  function putRule(index: number, rule: Rule) {
-    onPut({ ...scene, rules: scene.rules.map((r, i) => (i === index ? rule : r)) });
-  }
-
-  function moveRule(index: number, by: -1 | 1) {
-    const rules = [...scene.rules];
-    const [rule] = rules.splice(index, 1);
-    rules.splice(index + by, 0, rule!);
-    onPut({ ...scene, rules });
+  // At once: Undo brings it back.
+  async function removeRule(index: number) {
+    ruleKeys.remove(index);
+    if (!(await putRules(scene.rules.filter((_, i) => i !== index)))) return;
+    toast({ message: `Removed Rule ${index + 1} from ${scene.name}` });
   }
 
   return (
-    <section>
-      <h3>Scene</h3>
-      <p>
-        <label>
-          Name{' '}
-          <input
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value);
-              onPut({ ...scene, name: e.target.value });
+    <section aria-label="Scene editor" className={styles.editor}>
+      <header className={styles.header}>
+        <TextField
+          label="Name"
+          value={scene.name}
+          parse={parseName}
+          onCommit={(name) => onPut({ ...scene, name })}
+        />
+        <TextField
+          label="Tags"
+          placeholder="verse, chorus"
+          value={scene.tags}
+          format={(tags) => tags.join(', ')}
+          parse={(text) => ({ ok: true, value: parseTags(text) })}
+          equals={sameTags}
+          onCommit={(tags) => onPut({ ...scene, tags })}
+        />
+        <Select
+          label="Layer"
+          value={scene.layer}
+          options={show.layers.map((layer) => ({ value: layer.id, label: layer.name }))}
+          onChange={(layer) => onPut({ ...scene, layer })}
+        />
+        <NumberField
+          label="Fade-in (s)"
+          value={scene.fadeIn}
+          min={0}
+          integer={false}
+          step={FADE_STEP}
+          onCommit={(fadeIn) => onPut({ ...scene, fadeIn })}
+        />
+        <div className={styles.actions}>
+          <Button variant="primary" icon={<Play />} onClick={onGo}>
+            Go
+          </Button>
+          <IconButton icon={<Trash2 />} label="Remove Scene" onClick={onRemove} />
+        </div>
+      </header>
+      <div className={styles.rulesBar}>
+        <h3 className={styles.heading}>Rules</h3>
+        <span className={styles.hint}>Later Rules override earlier ones.</span>
+        <Button
+          icon={<Plus />}
+          className={styles.addRule}
+          onClick={() => putRules([...scene.rules, { target: {}, intensity: 1 }])}
+        >
+          Add Rule
+        </Button>
+      </div>
+      <div className={styles.rules}>
+        {scene.rules.length === 0 ? (
+          <p className={styles.empty}>No Rules: this Scene changes nothing.</p>
+        ) : (
+          <SortableList
+            label="Rules"
+            items={scene.rules}
+            getKey={(_, i) => ruleKeys.keys[i]!}
+            itemLabel={(_, i) => `Rule ${i + 1}`}
+            onMove={(from, to) => {
+              ruleKeys.move(from, to);
+              putRules(moveItem(scene.rules, from, to));
             }}
+            itemClassName={styles.card}
+            renderItem={(rule, i, handle) => (
+              <RuleCard
+                number={i + 1}
+                handle={handle}
+                rule={rule}
+                patch={patch}
+                onPut={(next) => putRules(scene.rules.map((r, j) => (j === i ? next : r)))}
+                onRemove={() => void removeRule(i)}
+              />
+            )}
           />
-        </label>{' '}
-        <label>
-          Tags{' '}
-          <input
-            value={tags}
-            placeholder="verse, chorus"
-            onChange={(e) => setTags(e.target.value)}
-            onBlur={() => onPut({ ...scene, tags: parseTags(tags) })}
-          />
-        </label>{' '}
-        <label>
-          Layer{' '}
-          <select value={scene.layer} onChange={(e) => onPut({ ...scene, layer: e.target.value })}>
-            {show.layers.map((layer) => (
-              <option key={layer.id} value={layer.id}>
-                {layer.name}
-              </option>
-            ))}
-          </select>
-        </label>{' '}
-        <label>
-          Fade-in (s){' '}
-          <input
-            type="number"
-            min={0}
-            step={0.1}
-            value={fadeIn}
-            style={{ width: '5em' }}
-            onChange={(e) => {
-              setFadeIn(e.target.value);
-              const seconds = Number(e.target.value);
-              if (e.target.value !== '' && seconds >= 0) onPut({ ...scene, fadeIn: seconds });
-            }}
-          />
-        </label>
-      </p>
-      <h4>Rules</h4>
-      <p>Later Rules override earlier ones.</p>
-      <ol>
-        {scene.rules.map((rule, i) => (
-          <li key={i}>
-            <RuleEditor rule={rule} patch={patch} onPut={(r) => putRule(i, r)} />
-            <p>
-              <button type="button" disabled={i === 0} onClick={() => moveRule(i, -1)}>
-                Move up
-              </button>
-              <button
-                type="button"
-                disabled={i === scene.rules.length - 1}
-                onClick={() => moveRule(i, 1)}
-              >
-                Move down
-              </button>
-              <button
-                type="button"
-                onClick={() => onPut({ ...scene, rules: scene.rules.filter((_, j) => j !== i) })}
-              >
-                Remove Rule
-              </button>
-            </p>
-          </li>
-        ))}
-      </ol>
-      <button
-        type="button"
-        onClick={() => onPut({ ...scene, rules: [...scene.rules, { target: {}, intensity: 1 }] })}
-      >
-        Add Rule
-      </button>
+        )}
+      </div>
     </section>
   );
 }
 
-// Comma-separated, trimmed, without empty or repeated tags.
-function parseTags(text: string): string[] {
-  return [...new Set(text.split(',').map((t) => t.trim()))].filter((t) => t !== '');
+function sameTags(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((tag, i) => tag === b[i]);
 }
 
-function RuleEditor({
+function RuleCard({
+  number,
+  handle,
   rule,
   patch,
   onPut,
+  onRemove,
 }: {
+  number: number;
+  handle: ReactNode;
   rule: Rule;
   patch: VenuePatch;
   onPut(rule: Rule): void;
+  onRemove(): void;
 }) {
   const { target, intensity, colour } = rule;
 
@@ -147,34 +159,41 @@ function RuleEditor({
   }
 
   return (
-    <div>
-      <ZonePicker patch={patch} zones={target.zones} onChange={(z) => setTarget('zones', z)} />
-      <RolePicker roles={target.roles} onChange={(r) => setTarget('roles', r)} />
-      <p>
-        <label>
-          <input
-            type="checkbox"
-            checked={intensity !== undefined}
-            onChange={(e) => set('intensity', e.target.checked ? 1 : undefined)}
-          />{' '}
-          Intensity
-        </label>{' '}
-        {intensity !== undefined && (
-          <>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={Math.round(intensity * 100)}
-              aria-label="Intensity"
-              onChange={(e) => set('intensity', Number(e.target.value) / 100)}
-            />{' '}
-            {Math.round(intensity * 100)} %
-          </>
-        )}
-      </p>
-      <ColourPicker colour={colour} onChange={(c) => set('colour', c)} />
-    </div>
+    <>
+      <div className={styles.cardHeader}>
+        {handle}
+        <h4 className={styles.cardTitle}>Rule {number}</h4>
+        <IconButton icon={<Trash2 />} label={`Remove Rule ${number}`} onClick={onRemove} />
+      </div>
+      <div className={styles.cardBody}>
+        <ZonePicker patch={patch} zones={target.zones} onChange={(z) => setTarget('zones', z)} />
+        <div className={styles.settings}>
+          <RolePicker roles={target.roles} onChange={(r) => setTarget('roles', r)} />
+          <div className={styles.intensity}>
+            <Checkbox
+              label="Intensity"
+              checked={intensity !== undefined}
+              onChange={(on) => set('intensity', on ? 1 : undefined)}
+            />
+            {intensity !== undefined && (
+              <>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={Math.round(intensity * 100)}
+                  aria-label={`Rule ${number} intensity`}
+                  className={styles.slider}
+                  onChange={(e) => set('intensity', Number(e.target.value) / 100)}
+                />
+                <output className={styles.percent}>{Math.round(intensity * 100)}%</output>
+              </>
+            )}
+          </div>
+          <ColourPicker colour={colour} onChange={(c) => set('colour', c)} />
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -196,25 +215,25 @@ function RolePicker({
   }
 
   return (
-    <fieldset>
-      <legend>Roles</legend>
+    <fieldset className={styles.roles}>
+      <legend className={styles.legend}>
+        Roles{' '}
+        {roles ? (
+          <button type="button" className={styles.link} onClick={() => onChange(undefined)}>
+            Every Role
+          </button>
+        ) : (
+          <span className={styles.hint}>every Role; click one to target it alone</span>
+        )}
+      </legend>
       {ROLES.map((role) => (
-        <label key={role} style={{ marginRight: '1em' }}>
-          <input
-            type="checkbox"
-            checked={!roles || roles.includes(role)}
-            onChange={() => toggle(role)}
-          />{' '}
-          {role}
-        </label>
+        <Checkbox
+          key={role}
+          label={role}
+          checked={!roles || roles.includes(role)}
+          onChange={() => toggle(role)}
+        />
       ))}
-      {roles ? (
-        <button type="button" onClick={() => onChange(undefined)}>
-          Every Role
-        </button>
-      ) : (
-        <span>(every Role; click one to target it alone)</span>
-      )}
     </fieldset>
   );
 }

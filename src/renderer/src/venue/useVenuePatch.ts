@@ -11,8 +11,9 @@ export function useVenuePatch() {
 
   useEffect(() => {
     const unsubscribe = window.engine.onEvent((event) => {
-      if (event.type === 'venue')
-        setVenue({ patch: event.patch, path: event.path, unsaved: event.unsaved });
+      if (event.type !== 'venue') return;
+      const { patch, path, unsaved, canUndo, canRedo } = event;
+      setVenue({ patch, path, unsaved, canUndo, canRedo });
     });
     window.engine.send({ type: 'getVenue' });
     return unsubscribe;
@@ -27,6 +28,8 @@ export function useVenuePatch() {
   );
 
   const newVenue = useCallback(() => window.engine.send({ type: 'newVenue' }), []);
+  const undo = useCallback(() => window.engine.send({ type: 'undoVenue' }), []);
+  const redo = useCallback(() => window.engine.send({ type: 'redoVenue' }), []);
 
   // Resolves to undefined when the user cancels the dialog.
   const open = useCallback(async (): Promise<string[] | undefined> => {
@@ -51,7 +54,7 @@ export function useVenuePatch() {
     [venue?.path],
   );
 
-  return { venue, edit, newVenue, open, save };
+  return { venue, edit, newVenue, undo, redo, open, save };
 }
 
 async function venueRequest(send: (requestId: number) => void): Promise<string[]> {

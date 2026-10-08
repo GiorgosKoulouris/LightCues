@@ -1,0 +1,21 @@
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  cursor: pointer;
+}
+
+.box {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.box:disabled,
+.box:disabled + * {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

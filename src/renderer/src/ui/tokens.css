@@ -1,0 +1,81 @@
+/* Design tokens (ADR 0003). Dark only; a light theme would redefine these. */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces, darkest first. */
+  --surface-0: #0e1014;
+  --surface-1: #15181e;
+  --surface-2: #1c2028;
+  --surface-3: #262b35;
+  --border: #2f3541;
+  --border-strong: #444c5b;
+
+  --text: #e3e6eb;
+  --text-muted: #9aa2b1;
+  --text-faint: #6b7383;
+  --text-on-accent: #0e1014;
+
+  --accent: #5b9dff;
+  --accent-hover: #7aafff;
+  --accent-soft: rgb(91 157 255 / 16%);
+  /* An active Scene or Layer. */
+  --active: #3ddc97;
+  --active-soft: rgb(61 220 151 / 16%);
+  /* Errors, destructive actions and Blackout. */
+  --danger: #ff4d4f;
+  --danger-hover: #ff6b6d;
+  --danger-soft: rgb(255 77 79 / 16%);
+  /* Warnings and Blind. */
+  --warning: #ffb020;
+  --warning-soft: rgb(255 176 32 / 16%);
+
+  --backdrop: rgb(0 0 0 / 60%);
+  --focus-ring: 0 0 0 2px var(--surface-0), 0 0 0 4px var(--accent);
+  --shadow-overlay: 0 12px 32px rgb(0 0 0 / 50%);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  --font-sans: 'Inter Variable', system-ui, sans-serif;
+  /* DMX addresses and channel numbers. */
+  --font-mono: ui-monospace, Consolas, 'Cascadia Mono', monospace;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --line-height: 1.4;
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-bold: 600;
+
+  --icon-sm: 16px;
+  --icon-md: 18px;
+  --icon-lg: 20px;
+
+  --control-height: 32px;
+  --control-height-lg: 44px;
+  /* Filter chips, such as a Scene tag. */
+  --chip-height: 24px;
+  --duration-fast: 120ms;
+
+  /* The shell. */
+  --sidebar-width: 176px;
+  --top-bar-height: 44px;
+  /* Status dots, such as unsaved changes. */
+  --dot-size: 8px;
+  /* The Blackout and Blind window frame, drawn over everything. */
+  --frame-width: 3px;
+  --z-frame: 1000;
+  /* A column shown over the view, such as the Show view's Preview below 1280px. */
+  --z-drawer: 10;
+}

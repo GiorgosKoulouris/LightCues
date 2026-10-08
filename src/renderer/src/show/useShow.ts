@@ -11,8 +11,9 @@ export function useShow() {
 
   useEffect(() => {
     const unsubscribe = window.engine.onEvent((event) => {
-      if (event.type === 'show')
-        setShow({ show: event.show, path: event.path, unsaved: event.unsaved });
+      if (event.type !== 'show') return;
+      const { show, path, unsaved, canUndo, canRedo } = event;
+      setShow({ show, path, unsaved, canUndo, canRedo });
     });
     window.engine.send({ type: 'getShow' });
     return unsubscribe;
@@ -25,6 +26,8 @@ export function useShow() {
   );
 
   const newShow = useCallback(() => window.engine.send({ type: 'newShow' }), []);
+  const undo = useCallback(() => window.engine.send({ type: 'undoShow' }), []);
+  const redo = useCallback(() => window.engine.send({ type: 'redoShow' }), []);
 
   // Resolves to undefined when the user cancels the dialog.
   const open = useCallback(async (): Promise<string[] | undefined> => {
@@ -49,7 +52,7 @@ export function useShow() {
     [show?.path],
   );
 
-  return { show, edit, newShow, open, save };
+  return { show, edit, newShow, undo, redo, open, save };
 }
 
 async function showRequest(send: (requestId: number) => void): Promise<string[]> {

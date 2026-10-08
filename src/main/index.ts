@@ -22,6 +22,7 @@ import {
   SAVE_BEFORE_CLOSE_CHANNEL,
   SAVED_BEFORE_CLOSE_CHANNEL,
   UNSAVED_CHANNEL,
+  unsavedMessage,
   type DocumentKind,
   type EngineConnect,
 } from '../shared/protocol';
@@ -123,13 +124,12 @@ function guardClose(window: BrowserWindow): void {
     event.preventDefault();
     if (saving.length > 0) return;
     const documents = (Object.keys(DOCUMENTS) as DocumentKind[]).filter((d) => unsaved.has(d));
-    const names = documents.map((d) => `The ${DOCUMENTS[d]}`).join(' and ');
     const choice = dialog.showMessageBoxSync(window, {
       type: 'warning',
       buttons: ['Save', "Don't Save", 'Cancel'],
       defaultId: 0,
       cancelId: 2,
-      message: `${names} ${documents.length > 1 ? 'have' : 'has'} unsaved changes.`,
+      message: unsavedMessage(documents),
       detail: 'Save them before closing?',
     });
     if (choice === 0) {

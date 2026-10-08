@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FixtureMode } from './fixture-profile';
-import { profileId, renameChannel } from './profile-edit';
+import { blankProfile, profileId, profileName, renameChannel } from './profile-edit';
 
 describe('profile editing', () => {
   it('derives the Profile id from manufacturer and model', () => {
@@ -22,5 +22,15 @@ describe('profile editing', () => {
       { kind: 'fine', name: 'Pan fine', of: 'Pan coarse', byte: 1, defaultValue: 0 },
       { kind: 'unused' },
     ]);
+  });
+});
+
+describe('profileName', () => {
+  it('joins manufacturer and model', () => {
+    expect(profileName({ ...blankProfile(), manufacturer: 'Acme', model: 'Par' })).toBe('Acme Par');
+  });
+
+  it('has no stray space while one is empty', () => {
+    expect(profileName({ ...blankProfile(), manufacturer: 'Acme' })).toBe('Acme');
   });
 });

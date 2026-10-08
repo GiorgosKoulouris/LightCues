@@ -1,0 +1,157 @@
+.view {
+  /* The Blackout button and the Grand Master fader. */
+  --wide-control: 200px;
+  --side-width: 360px;
+  /* Gig-sized targets, larger than `--control-height-lg`. */
+  --perform-height: 64px;
+  --scene-width: 180px;
+
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-4);
+  height: 100%;
+}
+
+.loading {
+  color: var(--text-faint);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.controls .control {
+  height: var(--perform-height);
+  font-size: var(--text-xl);
+}
+
+/* Shrinks a long Scene name rather than pushing the fader off. */
+.controls .baseLook {
+  max-width: 420px;
+}
+
+/* A large fader: a tall hit area, a thick track and a big thumb. */
+.grandMaster {
+  font-size: var(--text-lg);
+}
+
+.grandMaster input {
+  height: var(--perform-height);
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.grandMaster input::-webkit-slider-runnable-track {
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+}
+
+.grandMaster input::-webkit-slider-thumb {
+  width: var(--control-height);
+  height: var(--control-height);
+  margin-top: calc((var(--space-2) - var(--control-height)) / 2);
+  appearance: none;
+  border: 2px solid var(--surface-0);
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+
+.toggle {
+  margin-left: auto;
+}
+
+/* Scene groups | Preview. The groups scroll on their own. */
+.body {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--side-width);
+  gap: var(--space-4);
+  min-height: 0;
+  padding-top: var(--space-3);
+}
+
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.layer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.heading {
+  font-size: var(--text-lg);
+}
+
+.scenes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--scene-width), 1fr));
+  gap: var(--space-2);
+}
+
+/* Wraps a long name over two lines rather than cutting it. */
+.scenes .scene {
+  justify-content: space-between;
+  height: auto;
+  min-height: var(--perform-height);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xl);
+  text-align: left;
+  white-space: normal;
+}
+
+/* Glanceable from a distance: filled as well as outlined. */
+.scenes .scene[aria-pressed='true'] {
+  background: var(--active-soft);
+}
+
+.name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  overflow-wrap: anywhere;
+}
+
+.empty {
+  color: var(--text-faint);
+}
+
+.previewBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.side {
+  gap: var(--space-2);
+  overflow-y: auto;
+}
+
+/* Below 1280px the Preview is a SidePanel over the groups. */
+@media (width < 1280px) {
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

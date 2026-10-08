@@ -1,5 +1,6 @@
 import type { EngineCommand, EngineEvent, OflImportResult } from '../shared/protocol';
 import { findTrigger } from '../shared/show';
+import { profileName } from '../shared/profile-edit';
 import {
   createMidiInput,
   type MidiInputStorage,
@@ -53,12 +54,14 @@ export function createEngine({
   const library = openLibrary(storage);
   const venue = createVenueSession({
     emit,
+    now,
     changed: () => outputs?.patchChanged(),
     files: venueFiles,
     libraryProfile: (id) => library.get(id),
   });
   const show = createShowSession({
     emit,
+    now,
     files: showFiles,
     edited: () => playback.showEdited(),
     replaced: () => playback.showReplaced(),
@@ -110,9 +113,10 @@ export function createEngine({
       const { status, profile, unsupported } = library.importOfl(json, manufacturer, {
         overwrite,
       });
-      if (status === 'conflict') return { status, profileId: profile.id };
+      if (status === 'conflict')
+        return { status, profileId: profile.id, name: profileName(profile) };
       libraryChanged();
-      return { status, profileId: profile.id, unsupported };
+      return { status, profileId: profile.id, name: profileName(profile), unsupported };
     } catch (error) {
       return { status: 'failed', error: (error as Error).message };
     }
@@ -148,6 +152,8 @@ export function createEngine({
         case 'openVenue':
         case 'saveVenue':
         case 'editVenue':
+        case 'undoVenue':
+        case 'redoVenue':
           venue.handle(command);
           break;
         case 'getShow':
@@ -155,6 +161,8 @@ export function createEngine({
         case 'openShow':
         case 'saveShow':
         case 'editShow':
+        case 'undoShow':
+        case 'redoShow':
           show.handle(command);
           break;
         case 'getPlayback':

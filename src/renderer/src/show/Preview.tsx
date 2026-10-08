@@ -1,6 +1,7 @@
-import type { FixtureLight, PlaybackMode } from '../../../shared/protocol';
+import type { FixtureLight } from '../../../shared/protocol';
 import { fixtureZone, type PatchedFixture, type VenuePatch } from '../../../shared/venue-patch';
 import { StageGrid, stageViewBox } from '../venue/StagePlan';
+import styles from './Preview.module.css';
 import { usePreview } from './usePreview';
 
 const FIXTURE_RADIUS = 0.25;
@@ -11,29 +12,20 @@ const BEAM_HALF_ANGLE = (12 * Math.PI) / 180;
 const UP_BEAM_LENGTH = 3;
 // The front elevation shows at least this height, in metres.
 const MIN_VIEW_HEIGHT = 4;
-const VIEW_STYLE = { flex: '1 1 320px', maxWidth: 560, background: '#1b1d22' };
 
 const DARK: FixtureLight = { intensity: 0, red: 0, green: 0, blue: 0 };
 
 // The engine's resolved look, top-down and from the audience. In Monitor it is
 // what the rig shows; in Blind, what it would show.
-export function Preview({ patch, mode }: { patch: VenuePatch; mode: PlaybackMode }) {
+export function Preview({ patch }: { patch: VenuePatch }) {
   const lights = usePreview();
   const light = (fixture: PatchedFixture) => lights[fixture.id] ?? DARK;
 
   return (
-    <section>
-      <h3>Preview</h3>
-      <p>
-        {mode === 'blind'
-          ? 'Blind: shows what would be sent. The rig holds its last look.'
-          : 'Monitor: shows what is sent to the rig.'}
-      </p>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-start' }}>
-        <TopDown patch={patch} light={light} />
-        <FrontElevation patch={patch} light={light} />
-      </div>
-    </section>
+    <div className={styles.views}>
+      <TopDown patch={patch} light={light} />
+      <FrontElevation patch={patch} light={light} />
+    </div>
   );
 }
 
@@ -47,7 +39,7 @@ function TopDown({ patch, light }: ViewProps) {
   return (
     <svg
       viewBox={stageViewBox(patch.stage)}
-      style={VIEW_STYLE}
+      className={styles.view}
       role="img"
       aria-label="Top-down preview"
     >
@@ -73,17 +65,16 @@ function FrontElevation({ patch, light }: ViewProps) {
   const viewBox = `${-width / 2 - MARGIN} ${-top} ${width + 2 * MARGIN} ${top + MARGIN}`;
 
   return (
-    <svg viewBox={viewBox} style={VIEW_STYLE} role="img" aria-label="Front elevation preview">
+    <svg viewBox={viewBox} className={styles.view} role="img" aria-label="Front elevation preview">
       <rect
         x={-width / 2}
         y={0}
         width={width}
         height={0.15}
-        fill="#2a2d35"
-        stroke="#aab"
+        className={styles.floor}
         strokeWidth={0.03}
       />
-      <g fill="#889" fontSize={0.3} textAnchor="middle">
+      <g className={styles.label} fontSize={0.3} textAnchor="middle">
         <text x={-width / 3} y={0.6}>
           Stage Right
         </text>
@@ -120,7 +111,7 @@ function FrontElevation({ patch, light }: ViewProps) {
 function FixtureMarker({ light }: { light: FixtureLight }) {
   return (
     <>
-      <circle r={FIXTURE_RADIUS} fill="#000" stroke="#667" strokeWidth={0.04} />
+      <circle r={FIXTURE_RADIUS} className={styles.body} strokeWidth={0.04} />
       <circle r={FIXTURE_RADIUS} fill={colour(light)} fillOpacity={light.intensity} />
     </>
   );

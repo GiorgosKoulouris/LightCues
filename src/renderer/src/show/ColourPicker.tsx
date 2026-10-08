@@ -1,4 +1,8 @@
 import { SWATCHES, type Colour, type Swatch } from '../../../shared/show';
+import { Select } from '../ui/Select';
+import styles from './ColourPicker.module.css';
+
+type Kind = 'none' | 'swatch' | 'hue';
 
 // Picks a swatch or a hue and saturation, or no colour, shown as `unset`.
 export function ColourPicker({
@@ -12,40 +16,35 @@ export function ColourPicker({
   colour?: Colour;
   onChange(colour: Colour | undefined): void;
 }) {
-  const kind = colour === undefined ? 'none' : 'swatch' in colour ? 'swatch' : 'hue';
+  const kind: Kind = colour === undefined ? 'none' : 'swatch' in colour ? 'swatch' : 'hue';
   return (
-    <p>
-      <label>
-        {label}{' '}
-        <select
-          value={kind}
-          onChange={(e) => {
-            const value = e.target.value;
-            if (value === 'none') onChange(undefined);
-            else if (value === 'swatch') onChange({ swatch: 'White' });
-            else onChange({ hue: 0, saturation: 1 });
-          }}
-        >
-          <option value="none">{unset}</option>
-          <option value="swatch">Swatch</option>
-          <option value="hue">Hue and saturation</option>
-        </select>
-      </label>{' '}
+    <div className={styles.picker}>
+      <Select<Kind>
+        label={label}
+        value={kind}
+        options={[
+          { value: 'none', label: unset },
+          { value: 'swatch', label: 'Swatch' },
+          { value: 'hue', label: 'Hue and saturation' },
+        ]}
+        onChange={(value) => {
+          if (value === 'none') onChange(undefined);
+          else if (value === 'swatch') onChange({ swatch: 'White' });
+          else onChange({ hue: 0, saturation: 1 });
+        }}
+      />
       {colour && 'swatch' in colour && (
-        <select
+        <Select<Swatch>
+          label="Swatch"
           value={colour.swatch}
-          aria-label="Swatch"
-          onChange={(e) => onChange({ swatch: e.target.value as Swatch })}
-        >
-          {SWATCHES.map((swatch) => (
-            <option key={swatch}>{swatch}</option>
-          ))}
-        </select>
+          options={SWATCHES.map((swatch) => ({ value: swatch, label: swatch }))}
+          onChange={(swatch) => onChange({ swatch })}
+        />
       )}
       {colour && 'hue' in colour && (
-        <>
-          <label>
-            Hue{' '}
+        <div className={styles.hue}>
+          <label className={styles.slider}>
+            <span className={styles.label}>Hue</span>
             <input
               type="range"
               min={0}
@@ -53,9 +52,9 @@ export function ColourPicker({
               value={Math.round(colour.hue)}
               onChange={(e) => onChange({ ...colour, hue: Number(e.target.value) })}
             />
-          </label>{' '}
-          <label>
-            Saturation{' '}
+          </label>
+          <label className={styles.slider}>
+            <span className={styles.label}>Saturation</span>
             <input
               type="range"
               min={0}
@@ -63,19 +62,14 @@ export function ColourPicker({
               value={Math.round(colour.saturation * 100)}
               onChange={(e) => onChange({ ...colour, saturation: Number(e.target.value) / 100 })}
             />
-          </label>{' '}
+          </label>
           <span
             aria-hidden
-            style={{
-              display: 'inline-block',
-              width: '1.5em',
-              height: '1em',
-              verticalAlign: 'middle',
-              background: `hsl(${colour.hue} ${colour.saturation * 100}% 50%)`,
-            }}
+            className={styles.sample}
+            style={{ background: `hsl(${colour.hue} ${colour.saturation * 100}% 50%)` }}
           />
-        </>
+        </div>
       )}
-    </p>
+    </div>
   );
 }

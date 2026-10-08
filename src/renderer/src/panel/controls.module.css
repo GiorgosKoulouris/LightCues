@@ -1,0 +1,48 @@
+.blackout {
+  flex-shrink: 0;
+  min-width: var(--wide-control);
+}
+
+/* Shrinks a long Scene name rather than pushing the other controls off. */
+.baseLook {
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.grandMaster {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.label {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.grandMaster input {
+  width: var(--wide-control);
+  accent-color: var(--accent);
+}
+
+.percent {
+  width: 4ch;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.key {
+  padding: 0 var(--space-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}

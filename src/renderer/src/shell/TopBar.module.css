@@ -1,0 +1,62 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: var(--top-bar-height);
+  padding: 0 var(--space-4);
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.file {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kind {
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+.unsaved {
+  flex-shrink: 0;
+  width: var(--dot-size);
+  height: var(--dot-size);
+  border-radius: var(--radius-pill);
+  background: var(--warning);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.engine {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.dot {
+  width: var(--dot-size);
+  height: var(--dot-size);
+  border-radius: var(--radius-pill);
+  background: var(--text-faint);
+}
+
+.running {
+  background: var(--active);
+}
+
+.notResponding {
+  background: var(--danger);
+}

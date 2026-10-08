@@ -1,0 +1,27 @@
+.views {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.view {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  background: var(--surface-0);
+}
+
+.floor {
+  fill: var(--surface-3);
+  stroke: var(--border-strong);
+}
+
+.label {
+  fill: var(--text-faint);
+}
+
+/* A Fixture's body, unlit. */
+.body {
+  fill: var(--surface-0);
+  stroke: var(--text-faint);
+}

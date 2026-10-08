@@ -1,0 +1,39 @@
+.strip {
+  /* The Blackout button and the Grand Master fader. */
+  --wide-control: 140px;
+
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-1);
+  border-top: 1px solid var(--border);
+}
+
+.blackout {
+  background: var(--danger-soft);
+  border-top-color: var(--danger);
+}
+
+/* Caps a long Base Look name, so the Scene buttons keep room. */
+.baseLook {
+  max-width: 320px;
+}
+
+/* Scrolls sideways rather than wrapping, so the strip keeps its height. */
+.scenes {
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.note {
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+.scenes button {
+  flex-shrink: 0;
+}

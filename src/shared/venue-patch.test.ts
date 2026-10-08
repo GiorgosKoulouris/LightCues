@@ -8,9 +8,11 @@ import {
   fixturesInUniverse,
   fixtureZone,
   moveFixture,
+  addressProblem,
   putFixture,
+  putFixtures,
   putUniverse,
-  removeFixture,
+  removeFixtures,
   removeUniverse,
   setStage,
   suggestZone,
@@ -241,10 +243,61 @@ describe('Venue Patch', () => {
   it('drops a Profile copy once no Fixture uses it', () => {
     const patch = patched(emptyPatch(stage), fixture(), fixture({ id: 'f2', address: 4 }));
 
-    const one = removeFixture(patch, 'f1');
+    const one = removeFixtures(patch, ['f1']);
     expect(one.fixtures.map((f) => f.id)).toEqual(['f2']);
     expect(one.profiles).toEqual([par]);
-    expect(removeFixture(one, 'f2')).toEqual(emptyPatch(stage));
+    expect(removeFixtures(one, ['f2'])).toEqual(emptyPatch(stage));
+  });
+
+  it('removes several Fixtures at once', () => {
+    const patch = patched(
+      emptyPatch(stage),
+      fixture(),
+      fixture({ id: 'f2', address: 4 }),
+      fixture({ id: 'f3', address: 7 }),
+    );
+
+    expect(removeFixtures(patch, ['f1', 'f3']).fixtures.map((f) => f.id)).toEqual(['f2']);
+  });
+
+  it('puts several Fixtures in one change, checked as a whole', () => {
+    const patch = patched(emptyPatch(stage), fixture(), fixture({ id: 'f2', address: 4 }));
+
+    // Swapping addresses only fits when both move together.
+    const swapped = putFixtures(patch, [
+      fixture({ address: 4 }),
+      fixture({ id: 'f2', address: 1 }),
+    ]);
+    expect('patch' in swapped && swapped.patch.fixtures.map((f) => f.address)).toEqual([4, 1]);
+
+    const clash = putFixtures(patch, [
+      fixture({ role: 'Strobe' }),
+      fixture({ id: 'f2', address: 2 }),
+    ]);
+    expect(clash).toEqual({ errors: ['"Par 1" (1.2–1.4) overlaps "Par 1" (1.1–1.3)'] });
+  });
+
+  it('embeds the Profile of each new Fixture put together', () => {
+    const result = putFixtures(emptyPatch(stage), [fixture()], (id) =>
+      id === par.id ? par : undefined,
+    );
+
+    expect('patch' in result && result.patch.profiles).toEqual([par]);
+  });
+
+  it("tells why a Fixture's address does not fit", () => {
+    const patch = patched(
+      emptyPatch(stage),
+      fixture(),
+      fixture({ id: 'f2', name: 'Par 2', address: 4 }),
+    );
+    const f1 = patch.fixtures[0]!;
+
+    expect(addressProblem(patch, f1)).toBeUndefined();
+    expect(addressProblem(patch, { ...f1, address: 3 })).toBe('Overlaps Par 2 (1.4–1.6)');
+    expect(addressProblem(patch, { ...f1, address: 511 })).toBe('Runs past channel 512');
+    expect(addressProblem(patch, { ...f1, address: 0 })).toBe('Must be 1–512');
+    expect(addressProblem(patch, { ...f1, universe: 2, address: 4 })).toBeUndefined();
   });
 
   it('adds Universes and maps each to an Output', () => {

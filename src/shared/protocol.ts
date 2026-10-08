@@ -32,6 +32,10 @@ export type EngineCommand =
   | { type: 'openVenue'; requestId: number; path: string }
   | { type: 'saveVenue'; requestId: number; path?: string }
   | { type: 'editVenue'; requestId: number; edit: VenueEdit }
+  // Undo or redo the last edit; nothing when there is none. New and Open
+  // forget the history.
+  | { type: 'undoVenue' }
+  | { type: 'redoVenue' }
   | { type: 'listOutputs' }
   // The current Show, handled like the Venue Patch. `path` is an .lcshow file.
   | { type: 'getShow' }
@@ -39,6 +43,8 @@ export type EngineCommand =
   | { type: 'openShow'; requestId: number; path: string }
   | { type: 'saveShow'; requestId: number; path?: string }
   | { type: 'editShow'; requestId: number; edit: ShowEdit }
+  | { type: 'undoShow' }
+  | { type: 'redoShow' }
   // Active Scenes, the mode and the Fallback Panel. `goScene` replaces the
   // active Scene in its Layer, fading in; `clearLayer` clears it at once.
   // `goBaseLook` clears every Layer and goes to the Base Look, if the Show has
@@ -95,8 +101,10 @@ export type ShowEdit =
   | { type: 'putTrigger'; trigger: Trigger }
   | { type: 'removeTrigger'; note: MidiNote };
 
-// A change to the current Venue Patch. `putFixture` embeds the Fixture's
-// Profile from the Profile Library when the patch does not have it yet.
+// A change to the current Venue Patch. `putFixture` and `putFixtures` embed a
+// Fixture's Profile from the Profile Library when the patch does not have it
+// yet. `putFixtures` changes several Fixtures at once, or none if one does not
+// fit.
 export type VenueEdit =
   | { type: 'setStage'; stage: StageBounds }
   // `addUniverse` rejects a number already in the patch; `putUniverse`
@@ -105,8 +113,9 @@ export type VenueEdit =
   | { type: 'putUniverse'; universe: Universe }
   | { type: 'removeUniverse'; number: number }
   | { type: 'putFixture'; fixture: PatchedFixture }
+  | { type: 'putFixtures'; fixtures: PatchedFixture[] }
   | { type: 'moveFixture'; id: string; position: StagePosition }
-  | { type: 'removeFixture'; id: string };
+  | { type: 'removeFixtures'; ids: string[] };
 
 // A DMX interface port that Universes are sent to. `id` is what a Universe's
 // `output` names: the device's USB serial number, or its port when it has
@@ -141,9 +150,10 @@ export interface ProfileLibraryEntry {
   handEdited: boolean;
 }
 
+// `name` is the Profile's manufacturer and model, as shown in messages.
 export type OflImportResult =
-  | { status: 'imported'; profileId: string; unsupported: UnsupportedFeature[] }
-  | { status: 'conflict'; profileId: string }
+  | { status: 'imported'; profileId: string; name: string; unsupported: UnsupportedFeature[] }
+  | { status: 'conflict'; profileId: string; name: string }
   | { status: 'failed'; error: string };
 
 export type EngineEvent =
@@ -154,15 +164,15 @@ export type EngineEvent =
   // An empty `errors` list means the Profile was saved.
   | { type: 'profileSaved'; requestId: number; errors: string[] }
   // The current Venue Patch, sent on request and after every change. `unsaved`
-  // is true when it has changes not yet written to a file.
-  | { type: 'venue'; patch: VenuePatch; path?: string; unsaved: boolean }
+  // is true when it differs from what was last written to a file.
+  | ({ type: 'venue'; patch: VenuePatch; path?: string } & DocumentState)
   // Reply to openVenue, saveVenue and editVenue. An empty `errors` list means
   // it was done.
   | { type: 'venueDone'; requestId: number; errors: string[] }
   // All Outputs, sent on request and after every change.
   | { type: 'outputs'; outputs: OutputStatus[] }
   // The current Show, sent on request and after every change.
-  | { type: 'show'; show: Show; path?: string; unsaved: boolean }
+  | ({ type: 'show'; show: Show; path?: string } & DocumentState)
   // Reply to openShow, saveShow and editShow. An empty `errors` list means it
   // was done.
   | { type: 'showDone'; requestId: number; errors: string[] }
@@ -183,6 +193,13 @@ export type EngineEvent =
   // it is what the Outputs send; in Blind, what they would send. Sent while
   // the preview is started, on start and after every change.
   | { type: 'preview'; lights: Record<string, FixtureLight> };
+
+// Whether a Show or Venue Patch has unsaved changes, and edits to undo or redo.
+export interface DocumentState {
+  unsaved: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
+}
 
 // Sent by the main process to the engine with a fresh UI MessagePort attached.
 export type EngineConnect = { type: 'connect' };
@@ -220,8 +237,17 @@ export const SAVE_BEFORE_CLOSE_CHANNEL = 'window:saveBeforeClose';
 export const SAVED_BEFORE_CLOSE_CHANNEL = 'window:savedBeforeClose';
 
 // The documents that can have unsaved changes, in the order they are saved.
-export const DOCUMENTS = { show: 'Show', venue: 'Venue Patch' } as const;
+export const DOCUMENTS = { show: 'Show', venue: 'Venue Patch', profile: 'Profile' } as const;
 export type DocumentKind = keyof typeof DOCUMENTS;
+
+// "The Show, the Venue Patch and the Profile have unsaved changes."
+export function unsavedMessage(documents: readonly DocumentKind[]): string {
+  const names = documents.map((d) => `the ${DOCUMENTS[d]}`);
+  const last = names.pop();
+  const list = names.length > 0 ? `${names.join(', ')} and ${last}` : (last ?? '');
+  const verb = documents.length > 1 ? 'have' : 'has';
+  return `${list.charAt(0).toUpperCase()}${list.slice(1)} ${verb} unsaved changes.`;
+}
 
 // What the preload script exposes to the renderer as `window.closeGuard`.
 export interface CloseGuardBridge {

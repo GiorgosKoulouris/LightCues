@@ -1,0 +1,69 @@
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+  margin: 0;
+}
+
+.plan {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border-radius: var(--radius-md);
+  background: var(--surface-0);
+  touch-action: none;
+}
+
+.caption {
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.stage {
+  fill: var(--surface-3);
+  stroke: var(--border-strong);
+}
+
+.front {
+  fill: none;
+  stroke: var(--border);
+}
+
+.gridLine {
+  stroke: var(--border);
+}
+
+.label {
+  fill: var(--text-faint);
+}
+
+.fixture {
+  cursor: grab;
+}
+
+.marker {
+  fill: var(--warning);
+  stroke: var(--warning);
+  stroke-width: 0.05;
+}
+
+.overhead .marker {
+  fill: none;
+  stroke-dasharray: 0.1 0.06;
+}
+
+.selected .marker {
+  stroke: var(--accent);
+  stroke-width: 0.1;
+}
+
+.name {
+  fill: var(--text-muted);
+  text-anchor: middle;
+}
+
+.selected .name {
+  fill: var(--accent);
+}

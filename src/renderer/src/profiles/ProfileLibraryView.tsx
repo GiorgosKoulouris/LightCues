@@ -1,150 +1,178 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FixtureProfile } from '../../../shared/fixture-profile';
-import { blankProfile } from '../../../shared/profile-edit';
-import type { OflImportResult } from '../../../shared/protocol';
+import { blankProfile, profileName } from '../../../shared/profile-edit';
+import { useFindShortcut } from '../shell/useShortcuts';
+import { useConfirm } from '../ui/ConfirmDialog';
+import { useToast } from '../ui/Toast';
+import { OflImportDialog } from './OflImportDialog';
 import { ProfileEditor } from './ProfileEditor';
+import styles from './ProfileLibraryView.module.css';
+import { ProfileList } from './ProfileList';
+import { filterProfiles, sameProfile } from './profiles';
 import { useProfileLibrary } from './useProfileLibrary';
 
-// What the editor is open on: a new Profile, or an existing one by id.
-type Editing = { profile: FixtureProfile; replaces?: string };
+// What the editor is open on: a library Profile by id, or a new one.
+type Target = { id: string } | 'new';
 
-export function ProfileLibraryView() {
+const BLANK = blankProfile();
+
+// The Profile Library: the Profile list beside the Profile Editor. Edits are
+// a draft until saved (ADR 0004); switching away from unsaved edits asks
+// first, and closing the window offers to save them. While `active`, Ctrl+F
+// searches the Profiles.
+export function ProfileLibraryView({ active }: { active: boolean }) {
   const { entries, importOfl, saveProfile, deleteProfile } = useProfileLibrary();
-  const [editing, setEditing] = useState<Editing>();
+  const confirm = useConfirm();
+  const toast = useToast();
+  const [query, setQuery] = useState('');
+  const [target, setTarget] = useState<Target>();
+  // Counts each opening, so the editor starts afresh, but not after a save
+  // that renames the target.
+  const [opened, setOpened] = useState(0);
+  // Unsaved edits to the target; undefined when there are none.
+  const [draft, setDraft] = useState<FixtureProfile>();
+  // Why the engine refused the last save.
+  const [errors, setErrors] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+  // Saves the draft when the window closes; true when there was none to save.
+  const saveBeforeClose = useRef(async () => true);
 
-  if (editing) {
-    return (
-      <ProfileEditor
-        initial={editing.profile}
-        onSave={(profile) => saveProfile(profile, editing.replaces)}
-        onClose={() => setEditing(undefined)}
-      />
-    );
+  useFindShortcut(active, () => {
+    searchRef.current?.focus();
+    searchRef.current?.select();
+  });
+
+  const isNew = target === 'new';
+  const selectedId = isNew ? undefined : target?.id;
+  const base = isNew ? BLANK : entries.find((e) => e.profile.id === selectedId)?.profile;
+  const shown = draft ?? base;
+
+  function setEdits(next: FixtureProfile | undefined) {
+    setDraft(next);
+    setErrors([]);
   }
 
-  return (
-    <section>
-      <h2>Profile Library</h2>
-      <button type="button" onClick={() => setEditing({ profile: blankProfile() })}>
-        New Profile
-      </button>
-      <OflImportForm importOfl={importOfl} />
-      {entries.length === 0 ? (
-        <p>No Profiles yet. Import an OFL fixture or make one.</p>
-      ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Manufacturer</th>
-              <th>Model</th>
-              <th>Modes</th>
-              <th>Source</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map(({ profile, handEdited }) => (
-              <tr key={profile.id}>
-                <td>{profile.manufacturer}</td>
-                <td>{profile.model}</td>
-                <td>{profile.modes.map((m) => m.name).join(', ')}</td>
-                <td>{handEdited ? 'Edited by hand' : 'OFL'}</td>
-                <td>
-                  <button
-                    type="button"
-                    onClick={() => setEditing({ profile, replaces: profile.id })}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm(`Delete ${profile.manufacturer} ${profile.model}?`)) {
-                        deleteProfile(profile.id);
-                      }
-                    }}
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </section>
-  );
-}
+  // Resolves to whether the target may change: no draft, or it was discarded.
+  async function discardDraft(): Promise<boolean> {
+    if (!draft) return true;
+    const yes = await confirm({
+      title:
+        base && !isNew ? `Discard changes to ${profileName(base)}?` : 'Discard the new Profile?',
+      message: 'The Profile has unsaved changes.',
+      confirmLabel: 'Discard',
+      destructive: true,
+    });
+    if (yes) setEdits(undefined);
+    return yes;
+  }
 
-function OflImportForm({
-  importOfl,
-}: {
-  importOfl: (json: unknown, manufacturer: string, overwrite?: boolean) => Promise<OflImportResult>;
-}) {
-  const [file, setFile] = useState<File>();
-  const [manufacturer, setManufacturer] = useState('');
-  const [message, setMessage] = useState<string[]>([]);
+  async function open(next: Target) {
+    const same = next === 'new' ? isNew : next.id === selectedId;
+    if (same) return;
+    if (await discardDraft()) select(next);
+  }
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    if (!file) return;
-    let json: unknown;
+  function select(next: Target) {
+    setTarget(next);
+    setOpened((count) => count + 1);
+  }
+
+  // Resolves to whether `profile` was saved.
+  async function save(profile: FixtureProfile): Promise<boolean> {
+    setSaving(true);
+    let result: string[];
     try {
-      json = JSON.parse(await file.text());
-    } catch {
-      setMessage([`${file.name} is not valid JSON.`]);
-      return;
+      result = await saveProfile(profile, selectedId);
+    } catch (error) {
+      toast({ tone: 'error', message: `Save failed: ${(error as Error).message}` });
+      return false;
+    } finally {
+      setSaving(false);
     }
-    let result = await importOfl(json, manufacturer);
-    if (
-      result.status === 'conflict' &&
-      window.confirm(`"${result.profileId}" was edited by hand. Overwrite it with the OFL version?`)
-    ) {
-      result = await importOfl(json, manufacturer, true);
-    }
-    setMessage(describeImport(result));
+    setErrors(result);
+    if (result.length > 0) return false;
+    setTarget({ id: profile.id });
+    // Edits made while it was saving stay a draft.
+    setDraft((current) => (current === profile ? undefined : current));
+    toast({ tone: 'success', message: `${profileName(profile)} saved` });
+    return true;
+  }
+
+  useEffect(() => {
+    saveBeforeClose.current = async () => {
+      if (!draft) return true;
+      const saved = await save(draft);
+      if (!saved) toast({ tone: 'error', message: 'The Profile was not saved.' });
+      return saved;
+    };
+  });
+  useEffect(() => window.closeGuard.setUnsaved('profile', draft !== undefined), [draft]);
+  useEffect(
+    () => window.closeGuard.onSaveBeforeClose('profile', () => saveBeforeClose.current()),
+    [],
+  );
+
+  async function remove(profile: FixtureProfile) {
+    const yes = await confirm({
+      title: `Delete ${profileName(profile)}?`,
+      message: 'Venue Patches that use it keep their own copy.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!yes) return;
+    deleteProfile(profile.id);
+    setTarget(undefined);
+    setEdits(undefined);
   }
 
   return (
-    <form onSubmit={(event) => void submit(event)}>
-      <h3>Import from Open Fixture Library</h3>
-      <label>
-        Fixture file{' '}
-        <input type="file" accept=".json" onChange={(e) => setFile(e.target.files?.[0])} />
-      </label>{' '}
-      <label>
-        Manufacturer{' '}
-        <input value={manufacturer} onChange={(e) => setManufacturer(e.target.value)} />
-      </label>{' '}
-      <button type="submit" disabled={!file || !manufacturer.trim()}>
-        Import
-      </button>
-      {message.length > 0 && (
-        <ul>
-          {message.map((line, i) => (
-            <li key={i}>{line}</li>
-          ))}
-        </ul>
+    <div className={styles.view}>
+      <ProfileList
+        entries={filterProfiles(entries, query)}
+        libraryEmpty={entries.length === 0}
+        query={query}
+        selectedId={selectedId}
+        searchRef={searchRef}
+        onQuery={setQuery}
+        onSelect={(id) => void open({ id })}
+        onRemove={() => base && !isNew && void remove(base)}
+        onNew={() => void open('new')}
+        onImport={async () => {
+          // An import may replace the Profile being edited.
+          if (await discardDraft()) setImporting(true);
+        }}
+      />
+      {target && shown && base ? (
+        <ProfileEditor
+          key={opened}
+          profile={shown}
+          title={isNew ? 'New Profile' : profileName(base)}
+          unsaved={draft !== undefined}
+          isNew={isNew}
+          errors={errors}
+          saving={saving}
+          onChange={(profile) => setEdits(sameProfile(profile, base) ? undefined : profile)}
+          onSave={() => void save(shown)}
+          onCancel={() => {
+            setEdits(undefined);
+            if (isNew) setTarget(undefined);
+          }}
+          onDelete={isNew ? undefined : () => void remove(base)}
+        />
+      ) : (
+        <p className={styles.empty}>Select a Profile to edit it, or make a new one.</p>
       )}
-    </form>
+      <OflImportDialog
+        open={importing}
+        onOpenChange={setImporting}
+        importOfl={importOfl}
+        onImported={(id, name) => {
+          toast({ tone: 'success', message: `Imported ${name}` });
+          select({ id });
+        }}
+      />
+    </div>
   );
-}
-
-function describeImport(result: OflImportResult): string[] {
-  switch (result.status) {
-    case 'imported':
-      return [
-        `Imported ${result.profileId}.`,
-        ...result.unsupported.map(
-          (u) =>
-            `Unsupported: ${u.feature}` +
-            (u.mode ? ` (mode ${u.mode})` : '') +
-            (u.channel ? ` (channel ${u.channel})` : ''),
-        ),
-      ];
-    case 'conflict':
-      return [`Kept the hand-edited ${result.profileId}.`];
-    case 'failed':
-      return [`Import failed: ${result.error}`];
-  }
 }

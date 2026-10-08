@@ -1,0 +1,11 @@
+.dot,
+.off {
+  flex-shrink: 0;
+  width: var(--dot-size);
+  height: var(--dot-size);
+  border-radius: var(--radius-pill);
+}
+
+.dot {
+  background: var(--active);
+}

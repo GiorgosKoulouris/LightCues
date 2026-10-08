@@ -1,0 +1,199 @@
+.editor {
+  --identity-field-width: 180px;
+  --mode-name-width: 240px;
+  --dmx-column-width: 48px;
+  --kind-column-width: 110px;
+  --name-column-width: 160px;
+  --number-column-width: 72px;
+  --span-field-width: 56px;
+  /* Between the swatch and its border. */
+  --swatch-inset: 2px;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+}
+
+/* Title, Save and Cancel, then manufacturer, model and default Role. */
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-lg);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  margin-left: auto;
+  gap: var(--space-2);
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--identity-field-width), 1fr));
+  gap: var(--space-3);
+}
+
+.id {
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.errors {
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--danger);
+}
+
+/* Only the mode's channels scroll, so Save stays in view. */
+.modes {
+  flex: 1;
+}
+
+.mode {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  height: 100%;
+  padding-top: var(--space-3);
+}
+
+.modeBar {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.modeName {
+  width: var(--mode-name-width);
+}
+
+/* Lines up with the field, below its label. */
+.removeMode {
+  margin-top: calc(var(--text-sm) * var(--line-height) + var(--space-1));
+}
+
+.tableScroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-0);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-align: left;
+}
+
+.table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.table tbody tr:hover {
+  background: var(--surface-1);
+}
+
+/* Channel numbers, in line with the controls. */
+.dmx {
+  width: var(--dmx-column-width);
+  font-family: var(--font-mono);
+}
+
+.table td.dmx {
+  line-height: var(--control-height);
+}
+
+.kind {
+  width: var(--kind-column-width);
+}
+
+.name {
+  width: var(--name-column-width);
+}
+
+.number {
+  width: var(--number-column-width);
+}
+
+.table td.actions {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.ranges {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+.dmxValue,
+.spanValue {
+  width: var(--span-field-width);
+}
+
+.dash,
+.unit {
+  color: var(--text-faint);
+  line-height: var(--control-height);
+}
+
+.colour {
+  width: var(--control-height);
+  height: var(--control-height);
+  padding: var(--swatch-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  cursor: pointer;
+}
+
+.addRange {
+  align-self: flex-start;
+}
+
+.addChannel {
+  align-self: flex-start;
+}

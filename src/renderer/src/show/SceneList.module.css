@@ -1,0 +1,85 @@
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.chip {
+  height: var(--chip-height);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.chipOn,
+.chipOn:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.list {
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layer {
+  flex-shrink: 0;
+}
+
+/* Shown on hover and on the selected Scene. */
+.go {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--control-height);
+  height: calc(var(--control-height) - var(--space-2));
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  visibility: hidden;
+  cursor: pointer;
+}
+
+.go svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.go:hover {
+  background: var(--accent-hover);
+}
+
+li:hover > .go,
+li[aria-selected='true'] > .go {
+  visibility: visible;
+}

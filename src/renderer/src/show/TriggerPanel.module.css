@@ -1,0 +1,99 @@
+.panel {
+  /* Wide enough for the New Trigger row on one line. */
+  --trigger-panel-width: 960px;
+  --input-width: 480px;
+  /* Channel, note and mode in the New Trigger row. */
+  --channel-width: 80px;
+  --note-width: 100px;
+  --mode-width: 120px;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: var(--trigger-panel-width);
+  padding-top: var(--space-4);
+}
+
+.input {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  max-width: var(--input-width);
+}
+
+.input > :first-child {
+  flex: 1;
+}
+
+.warning {
+  padding-bottom: var(--space-2);
+  color: var(--warning);
+  font-size: var(--text-sm);
+}
+
+/* Channel, note, Learn, Scene, mode, Map. */
+.form {
+  display: grid;
+  grid-template-columns:
+    var(--channel-width) var(--note-width) auto minmax(0, 1fr) var(--mode-width)
+    auto;
+  align-items: start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+
+/* Lines up with the fields, below their labels. */
+.learn,
+.map {
+  margin-top: calc(var(--text-sm) * var(--line-height) + var(--space-1));
+}
+
+.replaces {
+  grid-column: 1 / -1;
+  color: var(--warning);
+  font-size: var(--text-sm);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-align: left;
+}
+
+.table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.table tbody tr:hover {
+  background: var(--surface-1);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.faint {
+  color: var(--text-faint);
+}
+
+.actions {
+  width: 1%;
+  text-align: right;
+}
+
+.empty {
+  padding: var(--space-4);
+  color: var(--text-faint);
+}

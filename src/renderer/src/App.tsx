@@ -1,67 +1,65 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { FallbackPanel } from './panel/FallbackPanel';
+import { usePanelKeys } from './panel/usePanelKeys';
+import { PerformView } from './perform/PerformView';
 import { ProfileLibraryView } from './profiles/ProfileLibraryView';
+import styles from './App.module.css';
+import { Sidebar } from './shell/Sidebar';
+import { TopBar } from './shell/TopBar';
+import { useViewShortcuts } from './shell/useShortcuts';
+import type { View } from './shell/views';
 import { ShowView } from './show/ShowView';
+import { useMidiInput } from './show/useMidiInput';
+import { usePlayback } from './show/usePlayback';
+import { useShow } from './show/useShow';
+import { cx } from './ui/cx';
+import { useVenuePatch } from './venue/useVenuePatch';
 import { VenuePatchView } from './venue/VenuePatchView';
 
-const VIEWS = { show: 'Show', venue: 'Venue Patch', profiles: 'Profile Library' } as const;
-
+// The shell: sidebar, top bar, the current view and the Fallback Panel strip,
+// which the Perform view replaces. Blackout frames the window red, Blind amber.
 export function App() {
-  const [status, setStatus] = useState('Waiting for engine…');
-  const [view, setView] = useState<keyof typeof VIEWS>('venue');
-  const nextId = useRef(1);
-  const sentAt = useRef(new Map<number, number>());
-
-  const ping = useCallback(() => {
-    const id = nextId.current++;
-    sentAt.current.set(id, performance.now());
-    window.engine.send({ type: 'ping', id });
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = window.engine.onEvent((event) => {
-      if (event.type !== 'pong') return;
-      const start = sentAt.current.get(event.id);
-      if (start === undefined) return;
-      sentAt.current.delete(event.id);
-      const roundTrip = Math.round(performance.now() - start);
-      const uptime = Math.round(event.uptimeMs / 1000);
-      setStatus(`Engine replied in ${roundTrip} ms (up ${uptime} s)`);
-    });
-    ping();
-    return unsubscribe;
-  }, [ping]);
+  const [view, setView] = useState<View>('venue');
+  const show = useShow().show;
+  const venue = useVenuePatch().venue;
+  const playback = usePlayback();
+  const midiInput = useMidiInput();
+  useViewShortcuts(setView);
+  usePanelKeys(show?.show, playback);
 
   return (
-    <main>
-      <h1>LightCues</h1>
-      <p>{status}</p>
-      <FallbackPanel />
-      <button type="button" onClick={ping}>
-        Ping engine
-      </button>
-      <nav>
-        {Object.entries(VIEWS).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            aria-pressed={view === key}
-            onClick={() => setView(key as keyof typeof VIEWS)}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
-      {/* All stay mounted, so the Show and Venue Patch still guard the window close. */}
-      <div hidden={view !== 'show'}>
-        <ShowView />
+    <div
+      className={cx(
+        styles.app,
+        playback?.blackout && styles.blackout,
+        playback?.mode === 'blind' && styles.blind,
+      )}
+    >
+      <Sidebar view={view} onView={setView} />
+      <div className={styles.main}>
+        <TopBar show={show} venue={venue} playback={playback} midiInput={midiInput} />
+        {/* All stay mounted, so the Show and Venue Patch still guard the window close. */}
+        <main className={styles.content}>
+          <div hidden={view !== 'show'}>
+            <ShowView active={view === 'show'} />
+          </div>
+          <div hidden={view !== 'venue'}>
+            <VenuePatchView active={view === 'venue'} />
+          </div>
+          <div hidden={view !== 'profiles'}>
+            <ProfileLibraryView active={view === 'profiles'} />
+          </div>
+          <div hidden={view !== 'perform'}>
+            <PerformView
+              active={view === 'perform'}
+              show={show?.show}
+              patch={venue?.patch}
+              playback={playback}
+            />
+          </div>
+        </main>
+        {view !== 'perform' && <FallbackPanel show={show?.show} playback={playback} />}
       </div>
-      <div hidden={view !== 'venue'}>
-        <VenuePatchView />
-      </div>
-      <div hidden={view !== 'profiles'}>
-        <ProfileLibraryView />
-      </div>
-    </main>
+    </div>
   );
 }

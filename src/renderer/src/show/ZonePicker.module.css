@@ -1,0 +1,77 @@
+.picker {
+  /* Each level's plan. */
+  --plan-width: 200px;
+
+  display: flex;
+  flex: 2 1 calc(var(--plan-width) * 2);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  margin-bottom: var(--space-2);
+  padding: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.summary {
+  color: var(--text-faint);
+  font-weight: var(--weight-normal);
+}
+
+.plans {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.plan {
+  flex: 1 1 var(--plan-width);
+  max-width: calc(var(--plan-width) * 1.5);
+}
+
+.svg {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  background: var(--surface-0);
+}
+
+.zone {
+  fill: var(--surface-3);
+  stroke: var(--border-strong);
+  cursor: pointer;
+}
+
+.zone:hover {
+  fill: var(--border-strong);
+}
+
+.picked,
+.picked:hover {
+  fill: var(--accent);
+  fill-opacity: 0.6;
+}
+
+.fixture {
+  fill: var(--warning);
+  pointer-events: none;
+}
+
+.label {
+  fill: var(--text-faint);
+}
+
+.caption {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+}

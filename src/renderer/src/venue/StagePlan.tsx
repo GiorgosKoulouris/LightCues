@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent } from 'react';
+import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import {
   fixtureRole,
   fixtureZone,
@@ -6,9 +6,12 @@ import {
   type StageBounds,
   type StagePosition,
   type VenuePatch,
-  type Zone,
   type ZoneRow,
+  zoneName,
 } from '../../../shared/venue-patch';
+import { cx } from '../ui/cx';
+import { selectModifiers, type SelectModifiers } from '../ui/List';
+import styles from './StagePlan.module.css';
 
 // Depth of the Front row drawn in front of the stage, in metres.
 export const FRONT_DEPTH = 2;
@@ -19,8 +22,11 @@ const SNAP = 0.05;
 
 interface StagePlanProps {
   patch: VenuePatch;
-  selectedId?: string;
-  onSelect(id: string): void;
+  selectedIds: readonly string[];
+  // Shift and Ctrl clicks select without dragging.
+  onSelect(id: string, modifiers: SelectModifiers): void;
+  // Keys the plan does not handle itself, such as Delete.
+  onKeyDown?(event: KeyboardEvent<SVGSVGElement>): void;
   // Resolves once the engine has answered, so the plan can stop showing the
   // dragged position.
   onMove(id: string, position: StagePosition): Promise<unknown>;
@@ -40,8 +46,8 @@ interface Drag {
 
 // Top-down view of the stage and its Zone grid, seen with the audience at the
 // bottom: Stage Left is on the right. Fixtures can be dragged; the Zone they
-// would be in shows while dragging.
-export function StagePlan({ patch, selectedId, onSelect, onMove }: StagePlanProps) {
+// would be in shows while dragging. Shift and Ctrl click select several.
+export function StagePlan({ patch, selectedIds, onSelect, onKeyDown, onMove }: StagePlanProps) {
   const svg = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag>();
 
@@ -58,6 +64,12 @@ export function StagePlan({ patch, selectedId, onSelect, onMove }: StagePlanProp
   }
 
   function startDrag(event: PointerEvent, fixture: PatchedFixture) {
+    svg.current?.focus();
+    const modifiers = selectModifiers(event);
+    if (modifiers.range || modifiers.toggle) {
+      onSelect(fixture.id, modifiers);
+      return;
+    }
     event.currentTarget.setPointerCapture(event.pointerId);
     const { x, y } = stagePoint(event);
     setDrag({
@@ -69,7 +81,7 @@ export function StagePlan({ patch, selectedId, onSelect, onMove }: StagePlanProp
       moved: false,
       released: false,
     });
-    onSelect(fixture.id);
+    onSelect(fixture.id, modifiers);
   }
 
   function moveDrag(event: PointerEvent) {
@@ -95,24 +107,30 @@ export function StagePlan({ patch, selectedId, onSelect, onMove }: StagePlanProp
   const dragged = drag && patch.fixtures.find((f) => f.id === drag.id);
 
   return (
-    <figure style={{ margin: 0 }}>
+    <figure className={styles.figure}>
       <svg
         ref={svg}
         viewBox={stageViewBox(patch.stage)}
-        style={{ width: '100%', maxWidth: 800, background: '#1b1d22', touchAction: 'none' }}
+        className={styles.plan}
         role="img"
         aria-label="Top-down stage plan"
+        tabIndex={0}
+        onKeyDown={onKeyDown}
       >
         <StageGrid stage={patch.stage} />
         {patch.fixtures.map((fixture) => {
           const shown = position(fixture);
-          const selected = fixture.id === selectedId;
           const overhead = fixtureZone(patch, shown).level === 'Overhead';
           return (
             <g
               key={fixture.id}
               transform={`translate(${shown.x} ${-shown.y})`}
-              style={{ cursor: 'grab' }}
+              className={cx(
+                styles.fixture,
+                overhead && styles.overhead,
+                selectedIds.includes(fixture.id) && styles.selected,
+              )}
+              data-testid={`plan-${fixture.id}`}
               onPointerDown={(e) => startDrag(e, fixture)}
               onPointerMove={moveDrag}
               onPointerUp={endDrag}
@@ -121,26 +139,20 @@ export function StagePlan({ patch, selectedId, onSelect, onMove }: StagePlanProp
               <title>
                 {`${fixture.name} (${fixtureRole(patch, fixture)}), ${fixture.universe}.${fixture.address}`}
               </title>
-              <circle
-                r={FIXTURE_RADIUS}
-                fill={overhead ? 'none' : '#e8b44c'}
-                stroke={selected ? '#fff' : '#e8b44c'}
-                strokeWidth={selected ? 0.08 : 0.05}
-                strokeDasharray={overhead ? '0.1 0.06' : undefined}
-              />
-              <text y={FIXTURE_RADIUS + 0.35} fill="#dde" fontSize={0.28} textAnchor="middle">
+              <circle r={FIXTURE_RADIUS} className={styles.marker} />
+              <text y={FIXTURE_RADIUS + 0.35} fontSize={0.28} className={styles.name}>
                 {fixture.name}
               </text>
             </g>
           );
         })}
       </svg>
-      <figcaption>
+      <figcaption className={styles.caption}>
         {dragged && drag.moved
           ? `${dragged.name}: x ${drag.x.toFixed(2)} m, y ${drag.y.toFixed(2)} m → ` +
             zoneName(fixtureZone(patch, position(dragged))) +
             (dragged.zone ? ' (Zone override)' : '')
-          : 'Drag a Fixture to move it. Dashed: Overhead.'}
+          : 'Drag a Fixture to move it. Shift or Ctrl click to select several. Dashed: Overhead.'}
       </figcaption>
     </figure>
   );
@@ -156,8 +168,7 @@ export function StageGrid({ stage: { width, depth } }: { stage: StageBounds }) {
         y={-depth}
         width={width}
         height={depth}
-        fill="#2a2d35"
-        stroke="#aab"
+        className={styles.stage}
         strokeWidth={0.04}
       />
       <rect
@@ -165,13 +176,12 @@ export function StageGrid({ stage: { width, depth } }: { stage: StageBounds }) {
         y={0}
         width={width}
         height={FRONT_DEPTH}
-        fill="none"
-        stroke="#667"
+        className={styles.front}
         strokeWidth={0.03}
         strokeDasharray="0.15 0.1"
       />
       {[1, 2].map((i) => (
-        <g key={i} stroke="#556" strokeWidth={0.02}>
+        <g key={i} className={styles.gridLine} strokeWidth={0.02}>
           <line
             x1={-width / 2 + (width * i) / 3}
             x2={-width / 2 + (width * i) / 3}
@@ -181,7 +191,7 @@ export function StageGrid({ stage: { width, depth } }: { stage: StageBounds }) {
           <line x1={-width / 2} x2={width / 2} y1={(-depth * i) / 3} y2={(-depth * i) / 3} />
         </g>
       ))}
-      <g fill="#889" fontSize={0.3} textAnchor="middle">
+      <g className={styles.label} fontSize={0.3} textAnchor="middle">
         <text x={-width / 3} y={-depth - 0.3}>
           Stage Right
         </text>
@@ -195,7 +205,7 @@ export function StageGrid({ stage: { width, depth } }: { stage: StageBounds }) {
           Audience
         </text>
       </g>
-      <g fill="#889" fontSize={0.3} textAnchor="end">
+      <g className={styles.label} fontSize={0.3} textAnchor="end">
         <text x={-width / 2 - 0.1} y={(-depth * 5) / 6}>
           Up
         </text>
@@ -227,10 +237,6 @@ export function zoneRowBounds({ depth }: StageBounds): Record<ZoneRow, [number, 
     Midstage: [(-depth * 2) / 3, -depth / 3],
     Upstage: [-depth, (-depth * 2) / 3],
   };
-}
-
-export function zoneName({ row, column, level }: Zone): string {
-  return `${row} ${column} ${level}`;
 }
 
 function snap(metres: number): number {

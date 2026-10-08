@@ -1,0 +1,101 @@
+/* Dialogs, popovers, menus and tooltips. */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--backdrop);
+}
+
+.dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: min(480px, calc(100vw - var(--space-6)));
+  max-height: calc(100vh - var(--space-6));
+  overflow-y: auto;
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-overlay);
+}
+
+.dialog:focus-visible {
+  box-shadow: var(--shadow-overlay);
+}
+
+.dialogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.dialogTitle {
+  font-size: var(--text-lg);
+}
+
+.dialogDescription {
+  color: var(--text-muted);
+}
+
+.dialogFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.popover,
+.menu {
+  min-width: 180px;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-overlay);
+}
+
+.popover {
+  padding: var(--space-4);
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-height);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  outline: none;
+  cursor: default;
+  user-select: none;
+}
+
+.menuItem svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.menuItem[data-highlighted] {
+  background: var(--surface-3);
+}
+
+.menuItem[data-disabled] {
+  opacity: 0.45;
+}
+
+.menuDanger {
+  color: var(--danger);
+}
+
+.tooltip {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--text);
+  font-size: var(--text-sm);
+  box-shadow: var(--shadow-overlay);
+}

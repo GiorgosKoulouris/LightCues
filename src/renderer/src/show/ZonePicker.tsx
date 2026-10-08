@@ -7,8 +7,12 @@ import {
   type VenuePatch,
   type Zone,
   type ZoneLevel,
+  zoneName,
 } from '../../../shared/venue-patch';
-import { FRONT_DEPTH, stageViewBox, zoneName, zoneRowBounds } from '../venue/StagePlan';
+import { Button } from '../ui/Button';
+import { cx } from '../ui/cx';
+import { FRONT_DEPTH, stageViewBox, zoneRowBounds } from '../venue/StagePlan';
+import styles from './ZonePicker.module.css';
 
 interface ZonePickerProps {
   // Draws the current Venue Patch's stage and Fixtures, for reference.
@@ -32,21 +36,16 @@ export function ZonePicker({ patch, zones, onChange }: ZonePickerProps) {
   }
 
   return (
-    <fieldset>
-      <legend>Zones</legend>
-      <p>
-        {zones === undefined ? (
-          'Every Zone. Click a Zone to target it alone.'
-        ) : (
-          <>
-            {zones.map(zoneName).join(', ')}{' '}
-            <button type="button" onClick={() => onChange(undefined)}>
-              Every Zone
-            </button>
-          </>
-        )}
-      </p>
-      <div style={{ display: 'flex', gap: '1em', flexWrap: 'wrap' }}>
+    <fieldset className={styles.picker}>
+      <legend className={styles.legend}>
+        Zones{' '}
+        <span className={styles.summary}>
+          {zones === undefined
+            ? 'every Zone; click one to target it alone'
+            : zones.map(zoneName).join(', ')}
+        </span>
+      </legend>
+      <div className={styles.plans}>
         {ZONE_LEVELS.map((level) => (
           <LevelPlan
             key={level}
@@ -57,6 +56,11 @@ export function ZonePicker({ patch, zones, onChange }: ZonePickerProps) {
           />
         ))}
       </div>
+      {zones !== undefined && (
+        <Button variant="ghost" onClick={() => onChange(undefined)}>
+          Every Zone
+        </Button>
+      )}
     </fieldset>
   );
 }
@@ -77,10 +81,10 @@ function LevelPlan({
   const fixtures = patch.fixtures.filter((f) => fixtureZone(patch, f).level === level);
 
   return (
-    <figure style={{ margin: 0, flex: '1 1 260px' }}>
+    <figure className={styles.plan}>
       <svg
         viewBox={stageViewBox(patch.stage)}
-        style={{ width: '100%', maxWidth: 400, background: '#1b1d22' }}
+        className={styles.svg}
         role="group"
         aria-label={`${level} Zones`}
       >
@@ -96,11 +100,8 @@ function LevelPlan({
                 y={top}
                 width={width / 3}
                 height={bottom - top}
-                fill={picked ? '#4c7ae8' : '#2a2d35'}
-                fillOpacity={picked ? 0.6 : 1}
-                stroke="#889"
+                className={cx(styles.zone, picked && styles.picked)}
                 strokeWidth={0.03}
-                style={{ cursor: 'pointer' }}
                 role="checkbox"
                 aria-checked={picked}
                 aria-label={zoneName(zone)}
@@ -117,15 +118,20 @@ function LevelPlan({
             cx={fixture.x}
             cy={-fixture.y}
             r={0.15}
-            fill="#e8b44c"
-            pointerEvents="none"
+            className={styles.fixture}
           />
         ))}
-        <text x={0} y={FRONT_DEPTH + 0.6} fill="#889" fontSize={0.3} textAnchor="middle">
+        <text
+          x={0}
+          y={FRONT_DEPTH + 0.6}
+          className={styles.label}
+          fontSize={0.3}
+          textAnchor="middle"
+        >
           Audience
         </text>
       </svg>
-      <figcaption>{level}</figcaption>
+      <figcaption className={styles.caption}>{level}</figcaption>
     </figure>
   );
 }

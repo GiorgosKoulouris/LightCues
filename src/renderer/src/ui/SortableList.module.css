@@ -1,0 +1,47 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  position: relative;
+}
+
+/* Lifted above the others while it moves. */
+.dragging {
+  z-index: 1;
+  box-shadow: var(--shadow-overlay);
+}
+
+.handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--icon-lg);
+  height: var(--control-height);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-faint);
+  cursor: grab;
+  touch-action: none;
+}
+
+.handle:hover {
+  color: var(--text);
+}
+
+.handle svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.dragging .handle {
+  cursor: grabbing;
+}

@@ -111,13 +111,26 @@ export function putFixture(
       ],
     };
   }
-  const embedded = patch.profiles.some((p) => p.id === fixture.profileId);
-  const profiles = embedded || !profile ? patch.profiles : [...patch.profiles, profile];
-  const replaced = patch.fixtures.some((f) => f.id === fixture.id);
-  const fixtures = replaced
-    ? patch.fixtures.map((f) => (f.id === fixture.id ? fixture : f))
-    : [...patch.fixtures, fixture];
-  return validated(dropUnusedProfiles({ ...patch, fixtures, profiles }));
+  return putFixtures(patch, [fixture], () => profile);
+}
+
+// Adds or replaces several Fixtures in one change, checked as a whole: either
+// all go in or none do. `profileOf` gives the Profile to embed for a Fixture
+// whose Profile the patch has no copy of yet.
+export function putFixtures(
+  patch: VenuePatch,
+  fixtures: PatchedFixture[],
+  profileOf: (id: string) => FixtureProfile | undefined = () => undefined,
+): PatchResult {
+  const profiles = [...patch.profiles];
+  for (const { profileId } of fixtures) {
+    const profile = profiles.some((p) => p.id === profileId) ? undefined : profileOf(profileId);
+    if (profile) profiles.push(profile);
+  }
+  const byId = new Map(fixtures.map((f) => [f.id, f]));
+  const added = fixtures.filter((f) => !patch.fixtures.some((p) => p.id === f.id));
+  const replaced = patch.fixtures.map((f) => byId.get(f.id) ?? f);
+  return validated(dropUnusedProfiles({ ...patch, fixtures: [...replaced, ...added], profiles }));
 }
 
 // Places a Fixture at `position`. Its Zone follows the new position unless it
@@ -129,8 +142,11 @@ export function moveFixture(patch: VenuePatch, id: string, position: StagePositi
   return putFixture(patch, { ...fixture, x, y, height });
 }
 
-export function removeFixture(patch: VenuePatch, id: string): VenuePatch {
-  return dropUnusedProfiles({ ...patch, fixtures: patch.fixtures.filter((f) => f.id !== id) });
+export function removeFixtures(patch: VenuePatch, ids: string[]): VenuePatch {
+  return dropUnusedProfiles({
+    ...patch,
+    fixtures: patch.fixtures.filter((f) => !ids.includes(f.id)),
+  });
 }
 
 export function setStage(patch: VenuePatch, stage: StageBounds): PatchResult {
@@ -198,7 +214,7 @@ export function validatePatch(patch: VenuePatch): string[] {
       continue;
     }
     const first = fixture.address;
-    const last = first + fixtureMode(patch, fixture).channels.length - 1;
+    const last = lastChannel(patch, fixture);
     if (last > DMX_CHANNELS) {
       errors.push(
         `"${fixture.name}" (${span(fixture.universe, first, last)}) runs past channel ${DMX_CHANNELS}`,
@@ -261,14 +277,42 @@ function fixtureProblem(patch: VenuePatch, fixture: PatchedFixture): string | un
   const channels = profile.modes.find((m) => m.name === mode)?.channels;
   if (!channels) return `mode "${mode}" is not in Profile "${profileId}"`;
   if (channels.length === 0) return `mode "${mode}" has no channels`;
-  if (!Number.isInteger(address) || address < 1 || address > DMX_CHANNELS) {
-    return `address must be a whole number from 1 to ${DMX_CHANNELS}`;
+  if (!isAddress(address)) return `address must be a whole number from 1 to ${DMX_CHANNELS}`;
+  return undefined;
+}
+
+function isAddress(address: number): boolean {
+  return Number.isInteger(address) && address >= 1 && address <= DMX_CHANNELS;
+}
+
+// The last channel a patched Fixture occupies in its Universe.
+export function lastChannel(patch: VenuePatch, fixture: PatchedFixture): number {
+  return fixture.address + fixtureMode(patch, fixture).channels.length - 1;
+}
+
+// Why a Fixture's address does not fit in its Universe, if it does not: out
+// of range, running past the last channel, or overlapping another Fixture.
+export function addressProblem(patch: VenuePatch, fixture: PatchedFixture): string | undefined {
+  const { universe, address } = fixture;
+  if (!isAddress(address)) return `Must be 1–${DMX_CHANNELS}`;
+  const last = lastChannel(patch, fixture);
+  if (last > DMX_CHANNELS) return `Runs past channel ${DMX_CHANNELS}`;
+  for (const other of fixturesInUniverse(patch, universe)) {
+    if (other.id === fixture.id) continue;
+    const otherLast = lastChannel(patch, other);
+    if (other.address <= last && address <= otherLast) {
+      return `Overlaps ${other.name} (${span(universe, other.address, otherLast)})`;
+    }
   }
   return undefined;
 }
 
 export function isZone({ row, column, level }: Zone): boolean {
   return ZONE_ROWS.includes(row) && ZONE_COLUMNS.includes(column) && ZONE_LEVELS.includes(level);
+}
+
+export function zoneName({ row, column, level }: Zone): string {
+  return `${row} ${column} ${level}`;
 }
 
 export function sameZone(a: Zone, b: Zone): boolean {

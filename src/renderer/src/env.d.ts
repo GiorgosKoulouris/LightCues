@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 import type { CloseGuardBridge, DialogBridge, EngineBridge } from '../../shared/protocol';
 
 declare global {

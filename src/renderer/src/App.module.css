@@ -1,0 +1,41 @@
+.app {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  height: 100%;
+}
+
+/* The live-state frame, drawn over everything without taking clicks. */
+.app::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-frame);
+  border: var(--frame-width) solid transparent;
+  pointer-events: none;
+}
+
+.blind::after {
+  border-color: var(--warning);
+}
+
+/* Blackout wins over Blind. */
+.blackout::after {
+  border-color: var(--danger);
+}
+
+.main {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+/* Only the view scrolls; the top bar and the strip stay in place. */
+.content {
+  overflow: auto;
+  padding: var(--space-4);
+}
+
+/* A view fills the space, so it can scroll its own columns. */
+.content > * {
+  height: 100%;
+}

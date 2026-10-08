@@ -1,0 +1,33 @@
+.view {
+  --fixture-list-width: 300px;
+  --side-width: 320px;
+
+  height: 100%;
+}
+
+.loading {
+  color: var(--text-faint);
+}
+
+/* Fixture list | stage plan | inspector. Each column scrolls on its own. */
+.fixtures {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--fixture-list-width) minmax(0, 1fr) var(--side-width);
+  gap: var(--space-4);
+  height: 100%;
+  padding-top: var(--space-3);
+}
+
+.empty {
+  padding: var(--space-6);
+  color: var(--text-faint);
+  text-align: center;
+}
+
+/* Below 1280px the inspector is a SidePanel over the plan. */
+@media (width < 1280px) {
+  .fixtures {
+    grid-template-columns: var(--fixture-list-width) minmax(0, 1fr);
+  }
+}

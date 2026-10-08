@@ -1,599 +1,204 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { ROLES, type FixtureProfile, type Role } from '../../../shared/fixture-profile';
-import type { OutputStatus } from '../../../shared/protocol';
-import {
-  fixtureMode,
-  fixturesInUniverse,
-  fixtureZone,
-  freeUniverseNumber,
-  suggestZone,
-  ZONE_COLUMNS,
-  ZONE_LEVELS,
-  ZONE_ROWS,
-  type PatchedFixture,
-  type StageBounds,
-  type Universe,
-  type VenuePatch,
-  type Zone,
-} from '../../../shared/venue-patch';
+import { useRef, useState, type KeyboardEvent } from 'react';
+import type { VenueEdit } from '../../../shared/protocol';
+import { fixturesInUniverse, type PatchedFixture } from '../../../shared/venue-patch';
 import { useProfileLibrary } from '../profiles/useProfileLibrary';
-import { StagePlan, zoneName } from './StagePlan';
+import { FileButtons } from '../shell/FileButtons';
+import { HistoryButtons } from '../shell/HistoryButtons';
+import { useFileCommands } from '../shell/useFileCommands';
+import { useFileShortcuts, useFindShortcut, useHistoryShortcuts } from '../shell/useShortcuts';
+import type { SelectModifiers } from '../ui/List';
+import { namedCount, removedMessage } from '../ui/removed';
+import { SidePanel, SidePanelToggle } from '../ui/SidePanel';
+import { Tabs } from '../ui/Tabs';
+import { useToast } from '../ui/Toast';
+import { AddFixtureDialog } from './AddFixtureDialog';
+import { FixtureInspector } from './FixtureInspector';
+import { FixtureList } from './FixtureList';
+import {
+  filterFixtures,
+  selectFixture,
+  sortFixtures,
+  type FixtureFilter,
+  type Selection,
+} from './fixtures';
+import { RigSetup } from './RigSetup';
+import { StagePlan } from './StagePlan';
 import { useOutputs } from './useOutputs';
 import { useVenuePatch } from './useVenuePatch';
+import styles from './VenuePatchView.module.css';
 
-// Edits the current Venue Patch: file, stage bounds, Universes and their
-// Outputs, and Fixtures on a top-down stage plan.
-export function VenuePatchView() {
-  const { venue, edit, newVenue, open, save } = useVenuePatch();
+type SubTab = 'fixtures' | 'rig';
+
+const TABS = [
+  { value: 'fixtures', label: 'Fixtures' },
+  { value: 'rig', label: 'Rig setup' },
+] as const;
+
+// Edits the current Venue Patch. Fixtures: the Fixture list, the stage plan
+// and the inspector, with Shift/Ctrl multi-select in the list and on the plan.
+// Rig setup: stage size, Universes and Outputs. Removing is instant, and
+// undone with Undo. While `active`, Ctrl+N, O, S and Shift+S act on its file,
+// Ctrl+Z and Ctrl+Shift+Z undo and redo, and Ctrl+F searches the Fixtures.
+export function VenuePatchView({ active }: { active: boolean }) {
+  const { venue, edit, newVenue, undo, redo, open, save } = useVenuePatch();
   const { entries } = useProfileLibrary();
   const outputs = useOutputs();
-  const [selectedId, setSelectedId] = useState<string>();
-  const [errors, setErrors] = useState<string[]>([]);
+  const toast = useToast();
+  const [tab, setTab] = useState<SubTab>('fixtures');
+  const [selection, setSelection] = useState<Selection>({ ids: [] });
+  const [filter, setFilter] = useState<FixtureFilter>({ query: '', grouping: 'universe' });
+  const [adding, setAdding] = useState(false);
+  // The inspector, below 1280px where it is hidden by default.
+  const [sideOpen, setSideOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  // Tells main whether closing the window would lose changes.
-  const unsaved = venue?.unsaved ?? false;
-  useEffect(() => window.closeGuard.setUnsaved('venue', unsaved), [unsaved]);
+  const { run, fileCommands } = useFileCommands({
+    kind: 'venue',
+    name: 'Venue Patch',
+    unsaved: venue?.unsaved,
+    newFile: newVenue,
+    open,
+    save,
+    onReplaced: () => setSelection({ ids: [] }),
+  });
+  useFileShortcuts(active, fileCommands);
+  useHistoryShortcuts(active, { undo, redo });
+  useFindShortcut(active && tab === 'fixtures', () => {
+    searchRef.current?.focus();
+    searchRef.current?.select();
+  });
 
-  // Save chosen when closing the window. Cancelling the file dialog keeps
-  // the window open.
-  useEffect(
-    () =>
-      window.closeGuard.onSaveBeforeClose('venue', async () => {
-        const result = await save().catch((error: Error) => [`Save failed: ${error.message}`]);
-        if (result) setErrors(result);
-        return result?.length === 0;
-      }),
-    [save],
-  );
+  if (!venue || !fileCommands) return <p className={styles.loading}>Loading Venue Patch…</p>;
+  const { patch } = venue;
+  const change = (venueEdit: VenueEdit) => run(() => edit(venueEdit));
 
-  if (!venue) return <p>Loading Venue Patch…</p>;
-  const { patch, path } = venue;
-  const selected = patch.fixtures.find((f) => f.id === selectedId);
+  const listed = sortFixtures(patch, filterFixtures(patch, filter.query), filter.grouping);
+  // Fixtures removed elsewhere, such as with their Universe, drop out.
+  const selected = selection.ids.flatMap((id) => patch.fixtures.find((f) => f.id === id) ?? []);
+  const selectedIds = selected.map((f) => f.id);
 
-  // Runs a change and shows its errors, or clears them when it worked. A
-  // change resolving to undefined was cancelled and leaves them.
-  async function run(change: () => Promise<string[] | undefined>): Promise<boolean> {
-    let result: string[] | undefined;
-    try {
-      result = await change();
-    } catch (error) {
-      result = [(error as Error).message];
-    }
-    if (result === undefined) return false;
-    setErrors(result);
-    return result.length === 0;
+  // A Shift range follows `order`: the list's for a list click; on the plan,
+  // which shows every Fixture, the list's order without the search.
+  const select = (order: PatchedFixture[]) => (id: string, modifiers: SelectModifiers) =>
+    setSelection(
+      selectFixture(
+        { ...selection, ids: selectedIds },
+        id,
+        order.map((f) => f.id),
+        modifiers,
+      ),
+    );
+
+  async function removeSelected() {
+    if (selected.length === 0) return;
+    if (!(await change({ type: 'removeFixtures', ids: selectedIds }))) return;
+    setSelection({ ids: [] });
+    toast({
+      message:
+        selected.length === 1
+          ? removedMessage(selected[0]!.name)
+          : removedMessage(namedCount('Fixture', names(selected))),
+    });
   }
 
-  function discardUnsaved(): boolean {
-    return !unsaved || window.confirm('The Venue Patch has unsaved changes. Discard them?');
-  }
-
-  function removeUniverse(number: number) {
+  async function removeUniverse(number: number) {
     const fixtures = fixturesInUniverse(patch, number);
-    if (
-      fixtures.length > 0 &&
-      !window.confirm(
-        `Universe ${number} has ${fixtures.length} Fixture(s): ` +
-          `${fixtures.map((f) => f.name).join(', ')}. Remove the Universe and its Fixtures?`,
-      )
-    ) {
-      return;
-    }
-    void run(() => edit({ type: 'removeUniverse', number }));
+    if (!(await change({ type: 'removeUniverse', number }))) return;
+    const also = fixtures.length > 0 ? [`its ${namedCount('Fixture', names(fixtures))}`] : [];
+    toast({ message: removedMessage(`Universe ${number}`, also) });
   }
+
+  const onDelete = (event: KeyboardEvent) => {
+    if (event.key !== 'Delete') return;
+    event.preventDefault();
+    void removeSelected();
+  };
 
   return (
-    <section>
-      <h2>Venue Patch</h2>
-      <p>
-        {path ?? 'Not saved yet'}
-        {unsaved && ' (unsaved changes)'}{' '}
-        <button
-          type="button"
-          onClick={() => {
-            if (!discardUnsaved()) return;
-            newVenue();
-            setSelectedId(undefined);
-            setErrors([]);
-          }}
-        >
-          New
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (discardUnsaved()) void run(open);
-          }}
-        >
-          Open…
-        </button>
-        <button type="button" onClick={() => void run(() => save())}>
-          Save
-        </button>
-        <button type="button" onClick={() => void run(() => save({ as: true }))}>
-          Save As…
-        </button>
-      </p>
-      {errors.length > 0 && (
-        <ul role="alert">
-          {errors.map((line, i) => (
-            <li key={i}>{line}</li>
-          ))}
-        </ul>
-      )}
-      <StageForm
-        key={`${patch.stage.width}x${patch.stage.depth}`}
-        stage={patch.stage}
-        onApply={(stage) => void run(() => edit({ type: 'setStage', stage }))}
-      />
-      <UniverseList
-        universes={patch.universes}
-        patch={patch}
-        outputs={outputs}
-        onAdd={(universe) => run(() => edit({ type: 'addUniverse', universe }))}
-        onPut={(universe) => void run(() => edit({ type: 'putUniverse', universe }))}
-        onRemove={removeUniverse}
-      />
-      <AddFixtureForm
-        patch={patch}
-        profiles={entries.map((e) => e.profile)}
-        onAdd={async (fixture) => {
-          if (await run(() => edit({ type: 'putFixture', fixture }))) setSelectedId(fixture.id);
-        }}
-      />
-      <div style={{ display: 'flex', gap: '1em', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 480px' }}>
+    <Tabs
+      label="Venue Patch"
+      tabs={TABS}
+      value={tab}
+      onChange={setTab}
+      className={styles.view}
+      actions={
+        <>
+          {tab === 'fixtures' && (
+            <SidePanelToggle
+              label="inspector"
+              open={sideOpen}
+              onToggle={() => setSideOpen(!sideOpen)}
+            />
+          )}
+          <HistoryButtons
+            commands={{ undo, redo }}
+            enabled={{ undo: venue.canUndo, redo: venue.canRedo }}
+          />
+          <FileButtons commands={fileCommands} />
+        </>
+      }
+    >
+      {tab === 'fixtures' ? (
+        <div className={styles.fixtures}>
+          <FixtureList
+            patch={patch}
+            fixtures={listed}
+            filter={filter}
+            selection={{ ...selection, ids: selectedIds }}
+            searchRef={searchRef}
+            onFilter={setFilter}
+            onSelect={select(listed)}
+            onRemove={() => void removeSelected()}
+            onAdd={() => setAdding(true)}
+          />
           <StagePlan
             patch={patch}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            onMove={(id, position) => run(() => edit({ type: 'moveFixture', id, position }))}
+            selectedIds={selectedIds}
+            onSelect={select(sortFixtures(patch, patch.fixtures, filter.grouping))}
+            onKeyDown={onDelete}
+            onMove={(id, position) => change({ type: 'moveFixture', id, position })}
           />
-        </div>
-        {selected && (
-          <FixtureForm
-            key={selected.id}
+          <SidePanel label="Inspector" open={sideOpen} onClose={() => setSideOpen(false)}>
+            {selected.length > 0 ? (
+              <FixtureInspector
+                key={selectedIds.join()}
+                patch={patch}
+                fixtures={selected}
+                onPut={(fixtures) => void change({ type: 'putFixtures', fixtures })}
+                onRemove={() => void removeSelected()}
+              />
+            ) : (
+              <p className={styles.empty}>
+                Select a Fixture to edit it. Shift or Ctrl click to select several.
+              </p>
+            )}
+          </SidePanel>
+          <AddFixtureDialog
+            open={adding}
+            onOpenChange={setAdding}
             patch={patch}
-            fixture={selected}
-            onApply={(fixture) => run(() => edit({ type: 'putFixture', fixture }))}
-            onRemove={() => {
-              if (!window.confirm(`Remove ${selected.name}?`)) return;
-              setSelectedId(undefined);
-              void run(() => edit({ type: 'removeFixture', id: selected.id }));
+            profiles={entries.map((e) => e.profile)}
+            onAdd={async (fixture) => {
+              const added = await change({ type: 'putFixture', fixture });
+              if (added) setSelection(selectFixture({ ids: [] }, fixture.id, [], {}));
+              return added;
             }}
           />
-        )}
-      </div>
-    </section>
-  );
-}
-
-function StageForm({ stage, onApply }: { stage: StageBounds; onApply(stage: StageBounds): void }) {
-  const [width, setWidth] = useState(String(stage.width));
-  const [depth, setDepth] = useState(String(stage.depth));
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        onApply({ width: Number(width), depth: Number(depth) });
-      }}
-    >
-      <h3>Stage</h3>
-      <label>
-        Width (m) <MetreInput value={width} onChange={setWidth} min={0.1} />
-      </label>{' '}
-      <label>
-        Depth (m) <MetreInput value={depth} onChange={setDepth} min={0.1} />
-      </label>{' '}
-      <button type="submit">Apply</button>
-    </form>
-  );
-}
-
-function UniverseList({
-  universes,
-  patch,
-  outputs,
-  onAdd,
-  onPut,
-  onRemove,
-}: {
-  universes: Universe[];
-  patch: VenuePatch;
-  outputs: OutputStatus[];
-  // Resolves to true when the Universe was added.
-  onAdd(universe: Universe): Promise<boolean>;
-  onPut(universe: Universe): void;
-  onRemove(number: number): void;
-}) {
-  // What the user typed; until then, the lowest free number.
-  const [typed, setTyped] = useState<string>();
-  const number = typed ?? String(freeUniverseNumber(patch));
-  return (
-    <section>
-      <h3>Universes</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>Universe</th>
-            <th>Output</th>
-            <th>Status</th>
-            <th>Fixtures</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {universes.map((universe) => (
-            <tr key={universe.number}>
-              <td>{universe.number}</td>
-              <td>
-                <OutputSelect universe={universe} outputs={outputs} onPut={onPut} />
-              </td>
-              <td>{outputState(outputs.find((o) => o.id === universe.output))}</td>
-              <td>{fixturesInUniverse(patch, universe.number).length}</td>
-              <td>
-                <button type="button" onClick={() => onRemove(universe.number)}>
-                  Remove
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void onAdd({ number: Number(number) }).then((added) => {
-            if (added) setTyped(undefined);
-          });
-        }}
-      >
-        <label>
-          Universe{' '}
-          <input
-            type="number"
-            min={1}
-            step={1}
-            value={number}
-            onChange={(e) => setTyped(e.target.value)}
-            style={{ width: '5em' }}
-          />
-        </label>{' '}
-        <button type="submit">Add Universe</button>
-      </form>
-    </section>
-  );
-}
-
-// A choice of the Outputs the engine found. The current Output stays listed
-// while it is unplugged, and before the engine has reported Outputs.
-function OutputSelect({
-  universe,
-  outputs,
-  onPut,
-}: {
-  universe: Universe;
-  outputs: OutputStatus[];
-  onPut(u: Universe): void;
-}) {
-  return (
-    <select
-      value={universe.output ?? ''}
-      aria-label={`Output of Universe ${universe.number}`}
-      onChange={(e) => {
-        const output = e.target.value;
-        onPut(output ? { number: universe.number, output } : { number: universe.number });
-      }}
-    >
-      <option value="">Unmapped</option>
-      {universe.output !== undefined && !outputs.some((o) => o.id === universe.output) && (
-        <option value={universe.output}>{universe.output}</option>
-      )}
-      {outputs.map((output) => (
-        <option key={output.id} value={output.id}>
-          {output.name}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-function outputState(output: OutputStatus | undefined): string {
-  // A mapped Output is never unused once the engine has caught up.
-  switch (output?.state) {
-    case undefined:
-    case 'unused':
-      return '';
-    case 'connecting':
-      return 'Connecting…';
-    case 'sending':
-      return 'Sending';
-    case 'failed':
-      return `Failed: ${output.error ?? 'unknown error'}. Retrying…`;
-    case 'missing':
-      return 'Not connected';
-  }
-}
-
-function AddFixtureForm({
-  patch,
-  profiles,
-  onAdd,
-}: {
-  patch: VenuePatch;
-  profiles: FixtureProfile[];
-  onAdd(fixture: PatchedFixture): Promise<void>;
-}) {
-  // Profiles the patch embeds come first: adding one of them keeps the
-  // patch's copy.
-  const choices = [
-    ...patch.profiles,
-    ...profiles.filter((p) => !patch.profiles.some((e) => e.id === p.id)),
-  ];
-  const [profileId, setProfileId] = useState('');
-  const [mode, setMode] = useState('');
-  const profile = choices.find((p) => p.id === profileId) ?? choices[0];
-  const modeName = profile?.modes.some((m) => m.name === mode) ? mode : profile?.modes[0]?.name;
-
-  const universe = patch.universes[0]?.number;
-
-  if (!profile || modeName === undefined) {
-    return <p>Add a Profile to the Profile Library to patch Fixtures.</p>;
-  }
-  if (universe === undefined) return <p>Add a Universe to patch Fixtures.</p>;
-
-  function add() {
-    if (!profile || modeName === undefined || universe === undefined) return;
-    const count = patch.fixtures.filter((f) => f.profileId === profile.id).length;
-    void onAdd({
-      id: crypto.randomUUID(),
-      name: `${profile.model} ${count + 1}`,
-      profileId: profile.id,
-      mode: modeName,
-      universe,
-      address: nextAddress(patch, universe),
-      x: 0,
-      y: patch.stage.depth / 6,
-      height: 0,
-    });
-  }
-
-  return (
-    <p>
-      <label>
-        Profile{' '}
-        <select value={profile.id} onChange={(e) => setProfileId(e.target.value)}>
-          {choices.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.manufacturer} {p.model}
-            </option>
-          ))}
-        </select>
-      </label>{' '}
-      <label>
-        Mode{' '}
-        <select value={modeName} onChange={(e) => setMode(e.target.value)}>
-          {profile.modes.map((m) => (
-            <option key={m.name} value={m.name}>
-              {m.name} ({m.channels.length} ch)
-            </option>
-          ))}
-        </select>
-      </label>{' '}
-      <button type="button" onClick={add}>
-        Add Fixture
-      </button>
-    </p>
-  );
-}
-
-// The address after the last Fixture in a Universe. A suggestion: the engine
-// still rejects it if the Fixture does not fit.
-function nextAddress(patch: VenuePatch, universe: number): number {
-  const ends = fixturesInUniverse(patch, universe).map(
-    (f) => f.address + fixtureMode(patch, f).channels.length,
-  );
-  return Math.max(1, ...ends);
-}
-
-// A Role or Zone field value meaning "no override".
-const SUGGESTED = '';
-
-type FixtureDraft = ReturnType<typeof fixtureDraft>;
-
-// The Fixture form's fields for a patched Fixture, as typed text.
-function fixtureDraft(fixture: PatchedFixture) {
-  return {
-    name: fixture.name,
-    mode: fixture.mode,
-    universe: String(fixture.universe),
-    address: String(fixture.address),
-    x: String(fixture.x),
-    y: String(fixture.y),
-    height: String(fixture.height),
-    role: fixture.role ?? SUGGESTED,
-    zone: fixture.zone ? zoneKey(fixture.zone) : SUGGESTED,
-  };
-}
-
-function FixtureForm({
-  patch,
-  fixture,
-  onApply,
-  onRemove,
-}: {
-  patch: VenuePatch;
-  fixture: PatchedFixture;
-  onApply(fixture: PatchedFixture): Promise<boolean>;
-  onRemove(): void;
-}) {
-  // Only the fields the user changed, so the others follow the engine's
-  // Fixture, e.g. its position after a drag.
-  const [edits, setEdits] = useState<Partial<FixtureDraft>>({});
-  const draft = { ...fixtureDraft(fixture), ...edits };
-  const unapplied = Object.keys(edits).length > 0;
-  const profile = patch.profiles.find((p) => p.id === fixture.profileId);
-  const set = (change: Partial<FixtureDraft>) => setEdits((e) => ({ ...e, ...change }));
-  const position = { x: Number(draft.x), y: Number(draft.y), height: Number(draft.height) };
-
-  function apply() {
-    const next: PatchedFixture = {
-      ...fixture,
-      name: draft.name,
-      mode: draft.mode,
-      universe: Number(draft.universe),
-      address: Number(draft.address),
-      ...position,
-    };
-    if (draft.role === SUGGESTED) delete next.role;
-    else next.role = draft.role as Role;
-    if (draft.zone === SUGGESTED) delete next.zone;
-    else next.zone = parseZoneKey(draft.zone);
-    void onApply(next).then((applied) => {
-      if (applied) setEdits({});
-    });
-  }
-
-  return (
-    <form
-      style={{ flex: '0 1 320px' }}
-      onSubmit={(e) => {
-        e.preventDefault();
-        apply();
-      }}
-    >
-      <h3>{fixture.name}</h3>
-      <p>
-        {profile ? `${profile.manufacturer} ${profile.model}` : fixture.profileId}
-        <br />
-        Zone: {zoneName(fixtureZone(patch, fixture))}
-        {fixture.zone && ' (override)'}
-      </p>
-      <Field label="Name">
-        <input value={draft.name} onChange={(e) => set({ name: e.target.value })} />
-      </Field>
-      <Field label="Mode">
-        <select value={draft.mode} onChange={(e) => set({ mode: e.target.value })}>
-          {profile?.modes.map((m) => (
-            <option key={m.name} value={m.name}>
-              {m.name} ({m.channels.length} ch)
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field label="Universe">
-        <select value={draft.universe} onChange={(e) => set({ universe: e.target.value })}>
-          {patch.universes.map((u) => (
-            <option key={u.number} value={u.number}>
-              {u.number}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field label="Address">
-        <input
-          type="number"
-          min={1}
-          max={512}
-          value={draft.address}
-          onChange={(e) => set({ address: e.target.value })}
+        </div>
+      ) : (
+        <RigSetup
+          patch={patch}
+          outputs={outputs}
+          onStage={(stage) => void change({ type: 'setStage', stage })}
+          onAddUniverse={(universe) => change({ type: 'addUniverse', universe })}
+          onPutUniverse={(universe) => void change({ type: 'putUniverse', universe })}
+          onRemoveUniverse={(number) => void removeUniverse(number)}
         />
-      </Field>
-      <Field label="x (m)">
-        <MetreInput value={draft.x} onChange={(x) => set({ x })} />
-      </Field>
-      <Field label="y (m)">
-        <MetreInput value={draft.y} onChange={(y) => set({ y })} />
-      </Field>
-      <Field label="Height (m)">
-        <MetreInput value={draft.height} onChange={(height) => set({ height })} min={0} />
-      </Field>
-      <Field label="Role">
-        <select value={draft.role} onChange={(e) => set({ role: e.target.value })}>
-          <option value={SUGGESTED}>Profile default ({profile?.defaultRole})</option>
-          {ROLES.map((r) => (
-            <option key={r} value={r}>
-              {r}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field label="Zone">
-        <select value={draft.zone} onChange={(e) => set({ zone: e.target.value })}>
-          <option value={SUGGESTED}>
-            Suggested ({zoneName(suggestZone(patch.stage, position))})
-          </option>
-          {ZONE_LEVELS.flatMap((level) =>
-            ZONE_ROWS.flatMap((row) =>
-              ZONE_COLUMNS.map((column) => {
-                const key = zoneKey({ row, column, level });
-                return (
-                  <option key={key} value={key}>
-                    {zoneName({ row, column, level })}
-                  </option>
-                );
-              }),
-            ),
-          )}
-        </select>
-      </Field>
-      <p>
-        {unapplied && (
-          <>
-            Unapplied changes.
-            <br />
-          </>
-        )}
-        <button type="submit" disabled={!unapplied}>
-          Apply
-        </button>{' '}
-        <button type="button" disabled={!unapplied} onClick={() => setEdits({})}>
-          Revert
-        </button>{' '}
-        <button type="button" onClick={onRemove}>
-          Remove Fixture
-        </button>
-      </p>
-    </form>
+      )}
+    </Tabs>
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <p style={{ margin: '0.3em 0' }}>
-      <label>
-        {label} {children}
-      </label>
-    </p>
-  );
-}
-
-function MetreInput({
-  value,
-  onChange,
-  min,
-}: {
-  value: string;
-  onChange(value: string): void;
-  min?: number;
-}) {
-  return (
-    <input
-      type="number"
-      step={0.05}
-      min={min}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      style={{ width: '6em' }}
-    />
-  );
-}
-
-function zoneKey({ row, column, level }: Zone): string {
-  return `${row}|${column}|${level}`;
-}
-
-function parseZoneKey(key: string): Zone {
-  const [row, column, level] = key.split('|') as [Zone['row'], Zone['column'], Zone['level']];
-  return { row, column, level };
+function names(fixtures: PatchedFixture[]): string[] {
+  return fixtures.map((f) => f.name);
 }

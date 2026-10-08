@@ -1,11 +1,12 @@
 // Pure helpers for making and editing Fixture Profiles by hand. Shared so the
 // OFL import and the editor derive ids the same way.
-import type {
-  Capability,
-  CapabilityRange,
-  Channel,
-  FixtureMode,
-  FixtureProfile,
+import {
+  DMX_MAX_VALUE,
+  type Capability,
+  type CapabilityRange,
+  type Channel,
+  type FixtureMode,
+  type FixtureProfile,
 } from './fixture-profile';
 
 // `<manufacturer-slug>/<model-slug>`, as used for imported Profiles.
@@ -57,5 +58,10 @@ export function blankChannel(name: string): Channel {
 }
 
 export function fullRange(capability: Capability = { type: 'intensity' }): CapabilityRange {
-  return { from: 0, to: 255, capability };
+  return { from: 0, to: DMX_MAX_VALUE, capability };
+}
+
+// "Acme Par", as a Profile is named in messages.
+export function profileName({ manufacturer, model }: FixtureProfile): string {
+  return `${manufacturer} ${model}`.trim();
 }
