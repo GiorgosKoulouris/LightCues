@@ -401,6 +401,8 @@ function createWindow(supervisor: Supervisor, pageUrl: string): BrowserWindow {
   const window = new BrowserWindow({
     width: 1280,
     height: 800,
+    // The packaged exe carries build/icon.ico. Dev runs set it here, or show Electron's default icon.
+    ...(app.isPackaged ? {} : { icon: join(__dirname, '../../build/icon.ico') }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
     },

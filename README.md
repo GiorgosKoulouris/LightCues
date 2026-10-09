@@ -1,4 +1,4 @@
-# LightCues
+# <img src="build/icon.svg" alt="" width="64" height="64" align="absmiddle"> LightCues
 
 A Windows lighting controller for live music shows.
 

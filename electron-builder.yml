@@ -20,6 +20,9 @@ extraResources:
 # Use the N-API prebuilds as shipped. A rebuild would need Windows build tools.
 npmRebuild: false
 win:
+  # Generated from build/icon.svg by `npm run icon`. NSIS uses it for the
+  # installer and uninstaller too.
+  icon: build/icon.ico
   target:
     - target: nsis
       arch: x64
