@@ -6,8 +6,14 @@ import tseslint from 'typescript-eslint';
 
 export default defineConfig(
   {
-    // Semgrep rule fixtures: deliberately insecure, never compiled.
-    ignores: ['out/**', 'dist/**', 'node_modules/**', 'security/semgrep/**'],
+    ignores: [
+      'out/**',
+      'dist/**',
+      'node_modules/**',
+      // Semgrep rule fixtures: deliberately insecure, never compiled.
+      'security/semgrep/**',
+      'test-results/**',
+    ],
   },
   js.configs.recommended,
   tseslint.configs.recommended,
@@ -18,6 +24,7 @@ export default defineConfig(
       'src/engine/**',
       'src/shared/**',
       'scripts/**',
+      'e2e/**',
       '*.config.*',
     ],
     languageOptions: { globals: globals.node },

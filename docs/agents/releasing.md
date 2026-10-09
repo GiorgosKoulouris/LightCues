@@ -43,7 +43,7 @@ If the GitHub Release was already published, delete it on GitHub before re-taggi
 
 ## Untagged code on `main`
 
-Every push to `main` also runs CI: check, package, and an installer artifact kept 7 days. If HEAD has no `v*` tag and files outside `docs/`, `.scratch/`, `.github/` and `*.md` changed since the last tag, the run shows a warning. It does not fail: the tag usually lands a few minutes after the merge. A warning that stays means a release was forgotten.
+Every push to `main` also runs CI: check, e2e, package, and an installer artifact kept 7 days. If HEAD has no `v*` tag and files outside `docs/`, `.scratch/`, `.github/` and `*.md` changed since the last tag, the run shows a warning. It does not fail: the tag usually lands a few minutes after the merge. A warning that stays means a release was forgotten.
 
 Until the first `v*` tag exists, every push to `main` warns, docs-only ones too.
 

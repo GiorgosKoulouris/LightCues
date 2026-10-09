@@ -13,6 +13,7 @@ The app targets Windows. Engine and logic work can also run in the [devcontainer
 | `security:scan`, `security:test-rules` | ✓ | |
 | `package` (Windows installer) | | ✓ |
 | `dev`, `start` (runs the Electron app) | | ✓ |
+| `e2e` (launches the built app) | | ✓ |
 | DMX Outputs, rtpMIDI | | ✓ |
 
 The container and the host each need their own `npm install`. In the container, `node_modules` is a separate Docker volume.
@@ -49,6 +50,7 @@ npm test
 | `npm run icon` | Regenerate `build/icon.ico` from `build/icon.svg`. |
 | `npm test` | Run the test suite (Vitest). |
 | `npm run test:watch` | Run Vitest in watch mode. |
+| `npm run e2e` | Build, then launch the app and run the end-to-end tests in [e2e/](../e2e/) (Playwright). Opens the example, fires a Scene and checks the Virtual Output's frame in the channel monitor. Not part of `check`. Windows host only. |
 | `npm run typecheck` | Typecheck engine, Electron side and renderer separately. |
 | `npm run lint` | ESLint. Also blocks Electron/UI imports in `src/engine` and `src/shared`. |
 | `npm run format` | Format with Prettier. |
@@ -63,7 +65,7 @@ GitHub Actions on `windows-latest` ([.github/workflows/](../.github/workflows/))
 
 | Event | What runs |
 | --- | --- |
-| Push to `stage` | Semver check on the `package.json` version, `npm run check`, `npm run package`. The installer is uploaded as a workflow artifact, kept 7 days. |
+| Push to `stage` | Semver check on the `package.json` version, `npm run check`, `npm run e2e`, `npm run package`. The installer is uploaded as a workflow artifact, kept 7 days. |
 | Push to `main` | Same as `stage`. Also warns when code changed since the last `v*` tag and HEAD is untagged. |
 | Push of tag `vX.Y.Z` | Fails unless the tag equals `v` + the `package.json` version and is on `main`. Then `npm run check`, `npm run package`, and a GitHub Release with the installer, its blockmap and `latest.yml` ([release.yml](../.github/workflows/release.yml)). |
 | Pull request to `main` | `npm run check` |
