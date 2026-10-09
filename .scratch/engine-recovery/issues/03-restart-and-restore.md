@@ -1,6 +1,6 @@
 # Restart the engine and restore its state
 
-Status: ready-for-human
+Status: resolved
 
 Blocked by: 02
 
@@ -54,3 +54,7 @@ Left for a human:
 4. A crash in the frame loop after a successful restore repeats until the engine is down. Restore only falls back on a synchronous throw. Main could send the Base Look restore on the next attempt instead.
 
 Then mark this issue resolved.
+
+### 2026-10-09: resolved
+
+Checked by the maintainer on Windows: ending the engine process restarts it and restores the look. The open decisions (2–4 above) are accepted as implemented.
