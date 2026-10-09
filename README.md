@@ -114,7 +114,7 @@ LightCues writes one log file per day to `%APPDATA%\LightCues\logs\`, named `lig
 
 ## Contributing
 
-Bug reports and Fixture requests welcome as GitHub Issues. Pull requests by arrangement: open an issue first.
+Bug reports and Fixture requests welcome as [GitHub Issues](https://github.com/GiorgosKoulouris/LightCues/issues/new/choose). Pull requests by arrangement: open an issue first. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

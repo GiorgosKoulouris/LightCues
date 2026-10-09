@@ -17,3 +17,7 @@ See spec, "User feedback". The files are agent work. Turning on Issues is yours.
 
 - New issue on GitHub offers the two templates and the security link, no blank issue.
 - `npm run format:check` passes.
+
+## Comments
+
+2026-10-09: agent part done: the three templates, `CONTRIBUTING.md`, the README link, and the GitHub Issues section in `docs/agents/issue-tracker.md`. No changelog line: nothing changes in the app. The security contact link points at the Security tab; it shows the policy once `repo-hygiene/02` lands. Left for the maintainer: enable Issues, create the five labels, check the new-issue page after the batch reaches `main` (templates only show from the default branch).

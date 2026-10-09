@@ -1,0 +1,53 @@
+name: Fixture / Profile request
+description: A Fixture does not import or does not work right.
+labels: [needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One Fixture per issue, please.
+  - type: input
+    id: manufacturer
+    attributes:
+      label: Manufacturer
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Model
+    validations:
+      required: true
+  - type: input
+    id: mode
+    attributes:
+      label: Mode
+      description: The DMX mode and its channel count.
+      placeholder: 8-channel
+    validations:
+      required: true
+  - type: input
+    id: link
+    attributes:
+      label: Link
+      description: The Fixture on Open Fixture Library or GDTF Share, or its manual.
+    validations:
+      required: true
+  - type: dropdown
+    id: problem
+    attributes:
+      label: What fails
+      options:
+        - Import error
+        - Wrong channels
+        - Missing feature
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: The error message, which channels are wrong, or what is missing.
+    validations:
+      required: false

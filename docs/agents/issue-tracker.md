@@ -10,6 +10,16 @@ Issues and specs for this repo live as markdown files in `.scratch/`.
 - Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings)
 - Comments and conversation history append to the bottom of the file under a `## Comments` heading
 
+## GitHub Issues
+
+Users report bugs and Fixture requests as GitHub Issues, through the templates in `.github/ISSUE_TEMPLATE/`. New ones get `needs-triage`. GitHub Issues are user feedback, not the work tracker.
+
+When a GitHub Issue turns into work:
+
+1. Create the `.scratch/` issue as usual. Under its `Status:` line, add `GitHub: #NN` with the full URL.
+2. Comment on the GitHub Issue with the `.scratch/` path, and swap `needs-triage` for the triage label that matches.
+3. Close the GitHub Issue when the fix is released, with the version.
+
 ## When a skill says "publish to the issue tracker"
 
 Create a new file under `.scratch/<feature-slug>/` (creating the directory if needed).

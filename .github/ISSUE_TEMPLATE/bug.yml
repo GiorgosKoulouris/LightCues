@@ -1,0 +1,81 @@
+name: Bug report
+description: Something in LightCues does not work as it should.
+labels: [needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please fill in what you can. For a security vulnerability, do not open an issue: use the Security tab instead.
+  - type: input
+    id: version
+    attributes:
+      label: LightCues version
+      description: Shown in the update check, or in Windows → Apps → Installed apps.
+      placeholder: 0.1.1
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 23H2
+    validations:
+      required: true
+  - type: input
+    id: dmx
+    attributes:
+      label: DMX interface
+      description: Enttec DMX USB Pro, DMXking ultraDMX, or the Virtual Output.
+    validations:
+      required: false
+  - type: input
+    id: midi
+    attributes:
+      label: MIDI setup
+      description: rtpMIDI, loopMIDI or a MIDI controller, and the DAW if any. "None" if you do not use MIDI.
+    validations:
+      required: false
+  - type: textarea
+    id: fixtures
+    attributes:
+      label: Fixtures involved
+      description: Manufacturer, model and mode of the Fixtures the problem concerns, if any.
+    validations:
+      required: false
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the Venue Patch ...
+        2. ...
+    validations:
+      required: false
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: If your version has "Copy diagnostics", click it and paste the text here.
+      render: text
+    validations:
+      required: false
+  - type: textarea
+    id: log
+    attributes:
+      label: Log excerpt
+      description: 'Optional. From `%APPDATA%\LightCues\logs\lightcues-YYYY-MM-DD.log` on the day of the problem. Logs hold file paths but no Show or Venue Patch contents.'
+      render: text
+    validations:
+      required: false
