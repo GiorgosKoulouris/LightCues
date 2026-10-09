@@ -65,9 +65,9 @@ GitHub Actions on `windows-latest` ([.github/workflows/](../.github/workflows/))
 
 | Event | What runs |
 | --- | --- |
-| Push to `stage` | Semver check on the `package.json` version, `npm run check`, `npm run e2e`, `npm run package`. The installer is uploaded as a workflow artifact, kept 7 days. |
+| Push to `stage` | Semver check on the `package.json` version, a warning when it has no [CHANGELOG.md](../CHANGELOG.md) section, `npm run check`, `npm run e2e`, `npm run package`. The installer is uploaded as a workflow artifact, kept 7 days. |
 | Push to `main` | Same as `stage`. Also warns when code changed since the last `v*` tag and HEAD is untagged. |
-| Push of tag `vX.Y.Z` | Fails unless the tag equals `v` + the `package.json` version and is on `main`. Then `npm run check`, `npm run package`, and a GitHub Release with the installer, its blockmap and `latest.yml` ([release.yml](../.github/workflows/release.yml)). |
+| Push of tag `vX.Y.Z` | Fails unless the tag equals `v` + the `package.json` version and is on `main`. Also fails when the version has no [CHANGELOG.md](../CHANGELOG.md) section. Then `npm run check`, `npm run package`, and a GitHub Release with the installer, its blockmap and `latest.yml`, and the changelog section as its body ([release.yml](../.github/workflows/release.yml)). |
 | Pull request to `main` | `npm run check` |
 | Push to `dev` | Nothing |
 
@@ -101,6 +101,7 @@ Electron app with three processes ([ADR 0002](adr/0002-electron-with-separate-en
 Pull requests by arrangement: open an issue first.
 
 - Work on the `dev` branch: `git switch dev`. `dev` reaches `main` squashed, through `stage`. See [agents/staging.md](agents/staging.md).
+- A user-facing change adds a line under `## [Unreleased]` in [CHANGELOG.md](../CHANGELOG.md).
 - Run `npm run check` before merging. CI runs it again on `stage` and on pull requests to `main`.
 - Issues and specs are markdown files under `.scratch/<feature>/`. See [agents/issue-tracker.md](agents/issue-tracker.md).
 - Use the domain terms from [CONTEXT.md](../CONTEXT.md) in code, UI and docs.

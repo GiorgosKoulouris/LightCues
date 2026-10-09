@@ -1,10 +1,10 @@
 # CI for `stage`, `main` and PRs. See docs/agents/staging.md and
 # docs/agents/releasing.md.
 # - Push to `stage`: check, e2e, package, upload the installer for an install
-#   test.
+#   test, warn when the version has no CHANGELOG.md section.
 # - PR to `main`: check only.
 # - Push to `main`: check, e2e, package, upload the installer, warn on
-#   untagged code.
+#   untagged code and a missing CHANGELOG.md section.
 # - Push to `dev`: nothing.
 # Tags are released by release.yml.
 name: CI
@@ -53,6 +53,17 @@ jobs:
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # A warning, not a failure: `stage` can hold a batch that is not a
+      # release. release.yml fails on a missing section.
+      - name: Check changelog section
+        if: github.event_name == 'push'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if ! node scripts/changelog-section.mjs "$VERSION" > /dev/null; then
+            echo "::warning file=CHANGELOG.md::No changelog section for $VERSION yet. Add one before tagging v$VERSION."
+          fi
 
       # Code on `main` that no `v*` tag covers yet. A warning, not a failure:
       # the tag is pushed by hand a few minutes after the merge.

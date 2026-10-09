@@ -2,7 +2,7 @@
 # and docs/adr/0006-tag-driven-releases.md.
 # The tag must equal `v` + the package.json version and point to a commit on
 # `main`. The installer is built from the tagged commit, never reused from a
-# `main` run.
+# `main` run. The release body is the version's CHANGELOG.md section.
 name: Release
 
 on:
@@ -53,6 +53,17 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      # The release body is the version's CHANGELOG.md section. Missing or
+      # empty fails before anything is built.
+      - name: Check release notes
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          if ! node scripts/changelog-section.mjs "$VERSION" > "$RUNNER_TEMP/notes.md"; then
+            echo "::error file=CHANGELOG.md::No release notes for $VERSION. Add a '## [$VERSION]' section."
+            exit 1
+          fi
+
       - run: npm ci
 
       - run: npm run check
@@ -72,7 +83,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             --verify-tag \
             --title "LightCues $VERSION" \
-            --generate-notes \
+            --notes-file "$RUNNER_TEMP/notes.md" \
             "${prerelease[@]}" \
             "dist/LightCues-Setup-$VERSION.exe" \
             "dist/LightCues-Setup-$VERSION.exe.blockmap" \
