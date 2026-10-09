@@ -21,3 +21,7 @@ The installer bundles React, serialport, @julusian/midi, fflate, fast-xml-parser
 - Tests for the script with `scripts/security-scan/testdata`-style fixtures: a package's license text is included, a package with no license file fails, a disallowed license fails.
 - After `npm run package` on Windows: `resources/THIRD_PARTY_NOTICES.txt` is in the install folder and lists `react`, `serialport` and `fast-xml-parser`.
 - `npm run check` passes.
+
+## Comments
+
+2026-10-09 (from `try-without-hardware/03`): the example Venue Patch embeds Profiles imported from Open Fixture Library fixture data (MIT, Copyright (c) 2017 Florian & Felix Edelmann). Credit it in `THIRD_PARTY_NOTICES.txt` too. `examples/README.md` has the license text.

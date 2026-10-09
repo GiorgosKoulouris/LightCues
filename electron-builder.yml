@@ -17,6 +17,10 @@ asarUnpack:
 extraResources:
   - from: LICENSE
     to: LICENSE.txt
+  # The example Venue Patch and Show, with the README that credits their
+  # fixture data. Main opens them from resources/examples.
+  - from: examples
+    to: examples
 # Use the N-API prebuilds as shipped. A rebuild would need Windows build tools.
 npmRebuild: false
 win:

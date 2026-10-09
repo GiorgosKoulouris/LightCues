@@ -78,7 +78,8 @@ export function createShowSession({
     return known === undefined ? {} : { folder: known };
   }
 
-  function open(from: string): string[] {
+  // `asNew` keeps no file, so Save asks where and the file is not reopened.
+  function open(from: string, asNew = false): string[] {
     if (!files) return ['Show files are not available'];
     if (!granted(from)) return [`Could not open ${from}: ${NOT_CHOSEN}`];
     try {
@@ -86,7 +87,7 @@ export function createShowSession({
     } catch (error) {
       return [`Could not open ${from}: ${(error as Error).message}`];
     }
-    path = from;
+    path = asNew ? undefined : from;
     recent?.set(path);
     emitShow();
     replaced?.();
@@ -181,7 +182,11 @@ export function createShowSession({
           replaced?.();
           break;
         case 'openShow':
-          emit({ type: 'showDone', requestId: command.requestId, errors: open(command.path) });
+          emit({
+            type: 'showDone',
+            requestId: command.requestId,
+            errors: open(command.path, command.asNew),
+          });
           break;
         case 'saveShow':
           emit({ type: 'showDone', requestId: command.requestId, errors: save(command.path) });

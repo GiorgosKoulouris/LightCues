@@ -31,6 +31,7 @@ import {
   ENGINE_RESTARTED_CHANNEL,
   LIBRARY_BACKUPS_FOLDER,
   MIDI_INPUT_ARG,
+  OPEN_EXAMPLE_CHANNEL,
   OPEN_RELEASE_PAGE_CHANNEL,
   RECENT_FILES_ARG,
   PROFILE_LIBRARY_ARG,
@@ -47,6 +48,7 @@ import {
   unsavedMessage,
   type DocumentKind,
   type EngineConnect,
+  type ExamplePaths,
   type EngineGrantPath,
   type EnginePathGranted,
   type UpdateAvailable,
@@ -275,6 +277,27 @@ function suggestedPath(folder: string | undefined, name: string | undefined): st
   return existing === undefined ? name : join(existing, name);
 }
 
+// The example Venue Patch and Show: in the install's resources folder
+// (electron-builder `extraResources`), or the repo's `examples/` in
+// development.
+function examplePaths(): ExamplePaths {
+  const folder = app.isPackaged
+    ? join(process.resourcesPath, 'examples')
+    : join(app.getAppPath(), 'examples');
+  return { venue: join(folder, 'demo.lcvenue'), show: join(folder, 'demo.lcshow') };
+}
+
+// Grants the engine both example files, like a dialog's choice (ADR 0010),
+// and gives the renderer their paths.
+function handleOpenExample(supervisor: Supervisor): void {
+  ipcMain.handle(OPEN_EXAMPLE_CHANNEL, async () => {
+    const paths = examplePaths();
+    await grantPath(supervisor, paths.venue);
+    await grantPath(supervisor, paths.show);
+    return paths;
+  });
+}
+
 // Reveals a library backup in Explorer. Only files in the backups folder, so
 // the renderer cannot reveal arbitrary paths.
 function handleShowLibraryBackup(): void {
@@ -458,6 +481,7 @@ void app.whenReady().then(() => {
     LIBRARY_OPEN_FILTERS,
   );
   handleShowLibraryBackup();
+  handleOpenExample(engine);
   const pageUrl = rendererUrl();
   restrictNavigation(pageUrl);
   window = createWindow(engine, pageUrl);

@@ -260,27 +260,11 @@ describe('importOflFixture', () => {
             ],
           },
         },
-        templateChannels: {
-          'Red $pixelKey': { capability: { type: 'ColorIntensity', color: 'Red' } },
-        },
         wheels: {
           'Gobo Wheel': { slots: [{ type: 'Open' }, { type: 'Gobo', name: 'Dots' }] },
         },
         modes: [
-          { name: 'Direct pixel', channels: ['Red 1'] },
           { name: 'Standard', channels: ['Gobo Wheel', 'Zoom', 'Strobe', 'Mode', 'Speed/Zoom'] },
-          {
-            name: 'Pixel',
-            channels: [
-              'Strobe',
-              {
-                insert: 'matrixChannels',
-                repeatFor: 'eachPixelABC',
-                channelOrder: 'perPixel',
-                templateChannels: ['Red $pixelKey'],
-              },
-            ],
-          },
         ],
       },
       'Generic',
@@ -302,17 +286,208 @@ describe('importOflFixture', () => {
         { from: 0, to: 255, capability: { type: 'unsupported', feature: 'Switching channel' } },
       ],
     });
-    expect(profile.modes.map((m) => m.name)).toEqual(['Direct pixel', 'Standard']);
     expect(unsupported).toEqual([
       { channel: 'Gobo Wheel', feature: 'WheelSlot between slots' },
       { channel: 'Gobo Wheel', feature: 'WheelSlot Gobo' },
       { channel: 'Zoom', feature: 'Zoom' },
       { channel: 'Strobe', feature: 'ShutterStrobe Pulse' },
       { channel: 'Mode', feature: 'Switching channels' },
-      { channel: 'Red 1', feature: 'Matrix channel' },
       { channel: 'Speed/Zoom', feature: 'Switching channel' },
-      { mode: 'Pixel', feature: 'Matrix channels (mode not imported)' },
     ]);
+  });
+
+  it('flattens a pixel bar into one channel per Cell, in pixel order', () => {
+    const { profile, unsupported } = importOflFixture(
+      {
+        name: 'Pixel Bar 3',
+        categories: ['Pixel Bar'],
+        meta,
+        matrix: { pixelCount: [3, 1, 1] },
+        availableChannels: { Dimmer: { capability: { type: 'Intensity' } } },
+        templateChannels: {
+          'Red $pixelKey': { capability: { type: 'ColorIntensity', color: 'Red' } },
+          'Green $pixelKey': { capability: { type: 'ColorIntensity', color: 'Green' } },
+        },
+        modes: [
+          {
+            name: 'Per pixel',
+            channels: [
+              'Dimmer',
+              {
+                insert: 'matrixChannels',
+                repeatFor: 'eachPixelXYZ',
+                channelOrder: 'perPixel',
+                templateChannels: ['Red $pixelKey', 'Green $pixelKey'],
+              },
+            ],
+          },
+          {
+            name: 'Per channel',
+            channels: [
+              {
+                insert: 'matrixChannels',
+                repeatFor: ['3', '1'],
+                channelOrder: 'perChannel',
+                templateChannels: ['Red $pixelKey', null, 'Green $pixelKey'],
+              },
+            ],
+          },
+        ],
+      },
+      'Generic',
+    );
+
+    expect(profile.defaultRole).toBe('Pixel/Bar');
+    expect(channelNames(profile.modes[0]!.channels)).toEqual([
+      'Dimmer',
+      'Red 1',
+      'Green 1',
+      'Red 2',
+      'Green 2',
+      'Red 3',
+      'Green 3',
+    ]);
+    expect(profile.modes[0]!.channels[3]).toEqual(emitterChannel('Red 2', 'red', 0));
+    expect(channelNames(profile.modes[1]!.channels)).toEqual([
+      'Red 3',
+      'Red 1',
+      '-',
+      '-',
+      'Green 3',
+      'Green 1',
+    ]);
+    expect(unsupported).toEqual([]);
+  });
+
+  it('resolves named pixels and pixel groups used directly in a mode', () => {
+    const { profile, unsupported } = importOflFixture(
+      {
+        name: 'Blinder 2',
+        categories: ['Blinder'],
+        meta,
+        matrix: { pixelKeys: [[['L', 'R']]], pixelGroups: { Master: 'all' } },
+        templateChannels: {
+          'Dimmer $pixelKey': {
+            fineChannelAliases: ['Dimmer $pixelKey fine'],
+            capability: { type: 'Intensity' },
+          },
+        },
+        modes: [
+          { name: '2ch', channels: ['Dimmer L', 'Dimmer R'] },
+          { name: 'Master 16-bit', channels: ['Dimmer Master', 'Dimmer Master fine'] },
+          {
+            name: 'Groups',
+            channels: [
+              {
+                insert: 'matrixChannels',
+                repeatFor: 'eachPixelGroup',
+                channelOrder: 'perPixel',
+                templateChannels: ['Dimmer $pixelKey'],
+              },
+            ],
+          },
+        ],
+      },
+      'Generic',
+    );
+
+    expect(profile.modes[0]!.channels).toEqual([
+      {
+        kind: 'control',
+        name: 'Dimmer L',
+        defaultValue: 0,
+        ranges: [{ from: 0, to: 255, capability: { type: 'intensity' } }],
+      },
+      {
+        kind: 'control',
+        name: 'Dimmer R',
+        defaultValue: 0,
+        ranges: [{ from: 0, to: 255, capability: { type: 'intensity' } }],
+      },
+    ]);
+    expect(profile.modes[1]!.channels[1]).toEqual({
+      kind: 'fine',
+      name: 'Dimmer Master fine',
+      of: 'Dimmer Master',
+      byte: 1,
+      defaultValue: 0,
+    });
+    expect(channelNames(profile.modes[2]!.channels)).toEqual(['Dimmer Master']);
+    expect(unsupported).toEqual([]);
+  });
+
+  it('orders a 2D matrix by the axes repeatFor names', () => {
+    const { profile } = importOflFixture(
+      {
+        name: 'Matrix 2x2',
+        categories: ['Matrix'],
+        meta,
+        matrix: { pixelCount: [2, 2, 1] },
+        templateChannels: {
+          'Red $pixelKey': { capability: { type: 'ColorIntensity', color: 'Red' } },
+        },
+        modes: [
+          {
+            name: 'Columns first',
+            channels: [
+              {
+                insert: 'matrixChannels',
+                repeatFor: 'eachPixelYXZ',
+                channelOrder: 'perPixel',
+                templateChannels: ['Red $pixelKey'],
+              },
+            ],
+          },
+        ],
+      },
+      'Generic',
+    );
+
+    expect(channelNames(profile.modes[0]!.channels)).toEqual([
+      'Red (1, 1)',
+      'Red (1, 2)',
+      'Red (2, 1)',
+      'Red (2, 2)',
+    ]);
+  });
+
+  it('lets an available channel override a resolved template channel', () => {
+    const { profile } = importOflFixture(
+      {
+        name: 'Override Bar',
+        categories: ['Pixel Bar'],
+        meta,
+        matrix: { pixelCount: [2, 1, 1] },
+        availableChannels: { 'Red 2': { capability: { type: 'Intensity' } } },
+        templateChannels: {
+          'Red $pixelKey': { capability: { type: 'ColorIntensity', color: 'Red' } },
+        },
+        modes: [{ name: '2ch', channels: ['Red 1', 'Red 2'] }],
+      },
+      'Generic',
+    );
+
+    expect(profile.modes[0]!.channels[0]).toEqual(emitterChannel('Red 1', 'red', 0));
+    expect(profile.modes[0]!.channels[1]).toMatchObject({
+      name: 'Red 2',
+      ranges: [{ capability: { type: 'intensity' } }],
+    });
+  });
+
+  it('keeps the slot of a channel key the fixture does not define', () => {
+    const { profile, unsupported } = importOflFixture(
+      {
+        name: 'Typo Par',
+        categories: ['Color Changer'],
+        meta,
+        availableChannels: { Dimmer: { capability: { type: 'Intensity' } } },
+        modes: [{ name: '2ch', channels: ['Dimmer', 'Dimer'] }],
+      },
+      'Generic',
+    );
+
+    expect(profile.modes[0]!.channels).toHaveLength(2);
+    expect(unsupported).toEqual([{ channel: 'Dimer', feature: 'Unknown channel' }]);
   });
 
   it('rejects JSON that is not an OFL fixture', () => {
@@ -435,6 +610,11 @@ describe('importOflFixture', () => {
     expect(profile.defaultRole).toBe(role);
   });
 });
+
+// Channel names, '-' for an unused slot.
+function channelNames(channels: Channel[]): string[] {
+  return channels.map((c) => (c.kind === 'unused' ? '-' : c.name));
+}
 
 function emitterChannel(name: string, emitter: Emitter, defaultValue: number): Channel {
   return {

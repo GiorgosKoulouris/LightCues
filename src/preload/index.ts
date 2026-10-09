@@ -11,6 +11,7 @@ import {
   ENGINE_IS_DOWN_CHANNEL,
   ENGINE_PORT_CHANNEL,
   ENGINE_RESTARTED_CHANNEL,
+  OPEN_EXAMPLE_CHANNEL,
   OPEN_RELEASE_PAGE_CHANNEL,
   SAVE_BEFORE_CLOSE_CHANNEL,
   SAVE_FROM_SNAPSHOT_CHANNEL,
@@ -93,6 +94,7 @@ const dialogs: DialogBridge = {
   chooseLibraryToSave: (name, folder) =>
     ipcRenderer.invoke(CHOOSE_LIBRARY_TO_SAVE_CHANNEL, undefined, folder, name),
   showLibraryBackup: (path) => ipcRenderer.send(SHOW_LIBRARY_BACKUP_CHANNEL, path),
+  openExample: () => ipcRenderer.invoke(OPEN_EXAMPLE_CHANNEL),
 };
 
 contextBridge.exposeInMainWorld('dialogs', dialogs);

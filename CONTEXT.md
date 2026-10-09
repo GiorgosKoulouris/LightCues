@@ -15,7 +15,7 @@ The manufacturer/model definition of a fixture type: its modes, channels and cap
 _Avoid_: Fixture definition, personality
 
 **Cell**:
-One repeated section of a multi-cell Fixture (a pixel, a wash section). A Fixture Profile has no cell model: each Cell's channels are flattened into the mode, named e.g. "Red (Cell 2)". Not a Zone.
+One repeated section of a multi-cell Fixture (a pixel, a wash section). A Fixture Profile has no cell model: each Cell's channels are flattened into the mode, named e.g. "Red (Cell 2)" from GDTF or "Red 2" from Open Fixture Library. Not a Zone.
 _Avoid_: Pixel, segment
 
 **Profile Library**:

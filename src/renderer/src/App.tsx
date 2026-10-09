@@ -6,8 +6,10 @@ import { PerformView } from './perform/PerformView';
 import { ProfileLibraryView } from './profiles/ProfileLibraryView';
 import styles from './App.module.css';
 import { EngineRecovery } from './shell/EngineRecovery';
+import { ExampleHint } from './shell/ExampleHint';
 import { Sidebar } from './shell/Sidebar';
 import { TopBar } from './shell/TopBar';
+import { nothingOpen, useOpenExample } from './shell/useOpenExample';
 import { useReopenErrors } from './shell/useReopenErrors';
 import { useViewShortcuts } from './shell/useShortcuts';
 import type { View } from './shell/views';
@@ -21,16 +23,23 @@ import { VenuePatchView } from './venue/VenuePatchView';
 
 // The shell: sidebar, top bar, the current view and the Fallback Panel strip,
 // which the Perform view replaces. Blackout frames the window red, Blind amber.
+// While nothing is open, a hint offers the example, except in Perform.
 export function App() {
   const [view, setView] = useState<View>('venue');
-  const show = useShow().show;
-  const venue = useVenuePatch().venue;
+  const showDocument = useShow();
+  const venueDocument = useVenuePatch();
+  const show = showDocument.show;
+  const venue = venueDocument.venue;
   const playback = usePlayback();
   const midiInput = useMidiInput();
   const tempo = useTempo();
   useViewShortcuts(setView);
   useReopenErrors();
   usePanelKeys(show?.show, playback);
+  const openExample = useOpenExample(
+    { state: show, openAsNew: showDocument.openAsNew },
+    { state: venue, openAsNew: venueDocument.openAsNew },
+  );
 
   return (
     <div
@@ -40,9 +49,14 @@ export function App() {
         playback?.mode === 'blind' && styles.blind,
       )}
     >
-      <Sidebar view={view} onView={setView} />
+      <Sidebar view={view} onView={setView} onOpenExample={() => void openExample()} />
       <div className={styles.main}>
-        <TopBar show={show} venue={venue} playback={playback} midiInput={midiInput} />
+        <div>
+          <TopBar show={show} venue={venue} playback={playback} midiInput={midiInput} />
+          {view !== 'perform' && nothingOpen(show, venue) && (
+            <ExampleHint onOpen={() => void openExample()} />
+          )}
+        </div>
         {/* All stay mounted, so the Show and Venue Patch still guard the window close. */}
         <main className={styles.content}>
           <div hidden={view !== 'show'}>

@@ -52,12 +52,32 @@ interface OflWheelSlot {
   colors?: string[];
 }
 
+// An OFL matrix, whose pixels are our Cells: either a pixel count per axis
+// or named pixels laid out z[y[x]], null for a hole. Pixel groups are only
+// read for their keys.
+interface OflMatrix {
+  pixelCount?: [number, number, number];
+  pixelKeys?: (string | null)[][][];
+  pixelGroups?: Record<string, unknown>;
+}
+
+// Repeats template channels for each pixel or pixel group of the matrix.
+interface OflMatrixInsert {
+  insert: 'matrixChannels';
+  repeatFor: string | string[];
+  channelOrder: 'perPixel' | 'perChannel';
+  templateChannels: (string | null)[];
+}
+
 interface OflFixture {
   name: string;
   categories: string[];
   availableChannels?: Record<string, OflChannel>;
+  // Channels whose keys, aliases and names contain `$pixelKey`.
+  templateChannels?: Record<string, OflChannel>;
+  matrix?: OflMatrix;
   wheels?: Record<string, { slots: OflWheelSlot[] }>;
-  modes: { name: string; channels: unknown[] }[];
+  modes: { name: string; channels: (string | null | OflMatrixInsert)[] }[];
 }
 
 // Imports one OFL fixture JSON. OFL files do not name their manufacturer (it
@@ -66,8 +86,10 @@ export function importOflFixture(json: unknown, manufacturer: string): FixtureIm
   if (!isOflFixture(json)) throw new Error('Not an Open Fixture Library fixture');
   const fixture = json;
   const report = createImportReport();
+  const matrix = fixture.matrix && matrixKeys(fixture.matrix);
+  const available = { ...resolvedTemplates(fixture, matrix), ...fixture.availableChannels };
   const channels = new Map<string, Channel>();
-  for (const [key, channel] of Object.entries(fixture.availableChannels ?? {})) {
+  for (const [key, channel] of Object.entries(available)) {
     for (const [modeKey, imported] of importChannel(key, channel, fixture, report)) {
       channels.set(modeKey, imported);
     }
@@ -75,16 +97,17 @@ export function importOflFixture(json: unknown, manufacturer: string): FixtureIm
 
   const modes: FixtureMode[] = [];
   for (const mode of fixture.modes) {
-    if (mode.channels.some((key) => key !== null && typeof key === 'object')) {
+    const keys = modeChannelKeys(mode.channels, matrix);
+    if (!keys) {
       report.add({ mode: mode.name, feature: 'Matrix channels (mode not imported)' });
       continue;
     }
     modes.push({
       name: mode.name,
-      channels: mode.channels.map((key) =>
+      channels: keys.map((key) =>
         key === null
           ? { kind: 'unused' }
-          : (channels.get(key as string) ?? unresolvedChannel(key as string, fixture, report)),
+          : (channels.get(key) ?? unresolvedChannel(key, available, report)),
       ),
     });
   }
@@ -109,13 +132,140 @@ function isOflFixture(json: unknown): json is OflFixture {
   );
 }
 
+// The pixel keys of a matrix, alphanumerically sorted, with their 1-based
+// x/y/z positions, and its pixel group keys in file order.
+interface MatrixKeys {
+  pixels: { key: string; position: [number, number, number] }[];
+  groups: string[];
+}
+
+function matrixKeys({ pixelCount, pixelKeys, pixelGroups }: OflMatrix): MatrixKeys {
+  const pixels: MatrixKeys['pixels'] = [];
+  if (pixelKeys) {
+    pixelKeys.forEach((ys, z) =>
+      ys.forEach((xs, y) =>
+        xs.forEach((key, x) => {
+          if (key !== null) pixels.push({ key, position: [x + 1, y + 1, z + 1] });
+        }),
+      ),
+    );
+  } else if (pixelCount) {
+    const [xCount, yCount, zCount] = pixelCount;
+    const axes = pixelCount.flatMap((count, axis) => (count > 1 ? [axis] : []));
+    for (let z = 1; z <= zCount; z++) {
+      for (let y = 1; y <= yCount; y++) {
+        for (let x = 1; x <= xCount; x++) {
+          const position: [number, number, number] = [x, y, z];
+          pixels.push({ key: defaultPixelKey(position, axes), position });
+        }
+      }
+    }
+  }
+  pixels.sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }));
+  return { pixels, groups: Object.keys(pixelGroups ?? {}) };
+}
+
+// OFL's key for an unnamed pixel: its number along the one axis with more
+// than one pixel, otherwise its position on those axes, e.g. "(2, 1)".
+function defaultPixelKey(position: number[], axes: number[]): string {
+  if (axes.length <= 1) return String(Math.max(...position));
+  return `(${axes.map((axis) => position[axis]).join(', ')})`;
+}
+
+// Every template channel resolved for every pixel and pixel group, by
+// resolved key.
+function resolvedTemplates(
+  fixture: OflFixture,
+  matrix: MatrixKeys | undefined,
+): Record<string, OflChannel> {
+  if (!matrix) return {};
+  const keys = [...matrix.pixels.map((p) => p.key), ...matrix.groups];
+  return Object.fromEntries(
+    Object.entries(fixture.templateChannels ?? {}).flatMap(([template, channel]) =>
+      keys.map((pixelKey) => [
+        resolveTemplate(template, pixelKey),
+        withPixelKey(channel, pixelKey) as OflChannel,
+      ]),
+    ),
+  );
+}
+
+function resolveTemplate(template: string, pixelKey: string): string {
+  return template.replaceAll('$pixelKey', pixelKey);
+}
+
+// A copy of a template channel's JSON with `$pixelKey` resolved in every
+// string and object key.
+function withPixelKey(value: unknown, pixelKey: string): unknown {
+  if (typeof value === 'string') return resolveTemplate(value, pixelKey);
+  if (Array.isArray(value)) return value.map((item) => withPixelKey(item, pixelKey));
+  if (typeof value !== 'object' || value === null) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [
+      resolveTemplate(key, pixelKey),
+      withPixelKey(item, pixelKey),
+    ]),
+  );
+}
+
+// A mode's channel keys with matrix inserts expanded, null for an unused
+// slot. Undefined when an insert cannot be expanded.
+function modeChannelKeys(
+  entries: OflFixture['modes'][number]['channels'],
+  matrix: MatrixKeys | undefined,
+): (string | null)[] | undefined {
+  const keys: (string | null)[] = [];
+  for (const entry of entries) {
+    if (entry === null || typeof entry === 'string') {
+      keys.push(entry);
+      continue;
+    }
+    const pixels = matrix && entry.insert === 'matrixChannels' && repeatKeys(entry, matrix);
+    if (!pixels) return undefined;
+    const resolve = (template: string | null, pixelKey: string) =>
+      template === null ? null : resolveTemplate(template, pixelKey);
+    if (entry.channelOrder === 'perChannel') {
+      for (const template of entry.templateChannels) {
+        keys.push(...pixels.map((pixelKey) => resolve(template, pixelKey)));
+      }
+    } else {
+      for (const pixelKey of pixels) {
+        keys.push(...entry.templateChannels.map((template) => resolve(template, pixelKey)));
+      }
+    }
+  }
+  return keys;
+}
+
+// The pixel or pixel group keys an insert repeats for, in order.
+function repeatKeys({ repeatFor }: OflMatrixInsert, matrix: MatrixKeys): string[] | undefined {
+  if (Array.isArray(repeatFor)) return repeatFor;
+  if (repeatFor === 'eachPixelABC') return matrix.pixels.map((p) => p.key);
+  if (repeatFor === 'eachPixelGroup') return matrix.groups;
+  const order = /^eachPixel([XYZ])([XYZ])([XYZ])$/.exec(repeatFor);
+  if (!order) return undefined;
+  // The first named axis changes fastest.
+  const [first, second, third] = order.slice(1).map((axis) => 'XYZ'.indexOf(axis));
+  const at = (position: number[], axis = 0) => position[axis] ?? 0;
+  return matrix.pixels
+    .toSorted(
+      ({ position: a }, { position: b }) =>
+        at(a, third) - at(b, third) || at(a, second) - at(b, second) || at(a, first) - at(b, first),
+    )
+    .map((p) => p.key);
+}
+
 // A mode key that is neither a channel nor a fine alias: a switching channel
-// alias or a resolved matrix (pixel) channel. It keeps its DMX slot.
-function unresolvedChannel(key: string, fixture: OflFixture, report: ImportReport): Channel {
-  const switching = Object.values(fixture.availableChannels ?? {}).some((channel) =>
+// alias or a key the fixture does not define. It keeps its DMX slot.
+function unresolvedChannel(
+  key: string,
+  available: Record<string, OflChannel>,
+  report: ImportReport,
+): Channel {
+  const switching = Object.values(available).some((channel) =>
     channel.capabilities?.some((cap) => cap.switchChannels && key in cap.switchChannels),
   );
-  const feature = switching ? 'Switching channel' : 'Matrix channel';
+  const feature = switching ? 'Switching channel' : 'Unknown channel';
   report.add({ channel: key, feature });
   return {
     kind: 'control',

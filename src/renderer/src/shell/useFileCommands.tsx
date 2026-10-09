@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react';
-import type { DocumentKind } from '../../../shared/protocol';
+import { unsavedMessage, type DocumentKind } from '../../../shared/protocol';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 import type { FileCommands } from './useShortcuts';
@@ -35,7 +35,6 @@ export function useFileCommands({
   onReplaced,
 }: FileDocument) {
   const toast = useToast();
-  const confirm = useConfirm();
 
   const showErrors = useCallback(
     (errors: string[]) => {
@@ -74,14 +73,8 @@ export function useFileCommands({
     [kind, save, showErrors],
   );
 
-  const discardUnsaved = async (): Promise<boolean> =>
-    !unsaved ||
-    confirm({
-      title: 'Discard unsaved changes?',
-      message: `The ${name} has unsaved changes.`,
-      confirmLabel: 'Discard',
-      destructive: true,
-    });
+  const discard = useDiscardUnsaved();
+  const discardUnsaved = async (): Promise<boolean> => !unsaved || discard([kind]);
 
   const saveAndTell = async (as: boolean) => {
     if (await run(() => save({ as }))) toast({ tone: 'success', message: `${name} saved` });
@@ -105,6 +98,22 @@ export function useFileCommands({
         };
 
   return { run, fileCommands };
+}
+
+// Asks before unsaved changes to `documents` are discarded; resolves to true
+// when they may be.
+export function useDiscardUnsaved() {
+  const confirm = useConfirm();
+  return useCallback(
+    (documents: DocumentKind[]) =>
+      confirm({
+        title: 'Discard unsaved changes?',
+        message: unsavedMessage(documents),
+        confirmLabel: 'Discard',
+        destructive: true,
+      }),
+    [confirm],
+  );
 }
 
 function errorMessage(errors: string[]) {

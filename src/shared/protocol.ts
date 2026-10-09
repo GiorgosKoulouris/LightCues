@@ -38,10 +38,12 @@ export type EngineCommand =
   // Drops the pending import.
   | { type: 'cancelLibraryImport' }
   // The current Venue Patch. `path` is an .lcvenue file; `saveVenue` without
-  // one saves to the file the patch was opened from or last saved to.
+  // one saves to the file the patch was opened from or last saved to. Open
+  // `asNew` reads the file into a new patch with no file, as for an example:
+  // Save then asks where, and the file is not reopened on launch.
   | { type: 'getVenue' }
   | { type: 'newVenue' }
-  | { type: 'openVenue'; requestId: number; path: string }
+  | { type: 'openVenue'; requestId: number; path: string; asNew?: boolean }
   | { type: 'saveVenue'; requestId: number; path?: string }
   | { type: 'editVenue'; requestId: number; edit: VenueEdit }
   // Undo or redo the last edit; nothing when there is none. New and Open
@@ -52,7 +54,7 @@ export type EngineCommand =
   // The current Show, handled like the Venue Patch. `path` is an .lcshow file.
   | { type: 'getShow' }
   | { type: 'newShow' }
-  | { type: 'openShow'; requestId: number; path: string }
+  | { type: 'openShow'; requestId: number; path: string; asNew?: boolean }
   | { type: 'saveShow'; requestId: number; path?: string }
   | { type: 'editShow'; requestId: number; edit: ShowEdit }
   | { type: 'undoShow' }
@@ -363,6 +365,8 @@ export const CHOOSE_SHOW_TO_OPEN_CHANNEL = 'dialog:chooseShowToOpen';
 export const CHOOSE_SHOW_TO_SAVE_CHANNEL = 'dialog:chooseShowToSave';
 export const CHOOSE_LIBRARY_TO_OPEN_CHANNEL = 'dialog:chooseLibraryToOpen';
 export const CHOOSE_LIBRARY_TO_SAVE_CHANNEL = 'dialog:chooseLibraryToSave';
+// Asks main for the example files, granted like a dialog's choice.
+export const OPEN_EXAMPLE_CHANNEL = 'dialog:openExample';
 export const SHOW_LIBRARY_BACKUP_CHANNEL = 'shell:showLibraryBackup';
 // The folder beside the Profile Library file that holds its backups.
 export const LIBRARY_BACKUPS_FOLDER = 'backups';
@@ -381,6 +385,15 @@ export interface DialogBridge {
   // Reveals a Profile Library backup in Explorer. Main ignores any path
   // outside the backups folder.
   showLibraryBackup(path: string): void;
+  // Grants the engine the example files and resolves to their paths. Open
+  // them `asNew`: they are in the install folder, which an update replaces.
+  openExample(): Promise<ExamplePaths>;
+}
+
+// The example Venue Patch and Show that ship with the app.
+export interface ExamplePaths {
+  venue: string;
+  show: string;
 }
 
 // IPC channels for the update check, which main makes (ADR 0012). The

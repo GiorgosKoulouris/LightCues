@@ -36,6 +36,15 @@ export function useShow() {
     return showRequest((requestId) => window.engine.send({ type: 'openShow', requestId, path }));
   }, [show?.folder]);
 
+  // Opens a granted file as a new, unsaved Show, as for the example.
+  const openAsNew = useCallback(
+    (path: string) =>
+      showRequest((requestId) =>
+        window.engine.send({ type: 'openShow', requestId, path, asNew: true }),
+      ),
+    [],
+  );
+
   // Saves in place, or asks for a file when there is none or `as` is set.
   const save = useCallback(
     async ({ as = false } = {}): Promise<string[] | undefined> => {
@@ -52,7 +61,7 @@ export function useShow() {
     [show?.path, show?.folder],
   );
 
-  return { show, edit, newShow, undo, redo, open, save };
+  return { show, edit, newShow, undo, redo, open, openAsNew, save };
 }
 
 async function showRequest(send: (requestId: number) => void): Promise<string[]> {

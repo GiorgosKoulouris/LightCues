@@ -3,3 +3,5 @@ node_modules/
 package-lock.json
 .devcontainer/
 *.md
+# Open Fixture Library files, kept as downloaded.
+scripts/make-examples/ofl/

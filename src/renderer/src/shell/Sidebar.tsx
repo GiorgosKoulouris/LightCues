@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   CircleArrowUp,
   Clapperboard,
   LayoutGrid,
@@ -30,9 +31,17 @@ const CHECK_NOW_MESSAGES: Record<CheckNowState, string> = {
 };
 
 // Switches between the views. Each shows its Ctrl shortcut as a tooltip.
-// Below them, a newer release and how a check asked for ended, never in
-// Perform, then the startup setting and a button to check now.
-export function Sidebar({ view, onView }: { view: View; onView: (view: View) => void }) {
+// Below them, outside Perform: Open example, a newer release and how a check
+// asked for ended. Then the startup setting and a button to check now.
+export function Sidebar({
+  view,
+  onView,
+  onOpenExample,
+}: {
+  view: View;
+  onView: (view: View) => void;
+  onOpenExample: () => void;
+}) {
   const updates = useUpdates();
   return (
     <nav aria-label="Views" className={styles.sidebar}>
@@ -54,6 +63,11 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
         );
       })}
       <div className={styles.footer}>
+        {view !== 'perform' && (
+          <Button variant="ghost" icon={<BookOpen aria-hidden />} onClick={onOpenExample}>
+            Open example
+          </Button>
+        )}
         {updates.available && view !== 'perform' && (
           <div role="status" aria-label="Update available" className={styles.update}>
             <p>LightCues {updates.available.version} is available</p>

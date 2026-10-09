@@ -32,7 +32,7 @@ The Profile Library and the chosen MIDI Input are kept in `%APPDATA%\LightCues`.
 
 ## First Show
 
-<!-- Open the example Show and Venue Patch, to try LightCues without hardware: added with try-without-hardware issue 03. -->
+To try LightCues without a rig, click **Open example** at the bottom of the Sidebar. It opens a demo Venue Patch and Show: a small band stage on the Virtual Output, which needs no DMX interface. Go to **Perform** and click the Scene buttons, or play notes from C3 up on MIDI channel 1. The Preview and the channel monitor in the Venue Patch view show what is sent. The example opens unsaved: **Save** asks where to put your copy. See [examples/README.md](examples/README.md) for the rig and the Triggers.
 
 The Sidebar switches between four views: Show, Venue Patch, Profile Library and Perform (Ctrl+1 to Ctrl+4). Show and Venue Patch each have New, Open…, Save and Save As… buttons.
 

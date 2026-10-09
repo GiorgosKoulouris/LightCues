@@ -1,0 +1,425 @@
+{
+  "version": 4,
+  "layers": [
+    {
+      "id": "looks",
+      "name": "Looks"
+    },
+    {
+      "id": "movement",
+      "name": "Movement"
+    },
+    {
+      "id": "hits",
+      "name": "Hits"
+    }
+  ],
+  "scenes": [
+    {
+      "id": "intro",
+      "name": "Intro: blue wash",
+      "layer": "looks",
+      "tags": [
+        "look"
+      ],
+      "fadeIn": 2,
+      "rules": [
+        {
+          "target": {
+            "roles": [
+              "Wash"
+            ]
+          },
+          "intensity": 0.4,
+          "colour": {
+            "swatch": "Blue"
+          }
+        },
+        {
+          "target": {
+            "roles": [
+              "Pixel/Bar"
+            ]
+          },
+          "intensity": 0.3,
+          "colour": {
+            "swatch": "Cyan"
+          }
+        },
+        {
+          "target": {
+            "zones": [
+              {
+                "row": "Upstage",
+                "column": "Stage Right",
+                "level": "Overhead"
+              },
+              {
+                "row": "Upstage",
+                "column": "Stage Left",
+                "level": "Overhead"
+              }
+            ]
+          },
+          "intensity": 0.3,
+          "colour": {
+            "swatch": "Blue"
+          },
+          "direction": "Down"
+        }
+      ]
+    },
+    {
+      "id": "verse",
+      "name": "Verse: warm, amber centre",
+      "layer": "looks",
+      "tags": [
+        "look"
+      ],
+      "fadeIn": 1,
+      "rules": [
+        {
+          "target": {
+            "roles": [
+              "Wash"
+            ]
+          },
+          "intensity": 0.7,
+          "colour": {
+            "swatch": "Warm White"
+          }
+        },
+        {
+          "target": {
+            "zones": [
+              {
+                "row": "Front",
+                "column": "Centre",
+                "level": "Overhead"
+              }
+            ]
+          },
+          "intensity": 0.8,
+          "colour": {
+            "swatch": "Amber"
+          }
+        },
+        {
+          "target": {
+            "roles": [
+              "Pixel/Bar"
+            ]
+          },
+          "intensity": 0.4,
+          "colour": {
+            "swatch": "Amber"
+          }
+        },
+        {
+          "target": {
+            "zones": [
+              {
+                "row": "Upstage",
+                "column": "Stage Right",
+                "level": "Overhead"
+              },
+              {
+                "row": "Upstage",
+                "column": "Stage Left",
+                "level": "Overhead"
+              }
+            ]
+          },
+          "intensity": 0.5,
+          "colour": {
+            "swatch": "Lavender"
+          },
+          "direction": "Cross"
+        }
+      ]
+    },
+    {
+      "id": "chorus",
+      "name": "Chorus: full red",
+      "layer": "looks",
+      "tags": [
+        "look"
+      ],
+      "fadeIn": 0,
+      "rules": [
+        {
+          "target": {},
+          "intensity": 1,
+          "colour": {
+            "swatch": "Red"
+          }
+        },
+        {
+          "target": {
+            "roles": [
+              "Pixel/Bar"
+            ]
+          },
+          "colour": {
+            "swatch": "Magenta"
+          }
+        },
+        {
+          "target": {
+            "zones": [
+              {
+                "row": "Upstage",
+                "column": "Stage Right",
+                "level": "Overhead"
+              },
+              {
+                "row": "Upstage",
+                "column": "Stage Left",
+                "level": "Overhead"
+              }
+            ]
+          },
+          "colour": {
+            "swatch": "White"
+          },
+          "direction": "Audience"
+        },
+        {
+          "target": {
+            "roles": [
+              "Blinder",
+              "Strobe"
+            ]
+          },
+          "intensity": 0
+        }
+      ]
+    },
+    {
+      "id": "blinder-hit",
+      "name": "Blinder hit",
+      "layer": "hits",
+      "tags": [
+        "hit"
+      ],
+      "fadeIn": 0,
+      "rules": [
+        {
+          "target": {
+            "roles": [
+              "Blinder",
+              "Strobe"
+            ]
+          },
+          "intensity": 1,
+          "colour": {
+            "swatch": "White"
+          }
+        }
+      ]
+    },
+    {
+      "id": "circle",
+      "name": "Circle movement",
+      "layer": "movement",
+      "tags": [
+        "movement"
+      ],
+      "fadeIn": 0.5,
+      "rules": [
+        {
+          "target": {
+            "zones": [
+              {
+                "row": "Upstage",
+                "column": "Stage Right",
+                "level": "Overhead"
+              },
+              {
+                "row": "Upstage",
+                "column": "Stage Left",
+                "level": "Overhead"
+              }
+            ]
+          },
+          "direction": "Centre",
+          "effect": {
+            "shape": "Circle",
+            "size": 25,
+            "length": 4,
+            "spread": "In sync"
+          }
+        }
+      ]
+    },
+    {
+      "id": "wave",
+      "name": "L→R wave",
+      "layer": "movement",
+      "tags": [
+        "movement"
+      ],
+      "fadeIn": 0.5,
+      "rules": [
+        {
+          "target": {
+            "zones": [
+              {
+                "row": "Upstage",
+                "column": "Stage Right",
+                "level": "Overhead"
+              },
+              {
+                "row": "Upstage",
+                "column": "Stage Left",
+                "level": "Overhead"
+              }
+            ]
+          },
+          "direction": "Audience",
+          "effect": {
+            "shape": "Tilt sweep",
+            "size": 12,
+            "length": 2,
+            "spread": "Left→Right"
+          }
+        }
+      ]
+    },
+    {
+      "id": "base-look",
+      "name": "Base Look: warm white",
+      "layer": "looks",
+      "tags": [
+        "look"
+      ],
+      "fadeIn": 1,
+      "rules": [
+        {
+          "target": {},
+          "intensity": 0.6,
+          "colour": {
+            "swatch": "Warm White"
+          }
+        },
+        {
+          "target": {
+            "roles": [
+              "Blinder",
+              "Strobe"
+            ]
+          },
+          "intensity": 0
+        },
+        {
+          "target": {
+            "zones": [
+              {
+                "row": "Upstage",
+                "column": "Stage Right",
+                "level": "Overhead"
+              },
+              {
+                "row": "Upstage",
+                "column": "Stage Left",
+                "level": "Overhead"
+              }
+            ]
+          },
+          "direction": "Down"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "name": "Outro: slow fade to blue",
+      "layer": "looks",
+      "tags": [
+        "look"
+      ],
+      "fadeIn": 4,
+      "rules": [
+        {
+          "target": {},
+          "intensity": 0
+        },
+        {
+          "target": {
+            "roles": [
+              "Wash"
+            ]
+          },
+          "intensity": 0.2,
+          "colour": {
+            "swatch": "Blue"
+          }
+        }
+      ]
+    }
+  ],
+  "triggers": [
+    {
+      "channel": 1,
+      "note": 48,
+      "scene": "intro",
+      "mode": "go"
+    },
+    {
+      "channel": 1,
+      "note": 50,
+      "scene": "verse",
+      "mode": "go"
+    },
+    {
+      "channel": 1,
+      "note": 52,
+      "scene": "chorus",
+      "mode": "go"
+    },
+    {
+      "channel": 1,
+      "note": 53,
+      "scene": "blinder-hit",
+      "mode": "flash"
+    },
+    {
+      "channel": 1,
+      "note": 55,
+      "scene": "circle",
+      "mode": "go"
+    },
+    {
+      "channel": 1,
+      "note": 57,
+      "scene": "wave",
+      "mode": "go"
+    },
+    {
+      "channel": 1,
+      "note": 59,
+      "scene": "wave",
+      "mode": "release"
+    },
+    {
+      "channel": 1,
+      "note": 60,
+      "scene": "base-look",
+      "mode": "go"
+    },
+    {
+      "channel": 1,
+      "note": 62,
+      "scene": "outro",
+      "mode": "go"
+    }
+  ],
+  "baseLook": "base-look",
+  "panelScenes": [
+    "intro",
+    "verse",
+    "chorus",
+    "blinder-hit",
+    "circle",
+    "outro"
+  ]
+}

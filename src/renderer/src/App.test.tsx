@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
@@ -10,7 +10,7 @@ import type {
   UpdateAvailable,
   UpdatesBridge,
 } from '../../shared/protocol';
-import type { Show } from '../../shared/show';
+import { emptyShow, type Show } from '../../shared/show';
 import { emptyPatch } from '../../shared/venue-patch';
 import { App } from './App';
 import { installFakeEngine, type FakeEngine } from './test-engine';
@@ -68,6 +68,10 @@ function answer(command: EngineCommand): EngineEvent[] {
       return [{ type: 'profiles', entries: [] }];
     case 'listOutputs':
       return [{ type: 'outputs', outputs: [] }];
+    case 'openVenue':
+      return [{ type: 'venueDone', requestId: command.requestId, errors: [] }];
+    case 'openShow':
+      return [{ type: 'showDone', requestId: command.requestId, errors: [] }];
     default:
       return [];
   }
@@ -79,6 +83,11 @@ const dialogs = {
   chooseShowToSave: vi.fn(async () => undefined),
   chooseVenueToOpen: vi.fn(async () => undefined),
   chooseVenueToSave: vi.fn(async () => undefined),
+  openExample: vi.fn(async () => EXAMPLE),
+};
+const EXAMPLE = {
+  venue: 'C:/LightCues/examples/demo.lcvenue',
+  show: 'C:/LightCues/examples/demo.lcshow',
 };
 
 const RELEASE: UpdateAvailable = {
@@ -411,5 +420,38 @@ describe('App engine recovery', () => {
     await renderApp();
     await userEvent.click(await screen.findByRole('button', { name: 'Save Show as…' }));
     expect(await screen.findByText('Could not save the Show: EACCES')).toBeInTheDocument();
+  });
+});
+
+describe('App example', () => {
+  const opens = () => engine.sent.filter((c) => c.type === 'openVenue' || c.type === 'openShow');
+  const emptyState = { unsaved: false, canUndo: false, canRedo: false };
+
+  it('offers the example while nothing is open and opens both files as new', async () => {
+    await renderApp();
+    expect(screen.queryByText('New here?')).toBeNull();
+    engine.emit({ type: 'show', show: emptyShow(), ...emptyState });
+
+    const hint = screen.getByRole('complementary', { name: 'Example' });
+    await userEvent.click(within(hint).getByRole('button', { name: 'Open example' }));
+
+    expect(dialogs.openExample).toHaveBeenCalledTimes(1);
+    expect(opens()).toEqual([
+      { type: 'openVenue', requestId: expect.any(Number), path: EXAMPLE.venue, asNew: true },
+      { type: 'openShow', requestId: expect.any(Number), path: EXAMPLE.show, asNew: true },
+    ]);
+  });
+
+  it('asks before the example replaces unsaved changes', async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole('button', { name: 'Open example' }));
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('The Show has unsaved changes.');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(dialogs.openExample).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Open example' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(dialogs.openExample).toHaveBeenCalledTimes(1);
+    expect(opens()).toHaveLength(2);
   });
 });

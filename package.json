@@ -26,7 +26,8 @@
     "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
     "security:scan": "node scripts/security-scan.mjs",
     "security:test-rules": "semgrep --test --metrics=off security/semgrep",
-    "icon": "node scripts/make-icon.mjs"
+    "icon": "node scripts/make-icon.mjs",
+    "examples": "node scripts/make-examples.mjs"
   },
   "engines": {
     "node": ">=22.12.0"
