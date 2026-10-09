@@ -57,6 +57,16 @@ describe('Toast', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
+  it('keeps a toast with an action, then runs it and closes', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const onClick = vi.fn();
+    notify({ message: 'Imported 3 Profiles', action: { label: 'Show in folder', onClick } });
+    act(() => vi.advanceTimersByTime(60_000));
+    await userEvent.click(screen.getByRole('button', { name: 'Show in folder' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Imported 3 Profiles')).not.toBeInTheDocument();
+  });
+
   it('throws when used outside the provider', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(() => render(<Notify toast={{ message: 'x' }} />)).toThrow(/ToastProvider/);

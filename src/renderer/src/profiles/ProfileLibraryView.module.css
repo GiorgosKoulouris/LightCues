@@ -1,11 +1,44 @@
 .view {
   --profile-list-width: 300px;
+  --skipped-height: 200px;
 
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  height: 100%;
+}
+
+/* Library-wide buttons, at the end of the row like a tab row's actions. */
+.header {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+/* The Profiles an import will skip, in its confirm dialog. */
+.skipped {
+  max-height: var(--skipped-height);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  list-style: none;
+}
+
+.warning {
+  color: var(--warning);
+}
+
+.columns {
   display: grid;
+  flex: 1;
   grid-template-columns: var(--profile-list-width) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   gap: var(--space-4);
-  height: 100%;
+  min-height: 0;
 }
 
 .empty {

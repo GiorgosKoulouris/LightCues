@@ -4,6 +4,7 @@ import type { EngineCommand, EngineEvent, ShowEdit, VenueEdit } from '../shared/
 import type { Scene } from '../shared/show';
 import { fixtureZone, type PatchedFixture, type VenuePatch } from '../shared/venue-patch';
 import { createEngine } from './engine';
+import { readLibraryFile } from './profile-library';
 import { gdtfDimmer } from './gdtf-test-files';
 
 describe('engine', () => {
@@ -777,3 +778,239 @@ function importResult(events: EngineEvent[], requestId: number) {
   const reply = events.find((e) => e.type === 'fixtureImported' && e.requestId === requestId);
   return reply?.type === 'fixtureImported' ? reply.result : undefined;
 }
+
+describe('engine Profile Library export', () => {
+  // An engine whose library holds `dimmer`, hand-edited, over in-memory files.
+  function exportEngine(write?: (path: string, json: string) => void) {
+    const events: EngineEvent[] = [];
+    const files = new Map<string, string>();
+    const engine = createEngine({
+      emit: (e) => events.push(e),
+      libraryFiles: {
+        read: () => '',
+        write: write ?? ((path, json) => void files.set(path, json)),
+      },
+    });
+    engine.handle({ type: 'saveProfile', requestId: 1, profile: dimmer });
+    const exported = (path: string) => {
+      engine.handle({ type: 'exportLibrary', requestId: 2, path });
+      const reply = events.findLast((e) => e.type === 'libraryExported');
+      return reply?.type === 'libraryExported' && reply.requestId === 2 ? reply.errors : undefined;
+    };
+    return { engine, events, files, exported };
+  }
+
+  it('writes the whole library to the path, which reads back the same', () => {
+    const { files, exported } = exportEngine();
+
+    expect(exported('C:/backup/Profiles.lclibrary')).toEqual([]);
+
+    const read = readLibraryFile(files.get('C:/backup/Profiles.lclibrary')!);
+    expect(read).toEqual({
+      status: 'readable',
+      profiles: [dimmer],
+      handEdited: ['acme/dimmer'],
+      skipped: [],
+    });
+  });
+
+  it('reports a write error', () => {
+    const { exported } = exportEngine(() => {
+      throw new Error('Access denied');
+    });
+
+    expect(exported('C:/locked/Profiles.lclibrary')).toEqual([
+      'Could not export C:/locked/Profiles.lclibrary: Access denied',
+    ]);
+  });
+});
+
+describe('engine Profile Library import', () => {
+  const spot: FixtureProfile = { ...dimmer, id: 'acme/spot', model: 'Spot' };
+  const file = JSON.stringify({
+    version: 2,
+    profiles: [spot, { id: 'broken' }],
+    handEdited: ['acme/spot'],
+  });
+
+  // An engine whose library holds `dimmer`, hand-edited, over in-memory
+  // files, storage and backups. `failBackup` makes every backup throw.
+  function importEngine({ failBackup = false } = {}) {
+    const events: EngineEvent[] = [];
+    const files = new Map<string, string>([
+      ['C:/in/Profiles.lclibrary', file],
+      ['C:/in/empty.json', JSON.stringify({ version: 2, profiles: [] })],
+    ]);
+    const stored = { json: undefined as string | undefined };
+    const backups: string[] = [];
+    const engine = createEngine({
+      emit: (e) => events.push(e),
+      storage: {
+        read: () => stored.json,
+        write: (json) => void (stored.json = json),
+        setAside: () => {},
+      },
+      libraryFiles: {
+        read: (path) => {
+          const json = files.get(path);
+          if (json === undefined) throw new Error('File not found');
+          return json;
+        },
+        write: (path, json) => void files.set(path, json),
+      },
+      libraryBackups: {
+        save(json) {
+          if (failBackup) throw new Error('Disk full');
+          backups.push(json);
+          return `C:/data/backups/${backups.length}.json`;
+        },
+      },
+    });
+    engine.handle({ type: 'saveProfile', requestId: 1, profile: dimmer });
+    const send = (command: EngineCommand) => {
+      events.length = 0;
+      engine.handle(command);
+      return events;
+    };
+    const preview = (path: string, requestId = 2) => {
+      const reply = send({ type: 'previewLibraryImport', requestId, path }).find(
+        (e) => e.type === 'libraryImportPreview',
+      );
+      return reply?.type === 'libraryImportPreview' && reply.requestId === requestId
+        ? reply.preview
+        : undefined;
+    };
+    const confirm = (requestId = 3) => {
+      const reply = send({ type: 'confirmLibraryImport', requestId }).find(
+        (e) => e.type === 'libraryImported',
+      );
+      return reply?.type === 'libraryImported' && reply.requestId === requestId
+        ? reply.result
+        : undefined;
+    };
+    const profiles = () => {
+      engine.handle({ type: 'listProfiles' });
+      const reply = events.findLast((e) => e.type === 'profiles');
+      return reply?.type === 'profiles' ? reply.entries : undefined;
+    };
+    return { events, stored, backups, preview, confirm, profiles, send };
+  }
+
+  it('previews a readable file without changing anything', () => {
+    const { stored, backups, preview, profiles } = importEngine();
+    const before = stored.json;
+
+    expect(preview('C:/in/Profiles.lclibrary')).toEqual({
+      status: 'readable',
+      fileName: 'Profiles.lclibrary',
+      currentCount: 1,
+      keptCount: 1,
+      skipped: [{ index: 1, error: 'Not a Fixture Profile' }],
+    });
+    expect(stored.json).toBe(before);
+    expect(backups).toEqual([]);
+    expect(profiles()).toEqual([{ profile: dimmer, handEdited: true }]);
+  });
+
+  it('previews a rejected file, and confirming it changes nothing and makes no backup', () => {
+    const { stored, backups, preview, confirm, profiles } = importEngine();
+    const before = stored.json;
+
+    expect(preview('C:/in/empty.json')).toEqual({
+      status: 'rejected',
+      reason: 'The file has no valid Profiles',
+    });
+    expect(confirm()).toEqual({ status: 'failed', error: 'No import is pending' });
+    expect(stored.json).toBe(before);
+    expect(backups).toEqual([]);
+    expect(profiles()).toEqual([{ profile: dimmer, handEdited: true }]);
+  });
+
+  it('rejects a file that cannot be read', () => {
+    const { preview } = importEngine();
+
+    expect(preview('C:/in/missing.lclibrary')).toEqual({
+      status: 'rejected',
+      reason: 'Could not read C:/in/missing.lclibrary: File not found',
+    });
+  });
+
+  it('confirms by backing up, then replacing, saving and pushing the library', () => {
+    const { stored, backups, preview, confirm, events } = importEngine();
+    const before = stored.json!;
+    preview('C:/in/Profiles.lclibrary');
+
+    expect(confirm()).toEqual({
+      status: 'imported',
+      keptCount: 1,
+      backupPath: 'C:/data/backups/1.json',
+    });
+    expect(backups).toEqual([before]);
+    expect(readLibraryFile(stored.json!)).toMatchObject({ profiles: [spot] });
+    // Hand-edited flags follow the file.
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'profiles',
+        entries: [{ profile: spot, handEdited: true }],
+        folder: 'C:/in',
+      }),
+    );
+  });
+
+  it('backs up an empty library too', () => {
+    const { backups, preview, confirm, send } = importEngine();
+    send({ type: 'deleteProfile', id: 'acme/dimmer' });
+    preview('C:/in/Profiles.lclibrary');
+
+    expect(confirm()).toMatchObject({ status: 'imported' });
+    expect(readLibraryFile(backups[0]!)).toEqual({
+      status: 'rejected',
+      reason: 'The file has no valid Profiles',
+    });
+  });
+
+  it('applies a pending import only once', () => {
+    const { backups, preview, confirm } = importEngine();
+    preview('C:/in/Profiles.lclibrary');
+    confirm();
+
+    expect(confirm(4)).toEqual({ status: 'failed', error: 'No import is pending' });
+    expect(backups).toHaveLength(1);
+  });
+
+  it('does nothing on confirm with no pending import, or after a cancel', () => {
+    const { stored, backups, preview, confirm, send, profiles } = importEngine();
+    const before = stored.json;
+
+    expect(confirm()).toEqual({ status: 'failed', error: 'No import is pending' });
+    preview('C:/in/Profiles.lclibrary');
+    send({ type: 'cancelLibraryImport' });
+    expect(confirm(4)).toEqual({ status: 'failed', error: 'No import is pending' });
+
+    expect(stored.json).toBe(before);
+    expect(backups).toEqual([]);
+    expect(profiles()).toEqual([{ profile: dimmer, handEdited: true }]);
+  });
+
+  it('applies the latest preview', () => {
+    const { preview, confirm, profiles } = importEngine();
+    preview('C:/in/Profiles.lclibrary');
+    preview('C:/in/empty.json', 4);
+
+    expect(confirm()).toEqual({ status: 'failed', error: 'No import is pending' });
+    expect(profiles()).toEqual([{ profile: dimmer, handEdited: true }]);
+  });
+
+  it('leaves the library and its file unchanged when the backup fails', () => {
+    const { stored, preview, confirm, profiles } = importEngine({ failBackup: true });
+    const before = stored.json;
+    preview('C:/in/Profiles.lclibrary');
+
+    expect(confirm()).toEqual({
+      status: 'failed',
+      error: 'Could not back up the Profile Library: Disk full',
+    });
+    expect(stored.json).toBe(before);
+    expect(profiles()).toEqual([{ profile: dimmer, handEdited: true }]);
+  });
+});

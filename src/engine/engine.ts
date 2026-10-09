@@ -1,8 +1,11 @@
+import { basename } from 'node:path';
 import {
   DOCUMENTS,
   type EngineCommand,
   type EngineEvent,
   type FixtureImportResult,
+  type LibraryImportPreview,
+  type LibraryImportResult,
 } from '../shared/protocol';
 import { findTrigger } from '../shared/show';
 import { profileName } from '../shared/profile-edit';
@@ -15,7 +18,13 @@ import {
 import { createOutputs, type SerialPorts } from './outputs';
 import { createPlayback } from './playback';
 import { createPreview } from './preview';
-import { createProfileLibrary, type ImportResult, type ProfileLibrary } from './profile-library';
+import {
+  createProfileLibrary,
+  readLibraryFile,
+  type ImportResult,
+  type LibraryContents,
+  type ProfileLibrary,
+} from './profile-library';
 import {
   createRecentFiles,
   type RecentFile,
@@ -35,10 +44,27 @@ export interface LibraryStorage {
   setAside(): void;
 }
 
+// Reads and writes library files the user picked, by path. Both throw on
+// failure.
+export interface LibraryFiles {
+  read(path: string): string;
+  write(path: string, json: string): void;
+}
+
+// Copies of the library kept before an import replaces it.
+export interface LibraryBackups {
+  // Writes a new backup and returns its path. Throws on failure.
+  save(json: string): string;
+}
+
 export interface EngineOptions {
   emit: (event: EngineEvent) => void;
   now?: () => number;
   storage?: LibraryStorage;
+  // Without them, the library cannot be exported or imported.
+  libraryFiles?: LibraryFiles;
+  // Without them, no import is confirmed.
+  libraryBackups?: LibraryBackups;
   venueFiles?: VenueFiles;
   showFiles?: ShowFiles;
   // Without it, nothing is sent to Outputs.
@@ -58,6 +84,8 @@ export function createEngine({
   emit,
   now = performance.now.bind(performance),
   storage,
+  libraryFiles,
+  libraryBackups,
   venueFiles,
   showFiles,
   serialPorts,
@@ -66,7 +94,9 @@ export function createEngine({
   recentFilesStorage,
 }: EngineOptions): Engine {
   const startedAt = now();
-  const library = openLibrary(storage);
+  let library = openLibrary(storage);
+  // A previewed library file, waiting for the user to confirm it.
+  let pendingImport: { path: string; contents: LibraryContents } | undefined;
   const recentFiles = createRecentFiles(recentFilesStorage);
   const venue = createVenueSession({
     emit,
@@ -137,7 +167,68 @@ export function createEngine({
     const entries = library
       .list()
       .map((profile) => ({ profile, handEdited: library.isHandEdited(profile.id) }));
-    emit({ type: 'profiles', entries });
+    const folder = recentFiles.library.folder();
+    emit({ type: 'profiles', entries, ...(folder === undefined ? {} : { folder }) });
+  }
+
+  // Writes the whole library to a file the user picked. Returns errors; an
+  // empty list means it was written.
+  function exportLibrary(path: string): string[] {
+    if (!libraryFiles) return ['Library files are not available'];
+    try {
+      libraryFiles.write(path, library.save());
+    } catch (error) {
+      return [`Could not export ${path}: ${(error as Error).message}`];
+    }
+    recentFiles.library.set(path);
+    // Sends the new Export folder with the Profiles.
+    emitProfiles();
+    return [];
+  }
+
+  // Reads a library file to import. A readable one becomes the pending import.
+  function previewLibraryImport(path: string): LibraryImportPreview {
+    pendingImport = undefined;
+    if (!libraryFiles) return { status: 'rejected', reason: 'Library files are not available' };
+    let json: string;
+    try {
+      json = libraryFiles.read(path);
+    } catch (error) {
+      return { status: 'rejected', reason: `Could not read ${path}: ${(error as Error).message}` };
+    }
+    const read = readLibraryFile(json);
+    if (read.status === 'rejected') return read;
+    const { profiles, handEdited, skipped } = read;
+    pendingImport = { path, contents: { profiles, handEdited } };
+    return {
+      status: 'readable',
+      fileName: basename(path),
+      currentCount: library.list().length,
+      keptCount: profiles.length,
+      skipped,
+    };
+  }
+
+  // Backs up the library, then replaces it with the pending import. A failed
+  // backup leaves the library as it was.
+  function confirmLibraryImport(): LibraryImportResult {
+    const pending = pendingImport;
+    pendingImport = undefined;
+    if (!pending) return { status: 'failed', error: 'No import is pending' };
+    if (!libraryBackups) return { status: 'failed', error: 'Backups are not available' };
+    let backupPath: string;
+    try {
+      backupPath = libraryBackups.save(library.save());
+    } catch (error) {
+      return {
+        status: 'failed',
+        error: `Could not back up the Profile Library: ${(error as Error).message}`,
+      };
+    }
+    library = createProfileLibrary(pending.contents);
+    recentFiles.library.set(pending.path);
+    libraryChanged();
+    return { status: 'imported', keptCount: pending.contents.profiles.length, backupPath };
   }
 
   // Runs a Profile Library import and describes its result for the UI.
@@ -190,6 +281,24 @@ export function createEngine({
         case 'deleteProfile':
           library.remove(command.id);
           libraryChanged();
+          break;
+        case 'exportLibrary': {
+          const errors = exportLibrary(command.path);
+          emit({ type: 'libraryExported', requestId: command.requestId, errors });
+          break;
+        }
+        case 'previewLibraryImport': {
+          const preview = previewLibraryImport(command.path);
+          emit({ type: 'libraryImportPreview', requestId: command.requestId, preview });
+          break;
+        }
+        case 'confirmLibraryImport': {
+          const result = confirmLibraryImport();
+          emit({ type: 'libraryImported', requestId: command.requestId, result });
+          break;
+        }
+        case 'cancelLibraryImport':
+          pendingImport = undefined;
           break;
         case 'getVenue':
         case 'newVenue':

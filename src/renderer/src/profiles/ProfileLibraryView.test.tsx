@@ -8,6 +8,8 @@ import type {
   EngineCommand,
   EngineEvent,
   FixtureImportResult,
+  LibraryImportPreview,
+  LibraryImportResult,
   ProfileLibraryEntry,
 } from '../../../shared/protocol';
 import { installFakeEngine, type FakeEngine } from '../test-engine';
@@ -33,13 +35,27 @@ const closeGuard = {
   setUnsaved: vi.fn(),
   onSaveBeforeClose: vi.fn<CloseGuardBridge['onSaveBeforeClose']>(() => () => {}),
 };
+const dialogs = {
+  chooseLibraryToSave: vi.fn<(name: string, folder?: string) => Promise<string | undefined>>(),
+  chooseLibraryToOpen: vi.fn<(folder?: string) => Promise<string | undefined>>(),
+  showLibraryBackup: vi.fn<(path: string) => void>(),
+};
 let entries: ProfileLibraryEntry[];
+// The folder the engine remembers for library files.
+let folder: string | undefined;
+// What the engine answers to the next export.
+let exportErrors: string[];
 // What the engine answers to the next save and imports.
 let saveErrors: string[];
 let importResults: FixtureImportResult[];
+// What the engine answers to the next library import preview and confirm,
+// and the library a confirmed import leaves.
+let preview: LibraryImportPreview;
+let imported: LibraryImportResult;
+let importedEntries: ProfileLibraryEntry[];
 
 function answer(command: EngineCommand): EngineEvent[] {
-  const profiles = (): EngineEvent => ({ type: 'profiles', entries });
+  const profiles = (): EngineEvent => ({ type: 'profiles', entries, folder });
   switch (command.type) {
     case 'listProfiles':
       return [profiles()];
@@ -61,6 +77,20 @@ function answer(command: EngineCommand): EngineEvent[] {
       return [
         { type: 'fixtureImported', requestId: command.requestId, result: importResults.shift()! },
       ];
+    case 'exportLibrary':
+      return [{ type: 'libraryExported', requestId: command.requestId, errors: exportErrors }];
+    case 'previewLibraryImport':
+      return [{ type: 'libraryImportPreview', requestId: command.requestId, preview }];
+    case 'confirmLibraryImport': {
+      const done: EngineEvent = {
+        type: 'libraryImported',
+        requestId: command.requestId,
+        result: imported,
+      };
+      if (imported.status !== 'imported') return [done];
+      entries = importedEntries;
+      return [profiles(), done];
+    }
     default:
       return [];
   }
@@ -91,15 +121,29 @@ beforeEach(() => {
   ];
   saveErrors = [];
   importResults = [];
+  folder = undefined;
+  exportErrors = [];
+  preview = {
+    status: 'readable',
+    fileName: 'Profiles.lclibrary',
+    currentCount: 2,
+    keptCount: 1,
+    skipped: [],
+  };
+  imported = { status: 'imported', keptCount: 1, backupPath: 'C:\\Data\\backups\\b.json' };
+  importedEntries = [{ profile: spot, handEdited: false }];
   engine = installFakeEngine(answer);
   vi.stubGlobal('closeGuard', closeGuard);
+  vi.stubGlobal('dialogs', dialogs);
   vi.stubGlobal('confirm', () => {
     throw new Error('window.confirm must not be used');
   });
 });
-afterEach(() => {
-  // Unmounts while the fake engine is still there.
+afterEach(async () => {
+  // Unmounts while the fake engine is still there. Unmounting answers an open
+  // confirm with no, which may still send a command.
   cleanup();
+  await new Promise((resolve) => setTimeout(resolve));
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -442,5 +486,229 @@ describe('fixture import', () => {
     expect([...imports[0]!.bytes]).toEqual([...bytes]);
     expect(sent('importOfl')).toEqual([]);
     expect(await screen.findByText('Imported Acme Par')).toBeInTheDocument();
+  });
+});
+
+describe('library export', () => {
+  const exportButton = () => screen.getByRole('button', { name: 'Export…' });
+
+  it('saves the library to the chosen file, suggesting a dated name in the last folder', async () => {
+    folder = 'C:\\Backups';
+    dialogs.chooseLibraryToSave.mockResolvedValue('C:\\Backups\\Profiles.lclibrary');
+    await renderView();
+    const user = userEvent.setup();
+    await user.click(exportButton());
+
+    expect(dialogs.chooseLibraryToSave).toHaveBeenCalledWith(
+      expect.stringMatching(/^LightCues Profiles \d{4}-\d{2}-\d{2}\.lclibrary$/),
+      'C:\\Backups',
+    );
+    expect(sent('exportLibrary')).toEqual([
+      {
+        type: 'exportLibrary',
+        requestId: expect.any(Number),
+        path: 'C:\\Backups\\Profiles.lclibrary',
+      },
+    ]);
+    expect(await screen.findByText('Exported 2 Profiles')).toBeInTheDocument();
+  });
+
+  it('does nothing when the dialog is cancelled', async () => {
+    dialogs.chooseLibraryToSave.mockResolvedValue(undefined);
+    await renderView();
+    const user = userEvent.setup();
+    await user.click(exportButton());
+
+    expect(dialogs.chooseLibraryToSave).toHaveBeenCalledTimes(1);
+    expect(sent('exportLibrary')).toEqual([]);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('shows the engine’s error when the file cannot be written', async () => {
+    exportErrors = ['Could not export C:\\Locked\\Profiles.lclibrary: Access denied'];
+    dialogs.chooseLibraryToSave.mockResolvedValue('C:\\Locked\\Profiles.lclibrary');
+    await renderView();
+    const user = userEvent.setup();
+    await user.click(exportButton());
+
+    expect(
+      await screen.findByText(
+        'Export failed: Could not export C:\\Locked\\Profiles.lclibrary: Access denied',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('is disabled when the library has no Profiles', async () => {
+    entries = [];
+    render(
+      <UiProvider>
+        <ProfileLibraryView active />
+      </UiProvider>,
+    );
+    expect(await screen.findByText(/No Profiles yet/)).toBeInTheDocument();
+    expect(exportButton()).toBeDisabled();
+  });
+});
+
+describe('library import', () => {
+  const importButton = () => screen.getByRole('button', { name: 'Import…' });
+
+  async function startImport() {
+    await renderView();
+    const user = userEvent.setup();
+    dialogs.chooseLibraryToOpen.mockResolvedValue('C:\\Backups\\Profiles.lclibrary');
+    await user.click(importButton());
+    return user;
+  }
+
+  it('reads the chosen file from the last library folder', async () => {
+    folder = 'C:\\Backups';
+    await startImport();
+
+    expect(dialogs.chooseLibraryToOpen).toHaveBeenCalledWith('C:\\Backups');
+    expect(sent('previewLibraryImport')).toEqual([
+      {
+        type: 'previewLibraryImport',
+        requestId: expect.any(Number),
+        path: 'C:\\Backups\\Profiles.lclibrary',
+      },
+    ]);
+  });
+
+  it('does nothing when the dialog is cancelled', async () => {
+    await renderView();
+    const user = userEvent.setup();
+    dialogs.chooseLibraryToOpen.mockResolvedValue(undefined);
+    await user.click(importButton());
+
+    expect(sent('previewLibraryImport')).toEqual([]);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('shows why a rejected file cannot be imported', async () => {
+    preview = { status: 'rejected', reason: 'Not a Profile Library file' };
+    const user = await startImport();
+
+    const notice = await screen.findByRole('alertdialog');
+    expect(notice).toHaveTextContent('Not a Profile Library file');
+    expect(within(notice).queryByRole('button', { name: 'Replace' })).not.toBeInTheDocument();
+    await user.click(within(notice).getByRole('button', { name: 'OK' }));
+    expect(sent('confirmLibraryImport')).toEqual([]);
+  });
+
+  it('asks before replacing, with the counts and the skipped Profiles', async () => {
+    preview = {
+      status: 'readable',
+      fileName: 'Profiles.lclibrary',
+      currentCount: 2,
+      keptCount: 1,
+      skipped: [
+        { index: 1, manufacturer: 'Acme', model: 'Bad', error: 'Mode "3ch" has no channels' },
+        { index: 2, error: 'Not an object' },
+      ],
+    };
+    await startImport();
+
+    const ask = within(await screen.findByRole('alertdialog'));
+    expect(
+      ask.getByText(/^Replace 2 Profiles with 1 from Profiles\.lclibrary\./),
+    ).toHaveTextContent('2 will be skipped.');
+    const skipped = ask.getByRole('list', { name: 'Skipped Profiles' });
+    expect(
+      within(skipped)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Profile 2, Acme Bad: Mode "3ch" has no channels', 'Profile 3: Not an object']);
+    expect(ask.queryByText(/unsaved changes/)).not.toBeInTheDocument();
+  });
+
+  it('lists no skipped Profiles when there are none', async () => {
+    await startImport();
+
+    const ask = within(await screen.findByRole('alertdialog'));
+    expect(ask.getByText('Replace 2 Profiles with 1 from Profiles.lclibrary.')).toBeInTheDocument();
+    expect(ask.queryByRole('list')).not.toBeInTheDocument();
+  });
+
+  it('warns that unsaved Profile edits will be discarded', async () => {
+    await renderView();
+    const user = userEvent.setup();
+    await user.click(option('Acme Par'));
+    await user.type(editor().getByRole('textbox', { name: 'Model' }), ' 2');
+    dialogs.chooseLibraryToOpen.mockResolvedValue('C:\\Backups\\Profiles.lclibrary');
+    await user.click(importButton());
+
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent(
+      'The Profile Editor has unsaved changes. They will be discarded.',
+    );
+  });
+
+  it('drops the pending import on Cancel', async () => {
+    const user = await startImport();
+    // Behind the modal confirm.
+    expect(screen.getByRole('button', { name: 'Import…', hidden: true })).toBeDisabled();
+    await user.click(await alertDialog().findByRole('button', { name: 'Cancel' }));
+
+    expect(sent('cancelLibraryImport')).toHaveLength(1);
+    expect(sent('confirmLibraryImport')).toEqual([]);
+    expect(importButton()).toBeEnabled();
+    expect(option('Acme Par')).toBeInTheDocument();
+  });
+
+  it('replaces the library on Replace, and offers to show the backup', async () => {
+    const user = await startImport();
+    await user.click(await alertDialog().findByRole('button', { name: 'Replace' }));
+
+    expect(sent('confirmLibraryImport')).toHaveLength(1);
+    expect(await screen.findByText('Imported 1 Profile. Backup saved.')).toBeInTheDocument();
+    expect(list().getAllByRole('option')).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: 'Show in folder' }));
+    expect(dialogs.showLibraryBackup).toHaveBeenCalledWith('C:\\Data\\backups\\b.json');
+  });
+
+  it('shows why the backup failed, and keeps the library and the edits', async () => {
+    imported = { status: 'failed', error: 'Could not back up the Profile Library: Disk full' };
+    await renderView();
+    const user = userEvent.setup();
+    await user.click(option('Acme Par'));
+    await user.type(editor().getByRole('textbox', { name: 'Model' }), ' 2');
+    dialogs.chooseLibraryToOpen.mockResolvedValue('C:\\Backups\\Profiles.lclibrary');
+    await user.click(importButton());
+    await user.click(await alertDialog().findByRole('button', { name: 'Replace' }));
+
+    expect(await alertDialog().findByText(/Disk full/)).toBeInTheDocument();
+    await user.click(alertDialog().getByRole('button', { name: 'OK' }));
+    expect(editor().getByRole('textbox', { name: 'Model' })).toHaveValue('Par 2');
+    expect(list().getAllByRole('option')).toHaveLength(2);
+  });
+
+  it('reselects the open Profile when the import keeps it, discarding edits', async () => {
+    importedEntries = [{ profile: { ...spot, defaultRole: 'Blinder' }, handEdited: false }];
+    await renderView();
+    const user = userEvent.setup();
+    await user.click(option('Beamco Spot'));
+    await user.type(editor().getByRole('textbox', { name: 'Model' }), ' 2');
+    dialogs.chooseLibraryToOpen.mockResolvedValue('C:\\Backups\\Profiles.lclibrary');
+    await user.click(importButton());
+    await user.click(await alertDialog().findByRole('button', { name: 'Replace' }));
+
+    await screen.findByText('Imported 1 Profile. Backup saved.');
+    expect(editor().getByRole('heading', { name: 'Beamco Spot' })).toBeInTheDocument();
+    expect(editor().getByRole('textbox', { name: 'Model' })).toHaveValue('Spot');
+    expect(editor().queryByText('Unsaved changes')).not.toBeInTheDocument();
+    expect(option('Beamco Spot')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('closes the editor when the import drops the open Profile', async () => {
+    await renderView();
+    const user = userEvent.setup();
+    await user.click(option('Acme Par'));
+    dialogs.chooseLibraryToOpen.mockResolvedValue('C:\\Backups\\Profiles.lclibrary');
+    await user.click(importButton());
+    await user.click(await alertDialog().findByRole('button', { name: 'Replace' }));
+
+    await screen.findByText('Imported 1 Profile. Backup saved.');
+    expect(screen.queryByRole('region', { name: 'Profile editor' })).not.toBeInTheDocument();
+    expect(screen.getByText('Select a Profile to edit it, or make a new one.')).toBeInTheDocument();
   });
 });

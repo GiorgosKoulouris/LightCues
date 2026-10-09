@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FixtureProfile } from '../../../shared/fixture-profile';
+import type { LibraryImportPreview } from '../../../shared/protocol';
 import { blankProfile, profileName } from '../../../shared/profile-edit';
 import { useFindShortcut } from '../shell/useShortcuts';
+import { Button } from '../ui/Button';
 import { useConfirm } from '../ui/ConfirmDialog';
+import { plural } from '../ui/plural';
 import { useToast } from '../ui/Toast';
 import { FixtureImportDialog } from './FixtureImportDialog';
 import { ProfileEditor } from './ProfileEditor';
 import styles from './ProfileLibraryView.module.css';
 import { ProfileList } from './ProfileList';
-import { filterProfiles, sameProfile } from './profiles';
+import { filterProfiles, sameProfile, skippedProfileLabel } from './profiles';
 import { useProfileLibrary } from './useProfileLibrary';
 
 // What the editor is open on: a library Profile by id, or a new one.
@@ -19,9 +22,20 @@ const BLANK = blankProfile();
 // The Profile Library: the Profile list beside the Profile Editor. Edits are
 // a draft until saved (ADR 0004); switching away from unsaved edits asks
 // first, and closing the window offers to save them. While `active`, Ctrl+F
-// searches the Profiles.
+// searches the Profiles. The header exports the whole library, or replaces it
+// from a file after a confirm.
 export function ProfileLibraryView({ active }: { active: boolean }) {
-  const { entries, importOfl, importGdtf, saveProfile, deleteProfile } = useProfileLibrary();
+  const {
+    entries,
+    importOfl,
+    importGdtf,
+    saveProfile,
+    deleteProfile,
+    exportLibrary,
+    previewLibraryImport,
+    confirmLibraryImport,
+    cancelLibraryImport,
+  } = useProfileLibrary();
   const confirm = useConfirm();
   const toast = useToast();
   const [query, setQuery] = useState('');
@@ -35,6 +49,10 @@ export function ProfileLibraryView({ active }: { active: boolean }) {
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
+  // Set when a library import replaced the Profiles, until the editor follows.
+  const [libraryReplaced, setLibraryReplaced] = useState(false);
+  // A library import is under way.
+  const [replacing, setReplacing] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   // Saves the draft when the window closes; true when there was none to save.
   const saveBeforeClose = useRef(async () => true);
@@ -48,6 +66,14 @@ export function ProfileLibraryView({ active }: { active: boolean }) {
   const selectedId = isNew ? undefined : target?.id;
   const base = isNew ? BLANK : entries.find((e) => e.profile.id === selectedId)?.profile;
   const shown = draft ?? base;
+
+  // The new Profile list arrives before the import's reply, so it is in place
+  // here: the editor reopens the same Profile afresh, or closes.
+  if (libraryReplaced) {
+    setLibraryReplaced(false);
+    if (base && !isNew) select({ id: base.id });
+    else setTarget(undefined);
+  }
 
   function setEdits(next: FixtureProfile | undefined) {
     setDraft(next);
@@ -114,6 +140,85 @@ export function ProfileLibraryView({ active }: { active: boolean }) {
     [],
   );
 
+  async function exportToFile() {
+    let errors: string[] | undefined;
+    try {
+      errors = await exportLibrary();
+    } catch (error) {
+      errors = [(error as Error).message];
+    }
+    if (errors === undefined) return;
+    if (errors.length > 0) {
+      toast({ tone: 'error', message: `Export failed: ${errors.join(' ')}` });
+    } else {
+      toast({ tone: 'success', message: `Exported ${plural(entries.length, 'Profile')}` });
+    }
+  }
+
+  // Reads a library file, asks, then replaces the library. Failures are shown
+  // in a dialog, since nothing changed.
+  async function importFromFile() {
+    setReplacing(true);
+    try {
+      const preview = await previewLibraryImport();
+      if (preview === undefined) return;
+      if (preview.status === 'rejected') throw new Error(preview.reason);
+      if (!(await confirmReplace(preview))) {
+        cancelLibraryImport();
+        return;
+      }
+      const result = await confirmLibraryImport();
+      if (result.status === 'failed') throw new Error(result.error);
+      const { backupPath } = result;
+      setEdits(undefined);
+      setLibraryReplaced(true);
+      toast({
+        tone: 'info',
+        message: `Imported ${plural(result.keptCount, 'Profile')}. Backup saved.`,
+        action: {
+          label: 'Show in folder',
+          onClick: () => window.dialogs.showLibraryBackup(backupPath),
+        },
+      });
+    } catch (error) {
+      void confirm({
+        title: 'Import failed',
+        message: (error as Error).message,
+        confirmLabel: 'OK',
+        notice: true,
+      });
+    } finally {
+      setReplacing(false);
+    }
+  }
+
+  function confirmReplace(preview: Extract<LibraryImportPreview, { status: 'readable' }>) {
+    const { fileName, currentCount, keptCount, skipped } = preview;
+    const skips = skipped.length > 0 ? ` ${skipped.length} will be skipped.` : '';
+    return confirm({
+      title: 'Replace the Profile Library?',
+      message: `Replace ${plural(currentCount, 'Profile')} with ${keptCount} from ${fileName}.${skips}`,
+      details: (
+        <>
+          {skipped.length > 0 && (
+            <ul aria-label="Skipped Profiles" className={styles.skipped}>
+              {skipped.map((skip) => (
+                <li key={skip.index}>{skippedProfileLabel(skip)}</li>
+              ))}
+            </ul>
+          )}
+          {draft && (
+            <p className={styles.warning}>
+              The Profile Editor has unsaved changes. They will be discarded.
+            </p>
+          )}
+        </>
+      ),
+      confirmLabel: 'Replace',
+      destructive: true,
+    });
+  }
+
   async function remove(profile: FixtureProfile) {
     const yes = await confirm({
       title: `Delete ${profileName(profile)}?`,
@@ -129,41 +234,51 @@ export function ProfileLibraryView({ active }: { active: boolean }) {
 
   return (
     <div className={styles.view}>
-      <ProfileList
-        entries={filterProfiles(entries, query)}
-        libraryEmpty={entries.length === 0}
-        query={query}
-        selectedId={selectedId}
-        searchRef={searchRef}
-        onQuery={setQuery}
-        onSelect={(id) => void open({ id })}
-        onRemove={() => base && !isNew && void remove(base)}
-        onNew={() => void open('new')}
-        onImport={async () => {
-          // An import may replace the Profile being edited.
-          if (await discardDraft()) setImporting(true);
-        }}
-      />
-      {target && shown && base ? (
-        <ProfileEditor
-          key={opened}
-          profile={shown}
-          title={isNew ? 'New Profile' : profileName(base)}
-          unsaved={draft !== undefined}
-          isNew={isNew}
-          errors={errors}
-          saving={saving}
-          onChange={(profile) => setEdits(sameProfile(profile, base) ? undefined : profile)}
-          onSave={() => void save(shown)}
-          onCancel={() => {
-            setEdits(undefined);
-            if (isNew) setTarget(undefined);
+      <div className={styles.header}>
+        <Button disabled={replacing} onClick={() => void importFromFile()}>
+          Import…
+        </Button>
+        <Button disabled={entries.length === 0} onClick={() => void exportToFile()}>
+          Export…
+        </Button>
+      </div>
+      <div className={styles.columns}>
+        <ProfileList
+          entries={filterProfiles(entries, query)}
+          libraryEmpty={entries.length === 0}
+          query={query}
+          selectedId={selectedId}
+          searchRef={searchRef}
+          onQuery={setQuery}
+          onSelect={(id) => void open({ id })}
+          onRemove={() => base && !isNew && void remove(base)}
+          onNew={() => void open('new')}
+          onImport={async () => {
+            // An import may replace the Profile being edited.
+            if (await discardDraft()) setImporting(true);
           }}
-          onDelete={isNew ? undefined : () => void remove(base)}
         />
-      ) : (
-        <p className={styles.empty}>Select a Profile to edit it, or make a new one.</p>
-      )}
+        {target && shown && base ? (
+          <ProfileEditor
+            key={opened}
+            profile={shown}
+            title={isNew ? 'New Profile' : profileName(base)}
+            unsaved={draft !== undefined}
+            isNew={isNew}
+            errors={errors}
+            saving={saving}
+            onChange={(profile) => setEdits(sameProfile(profile, base) ? undefined : profile)}
+            onSave={() => void save(shown)}
+            onCancel={() => {
+              setEdits(undefined);
+              if (isNew) setTarget(undefined);
+            }}
+            onDelete={isNew ? undefined : () => void remove(base)}
+          />
+        ) : (
+          <p className={styles.empty}>Select a Profile to edit it, or make a new one.</p>
+        )}
+      </div>
       <FixtureImportDialog
         open={importing}
         onOpenChange={setImporting}

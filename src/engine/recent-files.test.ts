@@ -8,18 +8,23 @@ import { saveShowFile } from './show-file';
 // engine over the same maps is the next launch.
 function launch(files: Map<string, string>, recent: { json?: string }) {
   const events: EngineEvent[] = [];
+  let failing = false;
   const diskFiles = {
     read(path: string) {
       const json = files.get(path);
       if (json === undefined) throw new Error('File not found');
       return json;
     },
-    write: (path: string, json: string) => void files.set(path, json),
+    write(path: string, json: string) {
+      if (failing) throw new Error('Disk full');
+      files.set(path, json);
+    },
   };
   const engine = createEngine({
     emit: (e) => events.push(e),
     venueFiles: diskFiles,
     showFiles: diskFiles,
+    libraryFiles: diskFiles,
     recentFilesStorage: {
       read: () => recent.json,
       write: (json) => void (recent.json = json),
@@ -52,6 +57,15 @@ function launch(files: Map<string, string>, recent: { json?: string }) {
     },
     showPath() {
       return this.show().path;
+    },
+    profilesFolder() {
+      engine.handle({ type: 'listProfiles' });
+      const profiles = events.findLast((e) => e.type === 'profiles');
+      if (profiles?.type !== 'profiles') throw new Error('No profiles event');
+      return profiles.folder;
+    },
+    failWrites() {
+      failing = true;
     },
     reopenErrors() {
       engine.handle({ type: 'getReopenErrors' });
@@ -190,5 +204,42 @@ describe('engine recent folders', () => {
     expect(next.venue().path).toBeUndefined();
     expect(next.show()).toMatchObject({ folder: 'C:/shows' });
     expect(launch(files, recent).venue().folder).toBe('C:/gigs');
+  });
+});
+
+describe('engine library folder', () => {
+  it('sends the folder of the last library export with the Profiles, kept between launches', () => {
+    const files = new Map<string, string>();
+    const recent = {};
+    const first = launch(files, recent);
+    expect(first.profilesFolder()).toBeUndefined();
+
+    first.engine.handle({
+      type: 'exportLibrary',
+      requestId: 1,
+      path: 'C:/backup/Profiles.lclibrary',
+    });
+
+    expect(first.profilesFolder()).toBe('C:/backup');
+    expect(launch(files, recent).profilesFolder()).toBe('C:/backup');
+  });
+
+  it('keeps the folder when an export fails', () => {
+    const files = new Map<string, string>();
+    const recent = {};
+    const first = launch(files, recent);
+    first.engine.handle({
+      type: 'exportLibrary',
+      requestId: 1,
+      path: 'C:/backup/Profiles.lclibrary',
+    });
+    first.failWrites();
+    first.engine.handle({
+      type: 'exportLibrary',
+      requestId: 2,
+      path: 'D:/full/Profiles.lclibrary',
+    });
+
+    expect(first.profilesFolder()).toBe('C:/backup');
   });
 });

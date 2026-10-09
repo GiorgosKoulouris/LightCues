@@ -1,6 +1,6 @@
 // Pure helpers for the Profile Library view: search, order and summaries.
 import type { FixtureProfile } from '../../../shared/fixture-profile';
-import type { ProfileLibraryEntry } from '../../../shared/protocol';
+import type { ProfileLibraryEntry, SkippedProfile } from '../../../shared/protocol';
 import { profileName } from '../../../shared/profile-edit';
 import { plural } from '../ui/plural';
 import { matchesQuery } from '../ui/search';
@@ -40,4 +40,18 @@ function sameValue(a: unknown, b: unknown): boolean {
 
 function definedKeys(record: Record<string, unknown>): string[] {
   return Object.keys(record).filter((key) => record[key] !== undefined);
+}
+
+// A skipped Profile as listed before an import: "Profile 3, Acme Par: <error>",
+// counting from 1.
+export function skippedProfileLabel({ index, manufacturer, model, error }: SkippedProfile): string {
+  const name = [manufacturer, model].filter((part) => part !== undefined).join(' ');
+  return `Profile ${index + 1}${name ? `, ${name}` : ''}: ${error}`;
+}
+
+// "LightCues Profiles 2026-10-09.lclibrary", by the local date.
+export function libraryFileName(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return `LightCues Profiles ${day}.lclibrary`;
 }

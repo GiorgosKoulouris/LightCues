@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import {
+  CHOOSE_LIBRARY_TO_OPEN_CHANNEL,
+  CHOOSE_LIBRARY_TO_SAVE_CHANNEL,
   CHOOSE_SHOW_TO_OPEN_CHANNEL,
   CHOOSE_SHOW_TO_SAVE_CHANNEL,
   CHOOSE_VENUE_TO_OPEN_CHANNEL,
@@ -7,6 +9,7 @@ import {
   ENGINE_PORT_CHANNEL,
   SAVE_BEFORE_CLOSE_CHANNEL,
   SAVED_BEFORE_CLOSE_CHANNEL,
+  SHOW_LIBRARY_BACKUP_CHANNEL,
   UNSAVED_CHANNEL,
   type CloseGuardBridge,
   type DialogBridge,
@@ -50,6 +53,10 @@ const dialogs: DialogBridge = {
   chooseShowToOpen: (folder) => ipcRenderer.invoke(CHOOSE_SHOW_TO_OPEN_CHANNEL, folder),
   chooseShowToSave: (current, folder) =>
     ipcRenderer.invoke(CHOOSE_SHOW_TO_SAVE_CHANNEL, current, folder),
+  chooseLibraryToOpen: (folder) => ipcRenderer.invoke(CHOOSE_LIBRARY_TO_OPEN_CHANNEL, folder),
+  chooseLibraryToSave: (name, folder) =>
+    ipcRenderer.invoke(CHOOSE_LIBRARY_TO_SAVE_CHANNEL, undefined, folder, name),
+  showLibraryBackup: (path) => ipcRenderer.send(SHOW_LIBRARY_BACKUP_CHANNEL, path),
 };
 
 contextBridge.exposeInMainWorld('dialogs', dialogs);

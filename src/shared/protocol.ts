@@ -28,6 +28,15 @@ export type EngineCommand =
   // `replaces` is the id of the Profile being edited; absent for a new one.
   | { type: 'saveProfile'; requestId: number; profile: FixtureProfile; replaces?: string }
   | { type: 'deleteProfile'; id: string }
+  // Writes the whole library to `path`, an .lclibrary file.
+  | { type: 'exportLibrary'; requestId: number; path: string }
+  // Reads a library file to import and keeps it as the pending import,
+  // replacing any earlier one. Changes nothing yet.
+  | { type: 'previewLibraryImport'; requestId: number; path: string }
+  // Backs up the library, then replaces it with the pending import.
+  | { type: 'confirmLibraryImport'; requestId: number }
+  // Drops the pending import.
+  | { type: 'cancelLibraryImport' }
   // The current Venue Patch. `path` is an .lcvenue file; `saveVenue` without
   // one saves to the file the patch was opened from or last saved to.
   | { type: 'getVenue' }
@@ -181,13 +190,47 @@ export type FixtureImportResult =
   | { status: 'conflict'; profileId: string; name: string }
   | { status: 'failed'; error: string };
 
+// A Profile left out of an imported library file. `index` is its zero-based
+// position in the file; `manufacturer` and `model` are there when readable.
+export interface SkippedProfile {
+  index: number;
+  manufacturer?: string;
+  model?: string;
+  error: string;
+}
+
+// What confirming an import would do: replace `currentCount` Profiles with
+// `keptCount` from `fileName`, skipping the rest. A rejected file changes
+// nothing.
+export type LibraryImportPreview =
+  | { status: 'rejected'; reason: string }
+  | {
+      status: 'readable';
+      fileName: string;
+      currentCount: number;
+      keptCount: number;
+      skipped: SkippedProfile[];
+    };
+
+// What confirming an import did. On failure the library is unchanged.
+export type LibraryImportResult =
+  | { status: 'imported'; keptCount: number; backupPath: string }
+  | { status: 'failed'; error: string };
+
 export type EngineEvent =
   | { type: 'pong'; id: number; uptimeMs: number }
   // The whole Profile Library, sent on request and after every change.
-  | { type: 'profiles'; entries: ProfileLibraryEntry[] }
+  // `folder` is where its Export dialog starts.
+  | { type: 'profiles'; entries: ProfileLibraryEntry[]; folder?: string }
   | { type: 'fixtureImported'; requestId: number; result: FixtureImportResult }
   // An empty `errors` list means the Profile was saved.
   | { type: 'profileSaved'; requestId: number; errors: string[] }
+  // Reply to exportLibrary. An empty `errors` list means it was written.
+  | { type: 'libraryExported'; requestId: number; errors: string[] }
+  // Reply to previewLibraryImport.
+  | { type: 'libraryImportPreview'; requestId: number; preview: LibraryImportPreview }
+  // Reply to confirmLibraryImport.
+  | { type: 'libraryImported'; requestId: number; result: LibraryImportResult }
   // The current Venue Patch, sent on request and after every change. `unsaved`
   // is true when it differs from what was last written to a file. `folder` is
   // where its Open and Save As dialogs start.
@@ -252,15 +295,26 @@ export const CHOOSE_VENUE_TO_OPEN_CHANNEL = 'dialog:chooseVenueToOpen';
 export const CHOOSE_VENUE_TO_SAVE_CHANNEL = 'dialog:chooseVenueToSave';
 export const CHOOSE_SHOW_TO_OPEN_CHANNEL = 'dialog:chooseShowToOpen';
 export const CHOOSE_SHOW_TO_SAVE_CHANNEL = 'dialog:chooseShowToSave';
+export const CHOOSE_LIBRARY_TO_OPEN_CHANNEL = 'dialog:chooseLibraryToOpen';
+export const CHOOSE_LIBRARY_TO_SAVE_CHANNEL = 'dialog:chooseLibraryToSave';
+export const SHOW_LIBRARY_BACKUP_CHANNEL = 'shell:showLibraryBackup';
+// The folder beside the Profile Library file that holds its backups.
+export const LIBRARY_BACKUPS_FOLDER = 'backups';
 
 // What the preload script exposes to the renderer as `window.dialogs`. Each
 // resolves to the chosen path, or undefined when the user cancels. A dialog
-// starts at the `current` file, else in `folder` when it still exists.
+// starts at the `current` file, else in `folder` when it still exists. A
+// library has no current file: its Save dialog suggests `name` in `folder`.
 export interface DialogBridge {
   chooseVenueToOpen(folder?: string): Promise<string | undefined>;
   chooseVenueToSave(current?: string, folder?: string): Promise<string | undefined>;
   chooseShowToOpen(folder?: string): Promise<string | undefined>;
   chooseShowToSave(current?: string, folder?: string): Promise<string | undefined>;
+  chooseLibraryToOpen(folder?: string): Promise<string | undefined>;
+  chooseLibraryToSave(name: string, folder?: string): Promise<string | undefined>;
+  // Reveals a Profile Library backup in Explorer. Main ignores any path
+  // outside the backups folder.
+  showLibraryBackup(path: string): void;
 }
 
 // IPC channels guarding the window against closing with unsaved changes.

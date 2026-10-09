@@ -128,6 +128,21 @@ describe('ConfirmDialog', () => {
     expect(await answer).toBe(false);
   });
 
+  it('shows details below the message', async () => {
+    setup({ details: <ul aria-label="Triggers" /> });
+    await open();
+    expect(screen.getByRole('list', { name: 'Triggers' })).toBeInTheDocument();
+  });
+
+  it('shows a notice with only the confirm button', async () => {
+    const onAnswer = setup({ notice: true, confirmLabel: 'OK', destructive: false });
+    await open();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'OK' })).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(onAnswer).toHaveBeenCalledWith(true));
+  });
+
   it('throws when used outside the provider', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(() => render(<RemoveButton onAnswer={() => {}} />)).toThrow(/ConfirmProvider/);

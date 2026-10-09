@@ -6,7 +6,7 @@ import type {
   FixtureProfile,
 } from '../shared/fixture-profile';
 import { gdtfDimmer } from './gdtf-test-files';
-import { createProfileLibrary } from './profile-library';
+import { createProfileLibrary, readLibraryFile } from './profile-library';
 
 const meta = { authors: ['test'], createDate: '2026-01-01', lastModifyDate: '2026-01-01' };
 
@@ -332,3 +332,161 @@ function mode(name: string, channels: Channel[]): FixtureMode {
 function range(from: number, to: number): CapabilityRange {
   return { from, to, capability: { type: 'intensity' } };
 }
+
+describe('Reading a library file', () => {
+  const ledBar = handMade();
+  const par = handMade({ id: 'showtec/par-64', manufacturer: 'Showtec', model: 'Par 64' });
+
+  function file(contents: object): string {
+    return JSON.stringify(contents);
+  }
+
+  it('reads a version 2 file with its hand-edited ids', () => {
+    const result = readLibraryFile(
+      file({ version: 2, profiles: [ledBar, par], handEdited: ['acme/led-bar'] }),
+    );
+
+    expect(result).toEqual({
+      status: 'readable',
+      profiles: [ledBar, par],
+      handEdited: ['acme/led-bar'],
+      skipped: [],
+    });
+  });
+
+  it('reads a version 1 file, where no Profile is hand-edited', () => {
+    const result = readLibraryFile(file({ version: 1, profiles: [ledBar] }));
+
+    expect(result).toEqual({ status: 'readable', profiles: [ledBar], handEdited: [], skipped: [] });
+  });
+
+  it('reads a library saved by the app', () => {
+    const library = createProfileLibrary();
+    library.put(ledBar);
+
+    expect(readLibraryFile(library.save())).toMatchObject({
+      status: 'readable',
+      profiles: [ledBar],
+      handEdited: ['acme/led-bar'],
+    });
+  });
+
+  it.each([
+    ['invalid JSON', '{"version": 2, "profiles": [', 'The file is not valid JSON'],
+    ['a JSON value that is not an object', '[]', 'The file is not a Profile Library'],
+    ['a missing profiles array', file({ version: 2 }), 'The file is not a Profile Library'],
+    [
+      'an unsupported version',
+      file({ version: 3, profiles: [ledBar] }),
+      'Unsupported Profile Library version: 3',
+    ],
+    ['no Profiles', file({ version: 2, profiles: [] }), 'The file has no valid Profiles'],
+    [
+      'only invalid Profiles',
+      file({ version: 2, profiles: [handMade({ model: ' ' }), 'not a profile'] }),
+      'The file has no valid Profiles',
+    ],
+  ])('rejects %s', (_, json, reason) => {
+    expect(readLibraryFile(json)).toEqual({ status: 'rejected', reason });
+  });
+
+  it('keeps the valid Profiles and lists the skipped ones', () => {
+    const result = readLibraryFile(
+      file({
+        version: 2,
+        profiles: [handMade({ model: ' ' }), par, 42, { manufacturer: 'Cameo', modes: 'x' }],
+      }),
+    );
+
+    expect(result).toEqual({
+      status: 'readable',
+      profiles: [par],
+      handEdited: [],
+      skipped: [
+        { index: 0, manufacturer: 'Acme', model: ' ', error: 'Model is required' },
+        { index: 2, error: 'Not a Fixture Profile' },
+        { index: 3, manufacturer: 'Cameo', error: 'Not a Fixture Profile' },
+      ],
+    });
+  });
+
+  it('skips a Profile whose data breaks the validator', () => {
+    const broken = handMade({ modes: [{ name: '1ch', channels: [{ kind: 'control' }] }] } as never);
+
+    const result = readLibraryFile(file({ version: 2, profiles: [broken, par] }));
+
+    expect(result).toMatchObject({
+      status: 'readable',
+      profiles: [par],
+      skipped: [
+        { index: 0, manufacturer: 'Acme', model: 'LED Bar', error: 'Not a Fixture Profile' },
+      ],
+    });
+  });
+
+  it('keeps the first of a duplicate id', () => {
+    const second = handMade({ defaultRole: 'Wash' });
+
+    const result = readLibraryFile(file({ version: 2, profiles: [ledBar, par, second] }));
+
+    expect(result).toMatchObject({
+      status: 'readable',
+      profiles: [ledBar, par],
+      skipped: [{ index: 2, manufacturer: 'Acme', model: 'LED Bar', error: 'Duplicate id' }],
+    });
+  });
+
+  it('reports a later duplicate as a duplicate even when it is also invalid', () => {
+    const result = readLibraryFile(
+      file({ version: 2, profiles: [ledBar, handMade({ model: ' ' })] }),
+    );
+
+    expect(result).toMatchObject({
+      skipped: [{ index: 1, error: 'Duplicate id' }],
+    });
+  });
+
+  it('skips a Profile with an unknown default role', () => {
+    const result = readLibraryFile(
+      file({ version: 2, profiles: [{ ...ledBar, defaultRole: 'Laser' }, par] }),
+    );
+
+    expect(result).toMatchObject({
+      profiles: [par],
+      skipped: [{ index: 0, error: 'Not a Fixture Profile' }],
+    });
+  });
+
+  it('lists each hand-edited id once', () => {
+    const result = readLibraryFile(
+      file({ version: 2, profiles: [ledBar], handEdited: ['acme/led-bar', 'acme/led-bar'] }),
+    );
+
+    expect(result).toMatchObject({ handEdited: ['acme/led-bar'] });
+  });
+
+  it('drops hand-edited ids without a kept Profile', () => {
+    const result = readLibraryFile(
+      file({
+        version: 2,
+        profiles: [ledBar, handMade({ id: 'acme/bad', model: ' ' })],
+        handEdited: ['acme/led-bar', 'acme/bad', 'gone/profile', 7],
+      }),
+    );
+
+    expect(result).toMatchObject({ status: 'readable', handEdited: ['acme/led-bar'] });
+  });
+
+  it('builds a library from what it kept', () => {
+    const result = readLibraryFile(
+      file({ version: 2, profiles: [par, ledBar, 'junk'], handEdited: ['acme/led-bar'] }),
+    );
+    if (result.status !== 'readable') throw new Error('expected a readable file');
+
+    const library = createProfileLibrary(result);
+
+    expect(library.list().map((p) => p.id)).toEqual(['acme/led-bar', 'showtec/par-64']);
+    expect(library.isHandEdited('acme/led-bar')).toBe(true);
+    expect(library.isHandEdited('showtec/par-64')).toBe(false);
+  });
+});

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { FixtureProfile } from '../../../shared/fixture-profile';
 import type { ProfileLibraryEntry } from '../../../shared/protocol';
 import { blankChannel } from '../../../shared/profile-edit';
-import { filterProfiles, modeSummary, sameProfile } from './profiles';
+import { filterProfiles, libraryFileName, modeSummary, sameProfile } from './profiles';
 
 const profile = (manufacturer: string, model: string, counts: number[]): FixtureProfile => ({
   id: `${manufacturer}/${model}`.toLowerCase(),
@@ -82,5 +82,14 @@ describe('sameProfile', () => {
   it('is false when a channel differs', () => {
     const changed = { ...par, modes: [{ ...par.modes[0]!, channels: [] }, par.modes[1]!] };
     expect(sameProfile(par, changed)).toBe(false);
+  });
+});
+
+describe('libraryFileName', () => {
+  it('names an export by the local date', () => {
+    expect(libraryFileName(new Date(2026, 0, 5, 23, 59))).toBe(
+      'LightCues Profiles 2026-01-05.lclibrary',
+    );
+    expect(libraryFileName(new Date(2026, 9, 9))).toBe('LightCues Profiles 2026-10-09.lclibrary');
   });
 });

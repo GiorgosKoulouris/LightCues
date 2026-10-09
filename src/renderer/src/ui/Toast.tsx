@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { IconButton } from './Button';
+import { Button, IconButton } from './Button';
 import styles from './Toast.module.css';
 import { cx } from './cx';
 
@@ -17,13 +17,17 @@ export type ToastTone = 'info' | 'success' | 'error';
 export interface ToastOptions {
   message: ReactNode;
   tone?: ToastTone;
+  // A button that runs `onClick` and closes the toast.
+  action?: { label: string; onClick: () => void };
 }
 
-interface ToastEntry extends Required<ToastOptions> {
+interface ToastEntry extends ToastOptions {
   id: number;
+  tone: ToastTone;
 }
 
-// How long info and success toasts stay. Errors stay until dismissed.
+// How long info and success toasts stay. Errors, and toasts with an action,
+// stay until dismissed.
 const TOAST_MS = 3000;
 
 const ToastContext = createContext<((toast: ToastOptions) => void) | null>(null);
@@ -47,10 +51,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const show = useCallback((options: ToastOptions) => {
     const id = nextId.current++;
-    setToasts((current) => [
-      ...current,
-      { id, message: options.message, tone: options.tone ?? 'info' },
-    ]);
+    setToasts((current) => [...current, { ...options, id, tone: options.tone ?? 'info' }]);
   }, []);
 
   return (
@@ -68,12 +69,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 // onDismiss must be stable, or each render would restart the timer.
 function ToastItem({ toast, onDismiss }: { toast: ToastEntry; onDismiss: (id: number) => void }) {
   const Icon = ICONS[toast.tone];
+  const hasAction = toast.action !== undefined;
 
   useEffect(() => {
-    if (toast.tone === 'error') return;
+    if (toast.tone === 'error' || hasAction) return;
     const timer = setTimeout(() => onDismiss(toast.id), TOAST_MS);
     return () => clearTimeout(timer);
-  }, [toast.id, toast.tone, onDismiss]);
+  }, [toast.id, toast.tone, hasAction, onDismiss]);
 
   return (
     <div
@@ -82,6 +84,17 @@ function ToastItem({ toast, onDismiss }: { toast: ToastEntry; onDismiss: (id: nu
     >
       <Icon className={styles.icon} aria-hidden />
       <div className={styles.message}>{toast.message}</div>
+      {toast.action && (
+        <Button
+          variant="ghost"
+          onClick={() => {
+            toast.action?.onClick();
+            onDismiss(toast.id);
+          }}
+        >
+          {toast.action.label}
+        </Button>
+      )}
       <IconButton
         icon={<X />}
         label="Dismiss"

@@ -13,10 +13,14 @@ import { Dialog } from './Dialog';
 export interface ConfirmOptions {
   title: string;
   message?: ReactNode;
+  // Below the message, such as a list.
+  details?: ReactNode;
   confirmLabel: string;
   cancelLabel?: string;
   // Red confirm button, and focus starts on Cancel.
   destructive?: boolean;
+  // Only the confirm button: a notice to acknowledge, such as an error.
+  notice?: boolean;
 }
 
 type Confirm = (options: ConfirmOptions) => Promise<boolean>;
@@ -79,7 +83,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           description={options.message}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
-            (options.destructive ? cancelRef : confirmRef).current?.focus();
+            (options.destructive && !options.notice ? cancelRef : confirmRef).current?.focus();
           }}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
@@ -87,9 +91,11 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           }}
           footer={
             <>
-              <Button ref={cancelRef} onClick={() => answer(false)}>
-                {options.cancelLabel ?? 'Cancel'}
-              </Button>
+              {!options.notice && (
+                <Button ref={cancelRef} onClick={() => answer(false)}>
+                  {options.cancelLabel ?? 'Cancel'}
+                </Button>
+              )}
               <Button
                 ref={confirmRef}
                 variant={options.destructive ? 'danger' : 'primary'}
@@ -99,7 +105,9 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
               </Button>
             </>
           }
-        />
+        >
+          {options.details}
+        </Dialog>
       )}
     </ConfirmContext.Provider>
   );

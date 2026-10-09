@@ -4,25 +4,30 @@ import {
   dialog,
   ipcMain,
   MessageChannelMain,
+  shell,
   utilityProcess,
   type FileFilter,
   type IpcMainEvent,
   type UtilityProcess,
 } from 'electron';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import {
+  CHOOSE_LIBRARY_TO_OPEN_CHANNEL,
+  CHOOSE_LIBRARY_TO_SAVE_CHANNEL,
   CHOOSE_SHOW_TO_OPEN_CHANNEL,
   CHOOSE_SHOW_TO_SAVE_CHANNEL,
   CHOOSE_VENUE_TO_OPEN_CHANNEL,
   CHOOSE_VENUE_TO_SAVE_CHANNEL,
   DOCUMENTS,
   ENGINE_PORT_CHANNEL,
+  LIBRARY_BACKUPS_FOLDER,
   MIDI_INPUT_ARG,
   RECENT_FILES_ARG,
   PROFILE_LIBRARY_ARG,
   SAVE_BEFORE_CLOSE_CHANNEL,
   SAVED_BEFORE_CLOSE_CHANNEL,
+  SHOW_LIBRARY_BACKUP_CHANNEL,
   UNSAVED_CHANNEL,
   unsavedMessage,
   type DocumentKind,
@@ -31,13 +36,21 @@ import {
 
 const VENUE_FILTERS = [{ name: 'LightCues Venue Patch', extensions: ['lcvenue'] }];
 const SHOW_FILTERS = [{ name: 'LightCues Show', extensions: ['lcshow'] }];
+const LIBRARY_FILTERS = [{ name: 'LightCues Profile Library', extensions: ['lclibrary'] }];
+// Import also takes raw library JSON, such as a backup.
+const LIBRARY_OPEN_FILTERS = [{ name: 'Profile Library', extensions: ['lclibrary', 'json'] }];
+
+// The Profile Library file. The engine keeps its backups in a folder beside it.
+function libraryPath(): string {
+  return join(app.getPath('userData'), 'profile-library.json');
+}
 
 function startEngine(): UtilityProcess {
   const userData = app.getPath('userData');
   const engine = utilityProcess.fork(
     join(__dirname, 'engine.js'),
     [
-      PROFILE_LIBRARY_ARG + join(userData, 'profile-library.json'),
+      PROFILE_LIBRARY_ARG + libraryPath(),
       MIDI_INPUT_ARG + join(userData, 'midi-input.json'),
       RECENT_FILES_ARG + join(userData, 'recent-files.json'),
     ],
@@ -62,12 +75,18 @@ function connectWindowToEngine(window: BrowserWindow, engine: UtilityProcess): v
 }
 
 // Native Open/Save dialogs for one kind of file. The engine reads and writes
-// the chosen path.
-function handleFileDialogs(openChannel: string, saveChannel: string, filters: FileFilter[]): void {
+// the chosen path. Without a current file, Save suggests `name` in the
+// folder. Open may accept more files than Save writes.
+function handleFileDialogs(
+  openChannel: string,
+  saveChannel: string,
+  filters: FileFilter[],
+  openFilters = filters,
+): void {
   ipcMain.handle(openChannel, async (event, folder?: string) => {
     const window = BrowserWindow.fromWebContents(event.sender);
     const options = {
-      filters,
+      filters: openFilters,
       defaultPath: existingFolder(folder),
       properties: ['openFile' as const],
     };
@@ -76,9 +95,9 @@ function handleFileDialogs(openChannel: string, saveChannel: string, filters: Fi
       : dialog.showOpenDialog(options));
     return result.canceled ? undefined : result.filePaths[0];
   });
-  ipcMain.handle(saveChannel, async (event, current?: string, folder?: string) => {
+  ipcMain.handle(saveChannel, async (event, current?: string, folder?: string, name?: string) => {
     const window = BrowserWindow.fromWebContents(event.sender);
-    const options = { filters, defaultPath: current ?? existingFolder(folder) };
+    const options = { filters, defaultPath: current ?? suggestedPath(folder, name) };
     const result = await (window
       ? dialog.showSaveDialog(window, options)
       : dialog.showSaveDialog(options));
@@ -89,6 +108,24 @@ function handleFileDialogs(openChannel: string, saveChannel: string, filters: Fi
 // A remembered folder that is gone falls back to the OS default.
 function existingFolder(folder: string | undefined): string | undefined {
   return folder !== undefined && existsSync(folder) ? folder : undefined;
+}
+
+// `name` in the folder, or the folder alone. A name alone starts in the OS
+// default folder.
+function suggestedPath(folder: string | undefined, name: string | undefined): string | undefined {
+  const existing = existingFolder(folder);
+  if (name === undefined) return existing;
+  return existing === undefined ? name : join(existing, name);
+}
+
+// Reveals a library backup in Explorer. Only files in the backups folder, so
+// the renderer cannot reveal arbitrary paths.
+function handleShowLibraryBackup(): void {
+  const backups = join(dirname(libraryPath()), LIBRARY_BACKUPS_FOLDER);
+  ipcMain.on(SHOW_LIBRARY_BACKUP_CHANNEL, (_event, path: unknown) => {
+    if (typeof path !== 'string' || dirname(resolve(path)) !== backups) return;
+    shell.showItemInFolder(path);
+  });
 }
 
 // Asks before closing a window whose Show or Venue Patch has unsaved
@@ -176,6 +213,13 @@ void app.whenReady().then(() => {
   const engine = startEngine();
   handleFileDialogs(CHOOSE_VENUE_TO_OPEN_CHANNEL, CHOOSE_VENUE_TO_SAVE_CHANNEL, VENUE_FILTERS);
   handleFileDialogs(CHOOSE_SHOW_TO_OPEN_CHANNEL, CHOOSE_SHOW_TO_SAVE_CHANNEL, SHOW_FILTERS);
+  handleFileDialogs(
+    CHOOSE_LIBRARY_TO_OPEN_CHANNEL,
+    CHOOSE_LIBRARY_TO_SAVE_CHANNEL,
+    LIBRARY_FILTERS,
+    LIBRARY_OPEN_FILTERS,
+  );
+  handleShowLibraryBackup();
   createWindow(engine);
 });
 

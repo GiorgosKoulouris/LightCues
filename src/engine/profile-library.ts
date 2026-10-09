@@ -1,4 +1,5 @@
-import type { FixtureProfile } from '../shared/fixture-profile';
+import { ROLES, type FixtureProfile } from '../shared/fixture-profile';
+import type { SkippedProfile } from '../shared/protocol';
 import { importGdtfFixture } from './gdtf-import';
 import type { FixtureImport } from './import-report';
 import { importOflFixture } from './ofl-import';
@@ -25,6 +26,18 @@ export interface ProfileLibrary {
   save(): string;
 }
 
+// The Profiles a library holds and which of them were made or edited by hand.
+export interface LibraryContents {
+  profiles: FixtureProfile[];
+  handEdited: string[];
+}
+
+// The outcome of reading a library file picked by the user. A readable file
+// may still have skipped Profiles; a rejected one changes nothing.
+export type LibraryFileRead =
+  | { status: 'rejected'; reason: string }
+  | ({ status: 'readable'; skipped: SkippedProfile[] } & LibraryContents);
+
 export interface ImportResult extends FixtureImport {
   status: 'imported' | 'conflict';
 }
@@ -40,11 +53,12 @@ interface SavedLibrary {
   handEdited?: string[];
 }
 
-export function createProfileLibrary(saved?: string): ProfileLibrary {
+// Restores saved JSON, or contents kept by `readLibraryFile`.
+export function createProfileLibrary(saved?: string | LibraryContents): ProfileLibrary {
   const profiles = new Map<string, FixtureProfile>();
   const handEdited = new Set<string>();
   if (saved) {
-    const library = load(saved);
+    const library = typeof saved === 'string' ? load(saved) : saved;
     for (const profile of library.profiles) profiles.set(profile.id, profile);
     for (const id of library.handEdited ?? []) handEdited.add(id);
   }
@@ -98,8 +112,86 @@ export function createProfileLibrary(saved?: string): ProfileLibrary {
 
 function load(saved: string): SavedLibrary {
   const library = JSON.parse(saved) as SavedLibrary;
-  if (library.version !== VERSION_1 && library.version !== VERSION) {
-    throw new Error(`Unsupported Profile Library version: ${library.version}`);
-  }
+  const error = versionError(library.version);
+  if (error) throw new Error(error);
   return library;
+}
+
+function versionError(version: unknown): string | undefined {
+  if (version === VERSION_1 || version === VERSION) return undefined;
+  return `Unsupported Profile Library version: ${String(version)}`;
+}
+
+// Reads a user-picked library file. Unlike startup loading, it checks every
+// Profile, keeps the valid ones and lists the rest as skipped.
+export function readLibraryFile(json: string): LibraryFileRead {
+  let file: unknown;
+  try {
+    file = JSON.parse(json);
+  } catch {
+    return { status: 'rejected', reason: 'The file is not valid JSON' };
+  }
+  if (!isRecord(file) || !Array.isArray(file.profiles)) {
+    return { status: 'rejected', reason: 'The file is not a Profile Library' };
+  }
+  const unsupported = versionError(file.version);
+  if (unsupported) return { status: 'rejected', reason: unsupported };
+
+  const kept = new Map<string, FixtureProfile>();
+  const skipped: SkippedProfile[] = [];
+  file.profiles.forEach((entry: unknown, index) => {
+    const fields = isRecord(entry) ? entry : {};
+    const error =
+      typeof fields.id === 'string' && kept.has(fields.id) ? 'Duplicate id' : profileError(entry);
+    if (error === undefined) {
+      const profile = entry as FixtureProfile;
+      kept.set(profile.id, profile);
+      return;
+    }
+    skipped.push({
+      index,
+      ...(typeof fields.manufacturer === 'string' && { manufacturer: fields.manufacturer }),
+      ...(typeof fields.model === 'string' && { model: fields.model }),
+      error,
+    });
+  });
+  if (kept.size === 0) return { status: 'rejected', reason: 'The file has no valid Profiles' };
+
+  const handEdited = new Set(Array.isArray(file.handEdited) ? file.handEdited : []);
+  return {
+    status: 'readable',
+    profiles: [...kept.values()],
+    handEdited: [...handEdited].filter(
+      (id): id is string => typeof id === 'string' && kept.has(id),
+    ),
+    skipped,
+  };
+}
+
+// The first reason a file entry is not a valid Profile, or undefined. Checks
+// the top-level shape, then defers to `validateProfile`.
+function profileError(entry: unknown): string | undefined {
+  const notAProfile = 'Not a Fixture Profile';
+  if (
+    !isRecord(entry) ||
+    typeof entry.id !== 'string' ||
+    typeof entry.manufacturer !== 'string' ||
+    typeof entry.model !== 'string' ||
+    !(ROLES as readonly unknown[]).includes(entry.defaultRole) ||
+    !Array.isArray(entry.modes)
+  ) {
+    return notAProfile;
+  }
+  let errors: string[];
+  try {
+    errors = validateProfile(entry as unknown as FixtureProfile);
+  } catch {
+    // The validator trusts the Profile type; malformed nested data throws.
+    return notAProfile;
+  }
+  return errors[0];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
