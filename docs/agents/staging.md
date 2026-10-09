@@ -4,7 +4,7 @@
 
 A request can **hold back** commits: they stay on `dev`, unstaged, on top of `stage` (for example: "stage everything except the security scan commit"). After staging, `dev` is always `stage` plus the held-back commits, with nothing lost.
 
-If the batch is a release, bump the version on `dev` first and move the `## [Unreleased]` lines of CHANGELOG.md under the new version heading in the same commit. Tag after the merge. See [releasing.md](releasing.md).
+If the batch is a release, run the [Changelog review](releasing.md#changelog-review) and bump the version on `dev` first. Move the `## [Unreleased]` lines of CHANGELOG.md under the new version heading in the same commit. Tag after the merge. See [releasing.md](releasing.md).
 
 ## Safety nets
 
