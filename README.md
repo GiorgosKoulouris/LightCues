@@ -2,7 +2,8 @@
 
 Lights for your gig that follow your DAW, at any venue.
 
-<!-- Hero screenshot: Perform view (public-face issue 03). -->
+![Perform view: Scene buttons grouped by Layer, with Verse and Circle movement active, and the Preview showing the stage from above and from the front](docs/images/perform.png)
+*Perform, the view for the gig. Verse plays on the Looks Layer and Circle movement on the Movement Layer.*
 
 Building from source: [docs/development.md](docs/development.md).
 
@@ -38,13 +39,15 @@ The Sidebar switches between four views: Show, Venue Patch, Profile Library and 
 
 ### 1. Import Profiles
 
-<!-- Screenshot: Profile import (public-face issue 03). -->
+![Profile Library with an imported Open Fixture Library profile open, showing its mode and DMX channels](docs/images/profile-import.png)
+*An imported Open Fixture Library profile. Each channel's kind and colour come from the file.*
 
 In **Profile Library**, click **Import fixture** and choose an OFL `.json` or GDTF `.gdtf` file for each fixture type in the rig. **New Profile** makes one by hand. The Profile Library is kept on this PC, across Shows and venues.
 
 ### 2. Patch the Venue
 
-<!-- Screenshot: Venue Patch stage plan (public-face issue 03). -->
+![Venue Patch stage plan with Fixtures placed on a 3 × 3 grid of Zones and a moving head selected, its mounting shown in the inspector](docs/images/venue-patch.png)
+*The example rig on the stage plan. A moving head is selected, with its mounting in the inspector.*
 
 In **Venue Patch**:
 
@@ -55,7 +58,8 @@ In **Venue Patch**:
 
 ### 3. Build a Scene
 
-<!-- Screenshot: Scene and Rule editor (public-face issue 03). -->
+![Scene editor for Circle movement: one Rule targets the two upstage overhead Zones, with Direction Centre and a Circle Movement Effect](docs/images/scene-editor.png)
+*A Scene with one Rule. The moving heads in the upstage Zones aim at Centre and circle around it.*
 
 In **Show**, on the **Scenes** tab:
 
@@ -76,7 +80,8 @@ In **Show**, on the **Triggers** tab:
 
 ### 5. Perform
 
-<!-- Demo GIF: MIDI fires Scenes, Perform and Preview react (public-face issue 03). -->
+![Animation: Scenes fired one after another in Perform, with the Preview changing colour and the moving heads following](docs/images/demo.gif)
+*Firing Scenes from Perform, sped up. MIDI notes fire the same buttons.*
 
 Open **Perform** at the gig. It shows Blackout, Base Look, Grand Master, Tap Tempo and Freeze along the top, every Scene button by Layer, and the Preview. The top bar shows the MIDI Input: red means lost, and Triggers do not fire until it returns.
 
