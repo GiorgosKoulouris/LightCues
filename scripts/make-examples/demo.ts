@@ -238,7 +238,7 @@ export function demoShow(): Show {
     },
     {
       id: 'base-look',
-      name: 'Base Look: warm white',
+      name: 'Warm white',
       ...looks,
       fadeIn: 1,
       rules: [

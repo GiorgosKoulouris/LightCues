@@ -288,7 +288,7 @@
     },
     {
       "id": "base-look",
-      "name": "Base Look: warm white",
+      "name": "Warm white",
       "layer": "looks",
       "tags": [
         "look"

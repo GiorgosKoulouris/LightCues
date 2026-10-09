@@ -22,7 +22,7 @@ The Show has 8 Scenes on 3 Layers. Triggers listen on MIDI channel 1:
 | G3   | Circle movement           | Go      |
 | A3   | L→R wave                  | Go      |
 | B3   | L→R wave                  | Release |
-| C4   | Base Look: warm white     | Go      |
+| C4   | Warm white (Base Look)    | Go      |
 | D4   | Outro: slow fade to blue  | Go      |
 
 C4 is MIDI note 60. Without MIDI, use the Scene buttons in Perform or on the Fallback Panel.
