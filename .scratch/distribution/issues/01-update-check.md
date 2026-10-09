@@ -1,6 +1,6 @@
 # Update check
 
-Status: ready-for-human
+Status: resolved
 
 See spec, "Update check".
 
@@ -40,3 +40,6 @@ Choices beyond the issue:
 
 Left for a human: the manual check on Windows. Set `package.json` to a version below the latest release, run `npm run dev`, wait about 10 s. The notice shows outside Perform, hides in Perform, and the button opens the release page in the browser. Also try the check button with the startup check off. Then delete this issue.
 
+### 2026-10-09: resolved
+
+Marked resolved by the maintainer.
