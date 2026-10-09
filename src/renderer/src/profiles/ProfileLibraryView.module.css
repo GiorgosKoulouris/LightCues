@@ -3,6 +3,7 @@
 
   display: grid;
   grid-template-columns: var(--profile-list-width) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: var(--space-4);
   height: 100%;
 }

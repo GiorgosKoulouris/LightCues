@@ -86,6 +86,10 @@ A slot that holds at most one active Scene. Activating a Scene replaces the acti
 **Trigger**:
 A mapping from an incoming MIDI message to a Scene action: Go (activate and stay), Flash (active while held) or Release (clear the Layer).
 
+**Scene button**:
+A manual control for one Scene, in Perform and on the Fallback Panel, with its key. Toggles: it activates the Scene, or clears its Layer if that Scene is already active. Unlike a Trigger, which only does the action it maps.
+_Avoid_: Trigger button
+
 **MIDI Input**:
 The MIDI port Triggers listen to, chosen per machine and kept between runs. When it is lost, the current look holds until it returns.
 _Avoid_: MIDI device, controller

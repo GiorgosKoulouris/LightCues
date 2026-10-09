@@ -14,6 +14,7 @@
   position: relative;
   display: grid;
   grid-template-columns: var(--fixture-list-width) minmax(0, 1fr) var(--side-width);
+  grid-template-rows: minmax(0, 1fr);
   gap: var(--space-4);
   height: 100%;
   padding-top: var(--space-3);

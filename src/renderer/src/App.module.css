@@ -1,6 +1,9 @@
+/* Bounded by the window, so the window never scrolls: a view can't grow its
+   row past it. */
 .app {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
 }
 

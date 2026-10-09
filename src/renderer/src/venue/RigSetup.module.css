@@ -1,3 +1,4 @@
+/* Scrolls on its own, so the tab bar stays in place. */
 .rig {
   --rig-width: 800px;
   --stage-field-width: 140px;
@@ -7,7 +8,9 @@
   flex-direction: column;
   gap: var(--space-5);
   max-width: var(--rig-width);
+  height: 100%;
   padding-top: var(--space-4);
+  overflow-y: auto;
 }
 
 .section {
