@@ -1,6 +1,6 @@
 # App icon
 
-Status: ready-for-human
+Status: resolved
 
 See spec, "Icon". You draw the glyph, or approve a draft. The wiring is agent work.
 
@@ -36,3 +36,7 @@ Left for a human:
 3. `npm run dev` on Windows: the window shows the icon.
 
 Then mark this issue resolved.
+
+### 2026-10-09: resolved
+
+Checked by the maintainer on Windows: the installer, uninstaller, Start menu entry, taskbar and title bar show the icon, and it reads at 16 px.
