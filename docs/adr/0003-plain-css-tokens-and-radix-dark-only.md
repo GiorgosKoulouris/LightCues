@@ -1,6 +1,6 @@
 # Plain CSS tokens and Radix primitives, dark only
 
-The renderer is styled with plain CSS: design tokens as custom properties, one CSS module per component. Radix primitives are used only for widgets that are hard to get right (Dialog, Popover, Menu, Tooltip). The theme is dark only, because the app is used in dark venues where a bright screen ruins night vision and shows from the stage. Tokens keep a light theme possible later. Fonts and icons are bundled, because the app must work offline.
+The renderer is styled with plain CSS: design tokens as custom properties, one CSS module per component. Radix primitives are used only for widgets that are hard to get right (Dialog, Popover, Menu, Tooltip). The theme is dark only, because the app is used in dark venues where a bright screen ruins night vision and shows from the stage. Tokens keep a light theme possible later. Icons are bundled, because the app must work offline. Text uses the Windows system UI font (Segoe UI), so no font is bundled: Inter is OFL-1.1, which is not GPL-3.0 compatible.
 
 ## Considered Options
 

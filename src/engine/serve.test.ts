@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import type { EngineConnect } from '../shared/protocol';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { EngineConnect, EngineGrantPath } from '../shared/protocol';
 import type { ParentPortLike, PortLike } from './serve';
 import { serve } from './serve';
 
@@ -37,6 +37,8 @@ function fakePort() {
 }
 
 describe('serve', () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it('answers commands arriving on a UI port handed over by the parent', () => {
     const parent = fakePort();
     const ui = fakePort();
@@ -72,5 +74,75 @@ describe('serve', () => {
     parent.deliver({ type: 'something-else' }, [ui.port]);
 
     expect(ui.isStarted()).toBe(false);
+  });
+
+  it('grants a path from the parent, acks it on the parent port, then uses it', () => {
+    const parent = fakePort();
+    const ui = fakePort();
+    const files = new Map<string, string>();
+    serve(parent.port as ParentPortLike, {
+      now: () => 0,
+      venueFiles: { read: () => '', write: (path, json) => void files.set(path, json) },
+    });
+    parent.deliver(connect, [ui.port]);
+    const grant: EngineGrantPath = { type: 'grantPath', path: 'C:/gigs/club.lcvenue' };
+
+    ui.deliver({ type: 'saveVenue', requestId: 1, path: 'C:/gigs/club.lcvenue' });
+    parent.deliver(grant);
+    ui.deliver({ type: 'saveVenue', requestId: 2, path: 'C:/gigs/club.lcvenue' });
+
+    expect(parent.sent).toEqual([{ type: 'pathGranted', path: 'C:/gigs/club.lcvenue' }]);
+    expect(ui.sent).toContainEqual({
+      type: 'venueDone',
+      requestId: 1,
+      errors: ['Could not save C:/gigs/club.lcvenue: the file was not chosen in a file dialog'],
+    });
+    expect(ui.sent).toContainEqual({ type: 'venueDone', requestId: 2, errors: [] });
+    expect([...files.keys()]).toEqual(['C:/gigs/club.lcvenue']);
+  });
+
+  it('ignores a grant without a string path', () => {
+    const parent = fakePort();
+    serve(parent.port as ParentPortLike, { now: () => 0 });
+
+    parent.deliver({ type: 'grantPath', path: 7 });
+
+    expect(parent.sent).toEqual([]);
+  });
+
+  it('drops UI messages that are not a command and answers the next one', () => {
+    const parent = fakePort();
+    const ui = fakePort();
+    serve(parent.port as ParentPortLike, { now: () => 0 });
+    parent.deliver(connect, [ui.port]);
+
+    for (const data of [undefined, null, 'ping', 7, [], { id: 1 }, { type: 7 }]) {
+      expect(() => ui.deliver(data)).not.toThrow();
+    }
+    ui.deliver({ type: 'ping', id: 3 });
+
+    expect(ui.sent).toEqual([{ type: 'pong', id: 3, uptimeMs: 0 }]);
+  });
+
+  it('logs a command that throws and answers the next one', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const parent = fakePort();
+    const ui = fakePort();
+    let throwing = false;
+    serve(parent.port as ParentPortLike, {
+      now: () => {
+        if (throwing) throw new Error('boom');
+        return 0;
+      },
+    });
+    parent.deliver(connect, [ui.port]);
+    throwing = true;
+
+    expect(() => ui.deliver({ type: 'ping', id: 4 })).not.toThrow();
+    throwing = false;
+    ui.deliver({ type: 'ping', id: 5 });
+
+    expect(error).toHaveBeenCalledWith('Engine command ping failed.', expect.any(Error));
+    expect(ui.sent).toEqual([{ type: 'pong', id: 5, uptimeMs: 0 }]);
   });
 });

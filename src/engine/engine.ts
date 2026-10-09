@@ -16,6 +16,7 @@ import {
   type NoteMessage,
 } from './midi-input';
 import { createOutputs, type SerialPorts } from './outputs';
+import { createPathGrants, NOT_CHOSEN } from './path-grants';
 import { createPlayback } from './playback';
 import { createPreview } from './preview';
 import {
@@ -78,6 +79,8 @@ export interface EngineOptions {
 
 export interface Engine {
   handle(command: EngineCommand): void;
+  // Lets commands read and write `path`, which the user picked in a dialog.
+  grantPath(path: string): void;
 }
 
 export function createEngine({
@@ -98,6 +101,7 @@ export function createEngine({
   // A previewed library file, waiting for the user to confirm it.
   let pendingImport: { path: string; contents: LibraryContents } | undefined;
   const recentFiles = createRecentFiles(recentFilesStorage);
+  const grants = createPathGrants();
   const venue = createVenueSession({
     emit,
     now,
@@ -105,6 +109,7 @@ export function createEngine({
     replaced: () => playback.venueReplaced(),
     files: venueFiles,
     recent: recentFiles.of('venue'),
+    granted: grants.has,
     libraryProfile: (id) => library.get(id),
   });
   const show = createShowSession({
@@ -112,6 +117,7 @@ export function createEngine({
     now,
     files: showFiles,
     recent: recentFiles.of('show'),
+    granted: grants.has,
     edited: () => playback.showEdited(),
     replaced: () => playback.showReplaced(),
   });
@@ -175,6 +181,7 @@ export function createEngine({
   // empty list means it was written.
   function exportLibrary(path: string): string[] {
     if (!libraryFiles) return ['Library files are not available'];
+    if (!grants.has(path)) return [`Could not export ${path}: ${NOT_CHOSEN}`];
     try {
       libraryFiles.write(path, library.save());
     } catch (error) {
@@ -190,6 +197,8 @@ export function createEngine({
   function previewLibraryImport(path: string): LibraryImportPreview {
     pendingImport = undefined;
     if (!libraryFiles) return { status: 'rejected', reason: 'Library files are not available' };
+    if (!grants.has(path))
+      return { status: 'rejected', reason: `Could not read ${path}: ${NOT_CHOSEN}` };
     let json: string;
     try {
       json = libraryFiles.read(path);
@@ -247,11 +256,12 @@ export function createEngine({
   // Reopens the last Venue Patch and Show. Failures wait for the UI to ask,
   // once, since no UI is connected yet.
   let reopenErrors = [
-    ...reopen('venue', venue, recentFiles.of('venue')),
-    ...reopen('show', show, recentFiles.of('show')),
+    ...reopen('venue', venue, recentFiles.of('venue'), grants.grant),
+    ...reopen('show', show, recentFiles.of('show'), grants.grant),
   ];
 
   return {
+    grantPath: grants.grant,
     handle(command) {
       switch (command.type) {
         case 'ping':
@@ -365,14 +375,17 @@ export function createEngine({
   };
 }
 
-// Opens a document's last file, if any. One that fails is forgotten.
+// Opens a document's last file, if any. The engine kept that path itself, so
+// it is granted. One that fails is forgotten.
 function reopen(
   kind: RecentKind,
   session: { open(path: string): string[] },
   recent: RecentFile,
+  grant: (path: string) => void,
 ): string[] {
   const file = recent.file();
   if (file === undefined) return [];
+  grant(file);
   const errors = session.open(file);
   if (errors.length === 0) return [];
   recent.set(undefined);

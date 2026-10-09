@@ -82,8 +82,15 @@ function venueEngine(files = new Map<string, string>(), clock = { now: 0 }) {
 
   return {
     edit: (edit: VenueEdit) => request((requestId) => ({ type: 'editVenue', requestId, edit })),
-    save: (path?: string) => request((requestId) => ({ type: 'saveVenue', requestId, path })),
-    open: (path: string) => request((requestId) => ({ type: 'openVenue', requestId, path })),
+    // Grants each path first, as main does after a file dialog.
+    save: (path?: string) => {
+      if (path !== undefined) engine.grantPath(path);
+      return request((requestId) => ({ type: 'saveVenue', requestId, path }));
+    },
+    open: (path: string) => {
+      engine.grantPath(path);
+      return request((requestId) => ({ type: 'openVenue', requestId, path }));
+    },
     undo: () => engine.handle({ type: 'undoVenue' }),
     redo: () => engine.handle({ type: 'redoVenue' }),
     // The last Venue Patch state the engine sent.
@@ -230,6 +237,7 @@ describe('engine Venue Patch', () => {
       emit: (e) => events.push(e),
       venueFiles: { read: (path) => files.get(path) ?? '', write: () => {} },
     });
+    second.grantPath('C:/gigs/club.lcvenue');
     second.handle({ type: 'openVenue', requestId: 1, path: 'C:/gigs/club.lcvenue' });
 
     expect(events).toEqual([
@@ -377,8 +385,15 @@ function showEngine(files = new Map<string, string>(), clock = { now: 0 }) {
 
   return {
     edit: (edit: ShowEdit) => request((requestId) => ({ type: 'editShow', requestId, edit })),
-    save: (path?: string) => request((requestId) => ({ type: 'saveShow', requestId, path })),
-    open: (path: string) => request((requestId) => ({ type: 'openShow', requestId, path })),
+    // Grants each path first, as main does after a file dialog.
+    save: (path?: string) => {
+      if (path !== undefined) engine.grantPath(path);
+      return request((requestId) => ({ type: 'saveShow', requestId, path }));
+    },
+    open: (path: string) => {
+      engine.grantPath(path);
+      return request((requestId) => ({ type: 'openShow', requestId, path }));
+    },
     undo: () => engine.handle({ type: 'undoShow' }),
     redo: () => engine.handle({ type: 'redoShow' }),
     // The last Show state the engine sent.
@@ -793,6 +808,7 @@ describe('engine Profile Library export', () => {
     });
     engine.handle({ type: 'saveProfile', requestId: 1, profile: dimmer });
     const exported = (path: string) => {
+      engine.grantPath(path);
       engine.handle({ type: 'exportLibrary', requestId: 2, path });
       const reply = events.findLast((e) => e.type === 'libraryExported');
       return reply?.type === 'libraryExported' && reply.requestId === 2 ? reply.errors : undefined;
@@ -873,6 +889,7 @@ describe('engine Profile Library import', () => {
       return events;
     };
     const preview = (path: string, requestId = 2) => {
+      engine.grantPath(path);
       const reply = send({ type: 'previewLibraryImport', requestId, path }).find(
         (e) => e.type === 'libraryImportPreview',
       );
@@ -1012,5 +1029,160 @@ describe('engine Profile Library import', () => {
     });
     expect(stored.json).toBe(before);
     expect(profiles()).toEqual([{ profile: dimmer, handEdited: true }]);
+  });
+});
+
+describe('engine file grants', () => {
+  const NOT_CHOSEN = 'the file was not chosen in a file dialog';
+
+  // An engine over one in-memory disk for every kind of file, which records
+  // each read and write. `recent` is the recent-files storage.
+  function grantEngine(files = new Map<string, string>(), recent: { json?: string } = {}) {
+    const events: EngineEvent[] = [];
+    const reads: string[] = [];
+    const writes: string[] = [];
+    const disk = {
+      read(path: string) {
+        reads.push(path);
+        const json = files.get(path);
+        if (json === undefined) throw new Error('File not found');
+        return json;
+      },
+      write(path: string, json: string) {
+        writes.push(path);
+        files.set(path, json);
+      },
+    };
+    const engine = createEngine({
+      emit: (e) => events.push(e),
+      venueFiles: disk,
+      showFiles: disk,
+      libraryFiles: disk,
+      recentFilesStorage: {
+        read: () => recent.json,
+        write: (json) => void (recent.json = json),
+      },
+    });
+    let nextRequestId = 1;
+
+    // Sends a path command and returns the errors of its reply.
+    function run(type: PathCommand, path: string): string[] {
+      const requestId = nextRequestId++;
+      engine.handle({ type, requestId, path });
+      const reply = events.findLast((e) => 'requestId' in e && e.requestId === requestId);
+      switch (reply?.type) {
+        case 'venueDone':
+        case 'showDone':
+        case 'libraryExported':
+          return reply.errors;
+        case 'libraryImportPreview':
+          return reply.preview.status === 'rejected' ? [reply.preview.reason] : [];
+        default:
+          throw new Error('No reply');
+      }
+    }
+    return { engine, events, reads, writes, files, run };
+  }
+
+  // Each command that takes a path, its file, and the verb of its error.
+  const PATH_COMMANDS = {
+    openVenue: { file: 'C:/f/a.lcvenue', verb: 'open' },
+    saveVenue: { file: 'C:/f/a.lcvenue', verb: 'save' },
+    openShow: { file: 'C:/f/a.lcshow', verb: 'open' },
+    saveShow: { file: 'C:/f/a.lcshow', verb: 'save' },
+    exportLibrary: { file: 'C:/f/a.lclibrary', verb: 'export' },
+    previewLibraryImport: { file: 'C:/f/a.lclibrary', verb: 'read' },
+  } as const;
+  type PathCommand = keyof typeof PATH_COMMANDS;
+  const COMMANDS = Object.keys(PATH_COMMANDS) as PathCommand[];
+
+  // A file each command can read: a saved Venue Patch, Show and library.
+  function savedFiles(): Map<string, string> {
+    const files = new Map<string, string>();
+    const { engine, run } = grantEngine(files);
+    engine.handle({ type: 'saveProfile', requestId: 0, profile: dimmer });
+    for (const path of ['C:/f/a.lcvenue', 'C:/f/a.lcshow', 'C:/f/a.lclibrary']) {
+      engine.grantPath(path);
+    }
+    run('saveVenue', 'C:/f/a.lcvenue');
+    run('saveShow', 'C:/f/a.lcshow');
+    run('exportLibrary', 'C:/f/a.lclibrary');
+    return files;
+  }
+
+  it.each(COMMANDS)('%s works on a granted path', (command) => {
+    const { engine, run } = grantEngine(savedFiles());
+    engine.handle({ type: 'saveProfile', requestId: 0, profile: dimmer });
+    const { file } = PATH_COMMANDS[command];
+
+    engine.grantPath(file);
+
+    expect(run(command, file)).toEqual([]);
+  });
+
+  it.each(COMMANDS)('%s rejects a path not granted, reading and writing nothing', (command) => {
+    const files = savedFiles();
+    const before = new Map(files);
+    const { run, reads, writes } = grantEngine(files);
+    const { file, verb } = PATH_COMMANDS[command];
+
+    expect(run(command, file)).toEqual([`Could not ${verb} ${file}: ${NOT_CHOSEN}`]);
+    expect(reads).toEqual([]);
+    expect(writes).toEqual([]);
+    expect(files).toEqual(before);
+  });
+
+  it('saves in place of the current file without a new grant', () => {
+    const { engine, events, run, writes } = grantEngine(savedFiles());
+    engine.grantPath('C:/f/a.lcvenue');
+    engine.grantPath('C:/f/a.lcshow');
+    run('openVenue', 'C:/f/a.lcvenue');
+    run('openShow', 'C:/f/a.lcshow');
+
+    engine.handle({ type: 'saveVenue', requestId: 98 });
+    engine.handle({ type: 'saveShow', requestId: 99 });
+
+    expect(events.filter((e) => e.type === 'venueDone' || e.type === 'showDone').at(-2)).toEqual({
+      type: 'venueDone',
+      requestId: 98,
+      errors: [],
+    });
+    expect(events.findLast((e) => e.type === 'showDone')).toEqual({
+      type: 'showDone',
+      requestId: 99,
+      errors: [],
+    });
+    expect(writes).toEqual(['C:/f/a.lcvenue', 'C:/f/a.lcshow']);
+  });
+
+  it('reopens the last files on launch, and saves them in place, without a grant', () => {
+    const files = savedFiles();
+    const recent: { json?: string } = {};
+    const first = grantEngine(files, recent);
+    first.engine.grantPath('C:/f/a.lcvenue');
+    first.engine.grantPath('C:/f/a.lcshow');
+    first.run('openVenue', 'C:/f/a.lcvenue');
+    first.run('openShow', 'C:/f/a.lcshow');
+
+    const next = grantEngine(files, recent);
+    next.engine.handle({ type: 'getReopenErrors' });
+
+    expect(next.events.findLast((e) => e.type === 'reopenErrors')).toEqual({
+      type: 'reopenErrors',
+      errors: [],
+    });
+    expect(next.run('saveVenue', 'C:/f/a.lcvenue')).toEqual([]);
+    expect(next.run('saveShow', 'C:/f/a.lcshow')).toEqual([]);
+  });
+
+  it('matches a grant case-insensitively and ignoring .. segments', () => {
+    const { engine, run } = grantEngine(savedFiles());
+
+    engine.grantPath('C:/F/X/../A.LCVENUE');
+
+    expect(run('openVenue', 'C:/f/a.lcvenue')).toEqual([]);
+    expect(run('openShow', 'C:/f/a.lcshow')).toEqual([
+      `Could not open C:/f/a.lcshow: ${NOT_CHOSEN}`,
+    ]);
   });
 });

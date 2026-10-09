@@ -1,4 +1,3 @@
-import '@fontsource-variable/inter';
 import './ui/tokens.css';
 import './ui/global.css';
 import { StrictMode } from 'react';

@@ -1,8 +1,15 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  truncateSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { diskLibraryBackups } from './file-storage';
+import { diskLibraryBackups, diskVenueFiles } from './file-storage';
 
 describe('diskLibraryBackups', () => {
   let dir: string;
@@ -64,5 +71,33 @@ describe('diskLibraryBackups', () => {
     writeFileSync(blocker, '');
 
     expect(() => diskLibraryBackups(blocker).save('{}')).toThrow();
+  });
+});
+
+describe('diskVenueFiles', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'lightcues-files-'));
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('reads a file', () => {
+    const path = join(dir, 'Club.lcvenue');
+    writeFileSync(path, '{"version":1}');
+
+    expect(diskVenueFiles.read(path)).toBe('{"version":1}');
+  });
+
+  it('rejects a file over 32 MB without reading it', () => {
+    const path = join(dir, 'Huge.lcshow');
+    writeFileSync(path, '');
+    // Sparse: no 32 MB is written.
+    truncateSync(path, 32 * 1024 * 1024 + 1);
+
+    expect(() => diskVenueFiles.read(path)).toThrow('File is too large (over 32 MB)');
+  });
+
+  it('reports a missing file', () => {
+    expect(() => diskVenueFiles.read(join(dir, 'Gone.lcvenue'))).toThrow('File not found');
   });
 });

@@ -647,6 +647,7 @@ async function focusEngine() {
       write: (path, json) => void files.set(path, json),
     },
   });
+  engine.grantPath('rig.lcvenue');
   let requestId = 1;
   engine.handle({ type: 'saveProfile', requestId: requestId++, profile: dimmer });
   engine.handle({ type: 'saveProfile', requestId: requestId++, profile: mover });

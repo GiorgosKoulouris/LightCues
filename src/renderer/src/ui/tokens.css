@@ -45,7 +45,7 @@
   --radius-lg: 10px;
   --radius-pill: 999px;
 
-  --font-sans: 'Inter Variable', system-ui, sans-serif;
+  --font-sans: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
   /* DMX addresses and channel numbers. */
   --font-mono: ui-monospace, Consolas, 'Cascadia Mono', monospace;
   --text-xs: 11px;

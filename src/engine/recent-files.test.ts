@@ -32,7 +32,9 @@ function launch(files: Map<string, string>, recent: { json?: string }) {
   });
   let nextRequestId = 1;
 
+  // Grants the path first, as main does after a file dialog.
   function run(command: 'openVenue' | 'saveVenue' | 'openShow' | 'saveShow', path: string) {
+    engine.grantPath(path);
     engine.handle({ type: command, requestId: nextRequestId++, path });
   }
 
@@ -214,6 +216,7 @@ describe('engine library folder', () => {
     const first = launch(files, recent);
     expect(first.profilesFolder()).toBeUndefined();
 
+    first.engine.grantPath('C:/backup/Profiles.lclibrary');
     first.engine.handle({
       type: 'exportLibrary',
       requestId: 1,
@@ -228,12 +231,14 @@ describe('engine library folder', () => {
     const files = new Map<string, string>();
     const recent = {};
     const first = launch(files, recent);
+    first.engine.grantPath('C:/backup/Profiles.lclibrary');
     first.engine.handle({
       type: 'exportLibrary',
       requestId: 1,
       path: 'C:/backup/Profiles.lclibrary',
     });
     first.failWrites();
+    first.engine.grantPath('D:/full/Profiles.lclibrary');
     first.engine.handle({
       type: 'exportLibrary',
       requestId: 2,

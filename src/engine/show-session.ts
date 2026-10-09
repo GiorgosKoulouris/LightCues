@@ -17,6 +17,7 @@ import {
   type ShowResult,
 } from '../shared/show';
 import { createHistory } from './history';
+import { NOT_CHOSEN } from './path-grants';
 import type { RecentFile } from './recent-files';
 import { loadShowFile, saveShowFile } from './show-file';
 
@@ -38,6 +39,9 @@ export interface ShowSessionOptions {
   files?: ShowFiles;
   // Kept up to date with the file the Show was opened from or last saved to.
   recent?: RecentFile;
+  // Whether a path may be read or written. The current file always may: it
+  // was granted to be opened or saved.
+  granted: (path: string) => boolean;
   // Called after an edit, undo or redo changed the Show.
   edited?: () => void;
   // Called after the Show is replaced by a new or opened one.
@@ -50,6 +54,7 @@ export function createShowSession({
   now,
   files,
   recent,
+  granted,
   edited,
   replaced,
 }: ShowSessionOptions) {
@@ -75,6 +80,7 @@ export function createShowSession({
 
   function open(from: string): string[] {
     if (!files) return ['Show files are not available'];
+    if (!granted(from)) return [`Could not open ${from}: ${NOT_CHOSEN}`];
     try {
       history.reset(loadShowFile(files.read(from)));
     } catch (error) {
@@ -90,6 +96,7 @@ export function createShowSession({
   function save(to = path): string[] {
     if (!files) return ['Show files are not available'];
     if (to === undefined) return ['Choose a file to save the Show to'];
+    if (!granted(to)) return [`Could not save ${to}: ${NOT_CHOSEN}`];
     try {
       files.write(to, saveShowFile(history.current()));
     } catch (error) {

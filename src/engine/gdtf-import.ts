@@ -204,19 +204,41 @@ function defaultRole(
   return 'Wash';
 }
 
+// A .gdtf carries 3D models and images, so its cap is generous.
+const MAX_GDTF_BYTES = 256 * 1024 * 1024;
+const MAX_DESCRIPTION_BYTES = 16 * 1024 * 1024;
+const DESCRIPTION_TOO_LARGE = 'description.xml is too large (over 16 MB)';
+
 function readFixtureType(bytes: Uint8Array): GdtfFixtureType {
+  if (bytes.length > MAX_GDTF_BYTES) throw new Error('File is too large (over 256 MB)');
   let files: Record<string, Uint8Array>;
+  let tooLarge = false;
   try {
-    files = unzipSync(bytes, { filter: (file) => file.name === 'description.xml' });
+    files = unzipSync(bytes, {
+      filter: (file) => {
+        if (file.name !== 'description.xml') return false;
+        if (file.originalSize <= MAX_DESCRIPTION_BYTES) return true;
+        tooLarge = true;
+        return false;
+      },
+    });
   } catch {
     throw new Error('Not a GDTF file');
   }
+  if (tooLarge) throw new Error(DESCRIPTION_TOO_LARGE);
   const xml = files['description.xml'];
   if (!xml) throw new Error('Not a GDTF file: description.xml is missing');
+  // The zip header size can lie.
+  if (xml.length > MAX_DESCRIPTION_BYTES) throw new Error(DESCRIPTION_TOO_LARGE);
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: '',
     parseAttributeValue: false,
+    // GDTF never uses DOCTYPE entities, so none are expanded. Turning entities
+    // off also leaves the XML ones (`&amp;`, ...), so those are decoded here.
+    processEntities: false,
+    attributeValueProcessor: (_name, value) => decodeXmlEntities(value),
+    tagValueProcessor: (_name, value) => decodeXmlEntities(value),
     // `Wheel` is also a ChannelFunction attribute.
     isArray: (name, _path, _isLeaf, isAttribute) => !isAttribute && REPEATED.has(name),
   });
@@ -224,6 +246,19 @@ function readFixtureType(bytes: Uint8Array): GdtfFixtureType {
   const fixtureType = document.GDTF?.FixtureType;
   if (!fixtureType) throw new Error('Not a GDTF file: description.xml has no FixtureType');
   return fixtureType;
+}
+
+const XML_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+};
+
+// The five entities XML predefines, in one pass so `&amp;lt;` stays `&lt;`.
+function decodeXmlEntities(text: string): string {
+  return text.replace(/&(amp|lt|gt|quot|apos);/g, (_match, name: string) => XML_ENTITIES[name]!);
 }
 
 // A Profile mode is one DMX block, so only channels in the mode's lowest DMX

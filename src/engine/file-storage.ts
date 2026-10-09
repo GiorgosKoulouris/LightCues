@@ -5,6 +5,7 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -24,10 +25,14 @@ export function fileStorage(path: string): LibraryStorage {
   };
 }
 
+// Far above any real Venue Patch, Show or library.
+const MAX_DOCUMENT_BYTES = 32 * 1024 * 1024;
+
 // .lcvenue files wherever the user chose to keep them.
 export const diskVenueFiles: VenueFiles = {
   read(path) {
     if (!existsSync(path)) throw new Error('File not found');
+    if (statSync(path).size > MAX_DOCUMENT_BYTES) throw new Error('File is too large (over 32 MB)');
     return readFileSync(path, 'utf8');
   },
   write: writeSafely,

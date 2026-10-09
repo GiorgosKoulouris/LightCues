@@ -71,6 +71,8 @@ The window should show "Engine replied in N ms". That confirms the engine proces
 
 `dependencies` lists only the packages main and the engine load at runtime. They ship in the installer. Renderer packages (React, Radix, …) go in `devDependencies`, because Vite bundles them into the renderer. A new native module also needs adding to `asarUnpack` and the prebuild filters in `electron-builder.yml`.
 
+`overrides` in `package.json` pins `global-agent@4.1.3` under `@electron/get`. `global-agent@3` pulls in `roarr` and `sprintf-js@1.1.3` (GHSA-hp3w-g68c-fv3c, no fixed release). Remove the override once `electron-builder`'s `@electron/get` depends on `global-agent@4` or later.
+
 ## 7. Commands
 
 See [Commands in the README](../README.md#commands).

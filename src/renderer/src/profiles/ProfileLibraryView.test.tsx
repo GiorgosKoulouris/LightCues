@@ -487,6 +487,21 @@ describe('fixture import', () => {
     expect(sent('importOfl')).toEqual([]);
     expect(await screen.findByText('Imported Acme Par')).toBeInTheDocument();
   });
+
+  it('rejects a .gdtf file over 256 MB without sending it', async () => {
+    await renderView();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Import fixture' }));
+    const file = new File([new Uint8Array([0x50, 0x4b, 3, 4])], 'huge.gdtf');
+    Object.defineProperty(file, 'size', { value: 256 * 1024 * 1024 + 1 });
+    await user.upload(dialog().getByLabelText('Fixture file'), file);
+    await user.click(dialog().getByRole('button', { name: 'Import' }));
+
+    expect(await dialog().findByRole('alert')).toHaveTextContent(
+      'huge.gdtf is too large (over 256 MB).',
+    );
+    expect(sent('importGdtf')).toEqual([]);
+  });
 });
 
 describe('library export', () => {

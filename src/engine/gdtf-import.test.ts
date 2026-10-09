@@ -330,6 +330,31 @@ describe('importGdtfFixture', () => {
     );
   });
 
+  it('rejects a file over 256 MB before unzipping it', () => {
+    expect(() => importGdtfFixture(new Uint8Array(256 * 1024 * 1024 + 1))).toThrow(
+      'File is too large (over 256 MB)',
+    );
+  });
+
+  it('rejects a description.xml over 16 MB by its zip header', () => {
+    const file = zipSync({ 'description.xml': new Uint8Array(16 * 1024 * 1024 + 1) });
+
+    expect(() => importGdtfFixture(file)).toThrow('description.xml is too large (over 16 MB)');
+  });
+
+  it('does not expand DOCTYPE entities but decodes the XML ones', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE GDTF [<!ENTITY maker "Expanded">]>
+<GDTF DataVersion="1.1">
+  <FixtureType Manufacturer="&maker;" Name="Spot &amp; Wash &lt;1&gt;"><DMXModes/></FixtureType>
+</GDTF>`;
+
+    const { profile } = importGdtfFixture(zipSync({ 'description.xml': strToU8(xml) }));
+
+    expect(profile.manufacturer).toBe('&maker;');
+    expect(profile.model).toBe('Spot & Wash <1>');
+  });
+
   it('reads the GDTF 1.0 default value from the DMX channel', () => {
     const { profile } = importGdtfFixture(
       gdtf(

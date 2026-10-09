@@ -12,6 +12,7 @@ import {
 } from 'electron';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   CHOOSE_LIBRARY_TO_OPEN_CHANNEL,
   CHOOSE_LIBRARY_TO_SAVE_CHANNEL,
@@ -29,10 +30,14 @@ import {
   SAVED_BEFORE_CLOSE_CHANNEL,
   SHOW_LIBRARY_BACKUP_CHANNEL,
   UNSAVED_CHANNEL,
+  isDocumentKind,
   unsavedMessage,
   type DocumentKind,
   type EngineConnect,
+  type EngineGrantPath,
+  type EnginePathGranted,
 } from '../shared/protocol';
+import { isAppPage } from './navigation';
 
 const VENUE_FILTERS = [{ name: 'LightCues Venue Patch', extensions: ['lcvenue'] }];
 const SHOW_FILTERS = [{ name: 'LightCues Show', extensions: ['lcshow'] }];
@@ -74,34 +79,75 @@ function connectWindowToEngine(window: BrowserWindow, engine: UtilityProcess): v
   });
 }
 
+// Grants the engine a path the user picked and waits for its ack. Only then
+// may the renderer have the path: its commands reach the engine on another
+// port, so they could otherwise arrive before the grant.
+function grantPath(engine: UtilityProcess, path: string): Promise<void> {
+  return new Promise((granted, failed) => {
+    // An engine that already exited fires no `exit` again.
+    if (engine.pid === undefined) return failed(new Error('The engine is not running'));
+    function onMessage(message: unknown): void {
+      const ack = message as EnginePathGranted | undefined;
+      if (ack?.type !== 'pathGranted' || ack.path !== path) return;
+      stop();
+      granted();
+    }
+    function onExit(): void {
+      stop();
+      failed(new Error('The engine stopped'));
+    }
+    function stop(): void {
+      engine.removeListener('message', onMessage);
+      engine.removeListener('exit', onExit);
+    }
+    engine.on('message', onMessage);
+    engine.on('exit', onExit);
+    const grant: EngineGrantPath = { type: 'grantPath', path };
+    engine.postMessage(grant);
+  });
+}
+
 // Native Open/Save dialogs for one kind of file. The engine reads and writes
-// the chosen path. Without a current file, Save suggests `name` in the
-// folder. Open may accept more files than Save writes.
+// the chosen path, once granted. Cancel grants nothing. Without a current
+// file, Save suggests `name` in the folder. Open may accept more files than
+// Save writes. Renderer values that are not strings count as absent.
 function handleFileDialogs(
+  engine: UtilityProcess,
   openChannel: string,
   saveChannel: string,
   filters: FileFilter[],
   openFilters = filters,
 ): void {
-  ipcMain.handle(openChannel, async (event, folder?: string) => {
+  ipcMain.handle(openChannel, async (event, folder: unknown) => {
     const window = BrowserWindow.fromWebContents(event.sender);
     const options = {
       filters: openFilters,
-      defaultPath: existingFolder(folder),
+      defaultPath: existingFolder(typeof folder === 'string' ? folder : undefined),
       properties: ['openFile' as const],
     };
     const result = await (window
       ? dialog.showOpenDialog(window, options)
       : dialog.showOpenDialog(options));
-    return result.canceled ? undefined : result.filePaths[0];
+    const path = result.canceled ? undefined : result.filePaths[0];
+    if (path !== undefined) await grantPath(engine, path);
+    return path;
   });
-  ipcMain.handle(saveChannel, async (event, current?: string, folder?: string, name?: string) => {
+  ipcMain.handle(saveChannel, async (event, current: unknown, folder: unknown, name: unknown) => {
     const window = BrowserWindow.fromWebContents(event.sender);
-    const options = { filters, defaultPath: current ?? suggestedPath(folder, name) };
+    const defaultPath =
+      typeof current === 'string'
+        ? current
+        : suggestedPath(
+            typeof folder === 'string' ? folder : undefined,
+            typeof name === 'string' ? name : undefined,
+          );
+    const options = { filters, defaultPath };
     const result = await (window
       ? dialog.showSaveDialog(window, options)
       : dialog.showSaveDialog(options));
-    return result.canceled ? undefined : result.filePath;
+    const path = result.canceled ? undefined : result.filePath;
+    if (path !== undefined) await grantPath(engine, path);
+    return path;
   });
 }
 
@@ -138,13 +184,18 @@ function guardClose(window: BrowserWindow): void {
   let saving: DocumentKind[] = [];
   let closing = false;
 
-  function onUnsaved(event: IpcMainEvent, document: DocumentKind, value: boolean): void {
-    if (event.sender !== contents) return;
+  function onUnsaved(event: IpcMainEvent, document: unknown, value: unknown): void {
+    if (event.sender !== contents || !isDocumentKind(document) || typeof value !== 'boolean') {
+      return;
+    }
     if (value) unsaved.add(document);
     else unsaved.delete(document);
   }
-  function onSaved(event: IpcMainEvent, document: DocumentKind, saved: boolean): void {
-    if (event.sender !== contents || saving[0] !== document) return;
+  function onSaved(event: IpcMainEvent, document: unknown, saved: unknown): void {
+    if (event.sender !== contents || !isDocumentKind(document) || typeof saved !== 'boolean') {
+      return;
+    }
+    if (saving[0] !== document) return;
     saving = saved ? saving.slice(1) : [];
     if (!saved) return;
     if (saving[0]) contents.send(SAVE_BEFORE_CLOSE_CHANNEL, saving[0]);
@@ -190,7 +241,7 @@ function guardClose(window: BrowserWindow): void {
   });
 }
 
-function createWindow(engine: UtilityProcess): void {
+function createWindow(engine: UtilityProcess, pageUrl: string): void {
   const window = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -200,27 +251,49 @@ function createWindow(engine: UtilityProcess): void {
   });
   connectWindowToEngine(window, engine);
   guardClose(window);
+  void window.loadURL(pageUrl);
+}
 
+// The renderer page: the dev server in development, the built file otherwise.
+function rendererUrl(): string {
   const devServerUrl = process.env['ELECTRON_RENDERER_URL'];
-  if (!app.isPackaged && devServerUrl) {
-    void window.loadURL(devServerUrl);
-  } else {
-    void window.loadFile(join(__dirname, '../renderer/index.html'));
-  }
+  if (!app.isPackaged && devServerUrl) return devServerUrl;
+  return pathToFileURL(join(__dirname, '../renderer/index.html')).href;
+}
+
+// Every window gets the preload API, so none may open new windows or leave
+// the app's page. The renderer has no links or window.open; any attempt comes
+// from injected content, such as a crafted Show, Venue Patch or Profile
+// Library file. Runs before the first window is created.
+function restrictNavigation(pageUrl: string): void {
+  app.on('web-contents-created', (_event, contents) => {
+    contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    contents.on('will-navigate', (event) => {
+      if (!isAppPage(event.url, pageUrl)) event.preventDefault();
+    });
+  });
 }
 
 void app.whenReady().then(() => {
   const engine = startEngine();
-  handleFileDialogs(CHOOSE_VENUE_TO_OPEN_CHANNEL, CHOOSE_VENUE_TO_SAVE_CHANNEL, VENUE_FILTERS);
-  handleFileDialogs(CHOOSE_SHOW_TO_OPEN_CHANNEL, CHOOSE_SHOW_TO_SAVE_CHANNEL, SHOW_FILTERS);
   handleFileDialogs(
+    engine,
+    CHOOSE_VENUE_TO_OPEN_CHANNEL,
+    CHOOSE_VENUE_TO_SAVE_CHANNEL,
+    VENUE_FILTERS,
+  );
+  handleFileDialogs(engine, CHOOSE_SHOW_TO_OPEN_CHANNEL, CHOOSE_SHOW_TO_SAVE_CHANNEL, SHOW_FILTERS);
+  handleFileDialogs(
+    engine,
     CHOOSE_LIBRARY_TO_OPEN_CHANNEL,
     CHOOSE_LIBRARY_TO_SAVE_CHANNEL,
     LIBRARY_FILTERS,
     LIBRARY_OPEN_FILTERS,
   );
   handleShowLibraryBackup();
-  createWindow(engine);
+  const pageUrl = rendererUrl();
+  restrictNavigation(pageUrl);
+  createWindow(engine, pageUrl);
 });
 
 app.on('window-all-closed', () => app.quit());

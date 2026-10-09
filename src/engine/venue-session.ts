@@ -15,6 +15,7 @@ import {
   type VenuePatch,
 } from '../shared/venue-patch';
 import { createHistory } from './history';
+import { NOT_CHOSEN } from './path-grants';
 import type { RecentFile } from './recent-files';
 import { loadVenueFile, saveVenueFile } from './venue-file';
 
@@ -42,6 +43,9 @@ export interface VenueSessionOptions {
   files?: VenueFiles;
   // Kept up to date with the file the patch was opened from or last saved to.
   recent?: RecentFile;
+  // Whether a path may be read or written. The current file always may: it
+  // was granted to be opened or saved.
+  granted: (path: string) => boolean;
   // Called after the patch is replaced, edited, undone or redone.
   changed?: () => void;
   // Called after New, or Open of a file.
@@ -56,6 +60,7 @@ export function createVenueSession({
   now,
   files,
   recent,
+  granted,
   changed,
   replaced,
   libraryProfile,
@@ -82,6 +87,7 @@ export function createVenueSession({
 
   function open(from: string): string[] {
     if (!files) return ['Venue files are not available'];
+    if (!granted(from)) return [`Could not open ${from}: ${NOT_CHOSEN}`];
     try {
       history.reset(loadVenueFile(files.read(from)));
     } catch (error) {
@@ -98,6 +104,7 @@ export function createVenueSession({
   function save(to = path): string[] {
     if (!files) return ['Venue files are not available'];
     if (to === undefined) return ['Choose a file to save the Venue Patch to'];
+    if (!granted(to)) return [`Could not save ${to}: ${NOT_CHOSEN}`];
     try {
       files.write(to, saveVenueFile(history.current()));
     } catch (error) {

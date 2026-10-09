@@ -42,6 +42,9 @@ type ImportFile = (overwrite: boolean) => Promise<FixtureImportResult>;
 // What the last attempt left to say: a problem, or what was imported.
 type Report = { error: string } | { imported: string; unsupported: string[] } | { kept: string };
 
+// The engine checks this again.
+const MAX_GDTF_BYTES = 256 * 1024 * 1024;
+
 function FixtureImportForm({
   importOfl,
   importGdtf,
@@ -86,6 +89,10 @@ function FixtureImportForm({
   // reporting why it cannot be read.
   async function readFile(chosen: File): Promise<ImportFile | undefined> {
     if (isGdtf) {
+      if (chosen.size > MAX_GDTF_BYTES) {
+        setReport({ error: `${chosen.name} is too large (over 256 MB).` });
+        return;
+      }
       const bytes = new Uint8Array(await chosen.arrayBuffer());
       return (overwrite) => importGdtf(bytes, overwrite);
     }

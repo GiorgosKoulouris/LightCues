@@ -280,6 +280,15 @@ export interface DocumentState {
 // Sent by the main process to the engine with a fresh UI MessagePort attached.
 export type EngineConnect = { type: 'connect' };
 
+// Sent by the main process to the engine after the user picked `path` in a
+// file dialog. Engine commands read and write only granted paths.
+export type EngineGrantPath = { type: 'grantPath'; path: string };
+
+// The engine's reply to a grant, on the parent port. Main hands the path to
+// the renderer only after it: the parent and UI ports are separate channels,
+// so a command could otherwise beat its grant.
+export type EnginePathGranted = { type: 'pathGranted'; path: string };
+
 // IPC channel on which the main process hands the renderer its engine port.
 export const ENGINE_PORT_CHANNEL = 'engine:port';
 
@@ -327,6 +336,12 @@ export const SAVED_BEFORE_CLOSE_CHANNEL = 'window:savedBeforeClose';
 // The documents that can have unsaved changes, in the order they are saved.
 export const DOCUMENTS = { show: 'Show', venue: 'Venue Patch', profile: 'Profile' } as const;
 export type DocumentKind = keyof typeof DOCUMENTS;
+
+// Whether a value from the renderer names a document. Inherited keys such as
+// `toString` do not count.
+export function isDocumentKind(value: unknown): value is DocumentKind {
+  return typeof value === 'string' && Object.hasOwn(DOCUMENTS, value);
+}
 
 // "The Show, the Venue Patch and the Profile have unsaved changes."
 export function unsavedMessage(documents: readonly DocumentKind[]): string {
