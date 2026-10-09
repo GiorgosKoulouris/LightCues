@@ -101,7 +101,7 @@ Main and the engine write one log file per day to `%APPDATA%\LightCues\logs\`, n
 
 If the engine process exits, main restarts it at once and restores the open Show, Venue Patch and live look (ADR 0011). A toast says "Engine restarted. Output resumed.", "Engine restarted in Base Look." when the live look could not be restored, or "Engine restarted without the open Show and Venue Patch." when nothing could. The log shows the exit code, `Restarting the engine` and the restore result. After 3 restarts in a minute, main stops trying: use Save Show as… and Save Venue Patch as… in the error banner, then restart LightCues.
 
-To try it, kill the `LightCues Engine` process in Task Manager.
+To try it, end the engine in Task Manager's Details tab, with the Command line column shown. It is the `LightCues.exe` with `--utility-sub-type=node.mojom.NodeService`, and its command line ends with `--profile-library=`, `--midi-input=` and `--recent-files=`. Ending the process without `--type` closes the app. Ending the `--type=renderer` one leaves the window white: only the engine is restarted.
 
 ### `npm run dev` fails with `Error: Electron uninstall`
 

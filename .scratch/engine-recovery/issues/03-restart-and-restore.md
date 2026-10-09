@@ -48,7 +48,7 @@ Choices beyond the issue:
 
 Left for a human:
 
-1. Manual check on Windows with a DMX interface. Run `npm run package`, install and launch. Start a Scene, then end `LightCues Engine` in Task Manager. Output comes back with the same look, and the toast shows. Note the gap measured. Check the log for `Engine exited with code N`, `Restarting the engine` and `Engine restore result: restored`. End it 3 more times within a minute: the banner shows, and Save Show as… writes a file that opens.
+1. Manual check on Windows with a DMX interface. Run `npm run package`, install and launch. Start a Scene, then end the engine in Task Manager: the `LightCues.exe` with `--utility-sub-type=node.mojom.NodeService` and `--profile-library=` in its command line. Output comes back with the same look, and the toast shows. Note the gap measured. Check the log for `Engine exited with code N`, `Restarting the engine` and `Engine restore result: restored`. End it 3 more times within a minute: the banner shows, and Save Show as… writes a file that opens.
 2. Decide whether these differences from "restores playback state exactly" are acceptable: no fade in progress, Flash comes back as Go, Focus Check off, Freeze at the new beat.
 3. Decide on the `empty` fallback. The empty engine then reports empty documents, so main's snapshot, and a later Save as from it, hold empty documents.
 4. A crash in the frame loop after a successful restore repeats until the engine is down. Restore only falls back on a synchronous throw. Main could send the Base Look restore on the next attempt instead.
