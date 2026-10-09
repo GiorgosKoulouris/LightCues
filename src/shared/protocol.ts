@@ -326,6 +326,33 @@ export interface DialogBridge {
   showLibraryBackup(path: string): void;
 }
 
+// IPC channels for the update check, which main makes (ADR 0012). The
+// renderer only shows the result and the setting.
+export const UPDATE_AVAILABLE_CHANNEL = 'updates:available';
+export const UPDATE_ENABLED_CHANNEL = 'updates:enabled';
+export const SET_UPDATE_ENABLED_CHANNEL = 'updates:setEnabled';
+export const OPEN_RELEASE_PAGE_CHANNEL = 'shell:openReleasePage';
+
+// A release newer than the running app.
+export interface UpdateAvailable {
+  version: string;
+  // Its GitHub release page.
+  url: string;
+}
+
+// What the preload script exposes to the renderer as `window.updates`.
+export interface UpdatesBridge {
+  // Resolves once the launch check is done, a few seconds after launch: the
+  // newer release, or undefined.
+  available(): Promise<UpdateAvailable | undefined>;
+  // Whether the check runs. On by default.
+  enabled(): Promise<boolean>;
+  // Saved for the next launch. Turning it on does not check until then.
+  setEnabled(enabled: boolean): void;
+  // Opens a release page in the default browser. Main ignores any other URL.
+  openReleasePage(url: string): void;
+}
+
 // IPC channels guarding the window against closing with unsaved changes.
 // The renderer reports each document's unsaved state; on close, main may ask
 // it to save them one by one, waiting for each reply on the saved channel.

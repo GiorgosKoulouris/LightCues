@@ -4,6 +4,7 @@ import {
   dialog,
   ipcMain,
   MessageChannelMain,
+  net,
   shell,
   utilityProcess,
   type FileFilter,
@@ -24,20 +25,27 @@ import {
   ENGINE_PORT_CHANNEL,
   LIBRARY_BACKUPS_FOLDER,
   MIDI_INPUT_ARG,
+  OPEN_RELEASE_PAGE_CHANNEL,
   RECENT_FILES_ARG,
   PROFILE_LIBRARY_ARG,
   SAVE_BEFORE_CLOSE_CHANNEL,
   SAVED_BEFORE_CLOSE_CHANNEL,
+  SET_UPDATE_ENABLED_CHANNEL,
   SHOW_LIBRARY_BACKUP_CHANNEL,
   UNSAVED_CHANNEL,
+  UPDATE_AVAILABLE_CHANNEL,
+  UPDATE_ENABLED_CHANNEL,
   isDocumentKind,
   unsavedMessage,
   type DocumentKind,
   type EngineConnect,
   type EngineGrantPath,
   type EnginePathGranted,
+  type UpdateAvailable,
 } from '../shared/protocol';
+import { fileStorage } from '../engine/file-storage';
 import { isAppPage } from './navigation';
+import { createUpdateCheck, isReleasePageUrl } from './update-check';
 
 const VENUE_FILTERS = [{ name: 'LightCues Venue Patch', extensions: ['lcvenue'] }];
 const SHOW_FILTERS = [{ name: 'LightCues Show', extensions: ['lcshow'] }];
@@ -174,6 +182,36 @@ function handleShowLibraryBackup(): void {
   });
 }
 
+// How long after the window's first load the update check runs, so it never
+// slows the launch.
+const UPDATE_CHECK_DELAY_MS = 10_000;
+
+// Checks for a newer release once, after the window's first load. Main makes
+// the request, so the renderer's CSP stays closed. The renderer asks for the
+// result, so a reload still gets it. Opens only this project's release pages.
+function handleUpdateCheck(window: BrowserWindow): void {
+  const check = createUpdateCheck({
+    currentVersion: app.getVersion(),
+    fetch: (url, init) => net.fetch(url, init),
+    now: Date.now,
+    storage: fileStorage(join(app.getPath('userData'), 'update-check.json')),
+    log: (message) => console.error(message),
+  });
+  const result = new Promise<UpdateAvailable | undefined>((done) => {
+    window.webContents.once('did-finish-load', () => {
+      setTimeout(() => void check.run().then(done), UPDATE_CHECK_DELAY_MS);
+    });
+  });
+  ipcMain.handle(UPDATE_AVAILABLE_CHANNEL, () => result);
+  ipcMain.handle(UPDATE_ENABLED_CHANNEL, () => check.enabled());
+  ipcMain.on(SET_UPDATE_ENABLED_CHANNEL, (_event, enabled: unknown) => {
+    if (typeof enabled === 'boolean') check.setEnabled(enabled);
+  });
+  ipcMain.on(OPEN_RELEASE_PAGE_CHANNEL, (_event, url: unknown) => {
+    if (isReleasePageUrl(url)) void shell.openExternal(url);
+  });
+}
+
 // Asks before closing a window whose Show or Venue Patch has unsaved
 // changes. Save runs the renderer's own save flow for each document in turn;
 // the window closes only once all of them worked.
@@ -241,7 +279,7 @@ function guardClose(window: BrowserWindow): void {
   });
 }
 
-function createWindow(engine: UtilityProcess, pageUrl: string): void {
+function createWindow(engine: UtilityProcess, pageUrl: string): BrowserWindow {
   const window = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -252,6 +290,7 @@ function createWindow(engine: UtilityProcess, pageUrl: string): void {
   connectWindowToEngine(window, engine);
   guardClose(window);
   void window.loadURL(pageUrl);
+  return window;
 }
 
 // The renderer page: the dev server in development, the built file otherwise.
@@ -293,7 +332,7 @@ void app.whenReady().then(() => {
   handleShowLibraryBackup();
   const pageUrl = rendererUrl();
   restrictNavigation(pageUrl);
-  createWindow(engine, pageUrl);
+  handleUpdateCheck(createWindow(engine, pageUrl));
 });
 
 app.on('window-all-closed', () => app.quit());

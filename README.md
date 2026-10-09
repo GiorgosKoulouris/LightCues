@@ -40,7 +40,7 @@ The container and the host each need their own `npm install`. In the container, 
 
 ## Install
 
-Download `LightCues-Setup-<version>.exe` from the [GitHub Releases page](https://github.com/GiorgosKoulouris/LightCues/releases) and run it. It installs for the current user, without admin rights. The installer is not code-signed yet: on the SmartScreen warning, choose **More info** → **Run anyway**. There is no auto-update; install new versions over the old one.
+Download `LightCues-Setup-<version>.exe` from the [GitHub Releases page](https://github.com/GiorgosKoulouris/LightCues/releases) and run it. It installs for the current user, without admin rights. The installer is not code-signed yet: on the SmartScreen warning, choose **More info** → **Run anyway**. LightCues checks GitHub for a newer release once a day and shows a notice in the Sidebar, never in Perform. It downloads nothing: install new versions over the old one. Untick **Check for updates** at the bottom of the Sidebar to turn the check off.
 
 The Profile Library and the chosen MIDI Input are kept in `%APPDATA%\LightCues`. Shows and Venue Patches are saved wherever you choose.
 

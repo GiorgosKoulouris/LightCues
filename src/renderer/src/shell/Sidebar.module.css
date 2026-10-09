@@ -44,3 +44,30 @@
   background: var(--accent-soft);
   color: var(--accent);
 }
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding: 0 var(--space-2);
+}
+
+.update {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.update p {
+  margin: 0;
+}
+
+.setting {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}

@@ -50,4 +50,4 @@ Until the first `v*` tag exists, every push to `main` warns, docs-only ones too.
 ## Not yet
 
 - No code signing. Windows SmartScreen warns on install.
-- No auto-update. `latest.yml` and the blockmap are published so an updater can be added later. Code signing must come first.
+- No auto-update. The app only checks for a newer release and links to it (ADR 0012). `latest.yml` and the blockmap are published so an updater can be added later. Code signing must come first.

@@ -1,7 +1,13 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EngineCommand, EngineEvent, MidiInputStatus } from '../../shared/protocol';
+import type {
+  EngineCommand,
+  EngineEvent,
+  MidiInputStatus,
+  UpdateAvailable,
+  UpdatesBridge,
+} from '../../shared/protocol';
 import type { Show } from '../../shared/show';
 import { emptyPatch } from '../../shared/venue-patch';
 import { App } from './App';
@@ -73,6 +79,12 @@ const dialogs = {
   chooseVenueToSave: vi.fn(async () => undefined),
 };
 
+const RELEASE: UpdateAvailable = {
+  version: '0.2.0',
+  url: 'https://github.com/GiorgosKoulouris/LightCues/releases/tag/v0.2.0',
+};
+let updates: { [K in keyof UpdatesBridge]: ReturnType<typeof vi.fn<UpdatesBridge[K]>> };
+
 async function renderApp() {
   render(
     <UiProvider>
@@ -95,6 +107,13 @@ beforeEach(() => {
   vi.stubGlobal('dialogs', dialogs);
   vi.stubGlobal('closeGuard', { setUnsaved: vi.fn(), onSaveBeforeClose: vi.fn(() => () => {}) });
   Object.values(dialogs).forEach((fn) => fn.mockClear());
+  updates = {
+    available: vi.fn(async () => undefined),
+    enabled: vi.fn(async () => true),
+    setEnabled: vi.fn(),
+    openReleasePage: vi.fn(),
+  };
+  vi.stubGlobal('updates', updates);
 });
 afterEach(() => {
   // Unmounts while the fake engine is still there.
@@ -255,5 +274,50 @@ describe('App top bar and strip', () => {
     if (ping?.type !== 'ping') throw new Error('No ping sent');
     engine.emit({ type: 'pong', id: ping.id, uptimeMs: 1000 });
     expect(screen.getByText('Engine')).toBeInTheDocument();
+  });
+});
+
+describe('App update notice', () => {
+  const notice = () => screen.queryByRole('status', { name: 'Update available' });
+
+  it('shows a newer release and opens its page', async () => {
+    updates.available.mockResolvedValue(RELEASE);
+    await renderApp();
+    expect(await screen.findByText('LightCues 0.2.0 is available')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Open release page' }));
+    expect(updates.openReleasePage).toHaveBeenCalledWith(RELEASE.url);
+  });
+
+  it('shows nothing without a newer release', async () => {
+    await renderApp();
+    expect(notice()).toBeNull();
+  });
+
+  it('never shows in Perform, and shows again on leaving it', async () => {
+    updates.available.mockResolvedValue(RELEASE);
+    await renderApp();
+    await screen.findByText('LightCues 0.2.0 is available');
+    await userEvent.keyboard('{Control>}4{/Control}');
+    expect(notice()).toBeNull();
+    await userEvent.keyboard('{Control>}1{/Control}');
+    expect(notice()).toBeInTheDocument();
+  });
+
+  it('shows the setting, and turning it off saves it and hides the notice', async () => {
+    updates.available.mockResolvedValue(RELEASE);
+    await renderApp();
+    const setting = await screen.findByRole('checkbox', { name: 'Check for updates' });
+    await screen.findByText('LightCues 0.2.0 is available');
+    expect(setting).toBeChecked();
+    await userEvent.click(setting);
+    expect(updates.setEnabled).toHaveBeenCalledWith(false);
+    expect(setting).not.toBeChecked();
+    expect(notice()).toBeNull();
+  });
+
+  it('shows the setting off when it was turned off', async () => {
+    updates.enabled.mockResolvedValue(false);
+    await renderApp();
+    expect(await screen.findByRole('checkbox', { name: 'Check for updates' })).not.toBeChecked();
   });
 });

@@ -7,16 +7,21 @@ import {
   CHOOSE_VENUE_TO_OPEN_CHANNEL,
   CHOOSE_VENUE_TO_SAVE_CHANNEL,
   ENGINE_PORT_CHANNEL,
+  OPEN_RELEASE_PAGE_CHANNEL,
   SAVE_BEFORE_CLOSE_CHANNEL,
   SAVED_BEFORE_CLOSE_CHANNEL,
+  SET_UPDATE_ENABLED_CHANNEL,
   SHOW_LIBRARY_BACKUP_CHANNEL,
   UNSAVED_CHANNEL,
+  UPDATE_AVAILABLE_CHANNEL,
+  UPDATE_ENABLED_CHANNEL,
   type CloseGuardBridge,
   type DialogBridge,
   type DocumentKind,
   type EngineBridge,
   type EngineCommand,
   type EngineEvent,
+  type UpdatesBridge,
 } from '../shared/protocol';
 
 let port: MessagePort | undefined;
@@ -76,3 +81,12 @@ const closeGuard: CloseGuardBridge = {
 };
 
 contextBridge.exposeInMainWorld('closeGuard', closeGuard);
+
+const updates: UpdatesBridge = {
+  available: () => ipcRenderer.invoke(UPDATE_AVAILABLE_CHANNEL),
+  enabled: () => ipcRenderer.invoke(UPDATE_ENABLED_CHANNEL),
+  setEnabled: (enabled) => ipcRenderer.send(SET_UPDATE_ENABLED_CHANNEL, enabled),
+  openReleasePage: (url) => ipcRenderer.send(OPEN_RELEASE_PAGE_CHANNEL, url),
+};
+
+contextBridge.exposeInMainWorld('updates', updates);
