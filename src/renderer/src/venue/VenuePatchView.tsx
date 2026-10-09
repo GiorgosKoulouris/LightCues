@@ -1,3 +1,4 @@
+import { Tag } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { VenueEdit } from '../../../shared/protocol';
 import { DIRECTIONS, type Direction } from '../../../shared/show';
@@ -15,6 +16,7 @@ import { BeamLines } from '../show/BeamLines';
 import { usePlayback } from '../show/usePlayback';
 import { usePreview } from '../show/usePreview';
 import { useShow } from '../show/useShow';
+import { IconButton } from '../ui/Button';
 import type { SelectModifiers } from '../ui/List';
 import { namedCount, removedMessage } from '../ui/removed';
 import { Select } from '../ui/Select';
@@ -32,8 +34,9 @@ import {
   type Selection,
 } from './fixtures';
 import { RigSetup } from './RigSetup';
-import { StagePlan } from './StagePlan';
+import { StagePlan, stageView } from './StagePlan';
 import { useOutputs } from './useOutputs';
+import { usePlanLabels } from './usePlanLabels';
 import { useVenuePatch } from './useVenuePatch';
 import styles from './VenuePatchView.module.css';
 
@@ -69,6 +72,7 @@ export function VenuePatchView({ active }: { active: boolean }) {
   const [adding, setAdding] = useState(false);
   // The inspector, below 1280px where it is hidden by default.
   const [sideOpen, setSideOpen] = useState(false);
+  const [showLabels, setShowLabels] = usePlanLabels();
   const searchRef = useRef<HTMLInputElement>(null);
 
   const { run, fileCommands } = useFileCommands({
@@ -147,11 +151,19 @@ export function VenuePatchView({ active }: { active: boolean }) {
       actions={
         <>
           {tab === 'fixtures' && (
-            <SidePanelToggle
-              label="inspector"
-              open={sideOpen}
-              onToggle={() => setSideOpen(!sideOpen)}
-            />
+            <>
+              <IconButton
+                icon={<Tag />}
+                label="Fixture labels"
+                aria-pressed={showLabels}
+                onClick={() => setShowLabels(!showLabels)}
+              />
+              <SidePanelToggle
+                label="inspector"
+                open={sideOpen}
+                onToggle={() => setSideOpen(!sideOpen)}
+              />
+            </>
           )}
           <Select<Direction | ''>
             label="Focus Check"
@@ -192,7 +204,7 @@ export function VenuePatchView({ active }: { active: boolean }) {
             onSelect={select(sortFixtures(patch, patch.fixtures, filter.grouping))}
             onKeyDown={onDelete}
             onMove={(id, position) => change({ type: 'moveFixture', id, position })}
-            audience={focusCheck !== undefined}
+            showLabels={showLabels}
           >
             {focusCheck !== undefined && <FocusCheckBeams patch={patch} />}
           </StagePlan>
@@ -238,10 +250,13 @@ export function VenuePatchView({ active }: { active: boolean }) {
   );
 }
 
-// The beams of the moving Fixtures, as the engine sends them. Mounted only
-// during the Focus Check, so the preview runs only then.
+// The beams of the moving Fixtures, as the engine sends them, cut at the
+// plan's view. Mounted only during the Focus Check, so the preview runs only
+// then.
 function FocusCheckBeams({ patch }: { patch: VenuePatch }) {
-  return <BeamLines patch={patch} lights={usePreview()} />;
+  return (
+    <BeamLines patch={patch} lights={usePreview()} view={stageView(patch.stage, patch.fixtures)} />
+  );
 }
 
 function names(fixtures: PatchedFixture[]): string[] {

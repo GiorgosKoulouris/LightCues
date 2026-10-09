@@ -18,6 +18,7 @@
 
 .label {
   fill: var(--text-faint);
+  font-size: var(--text-sm);
 }
 
 /* A Fixture's body, unlit. */

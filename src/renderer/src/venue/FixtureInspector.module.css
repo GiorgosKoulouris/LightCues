@@ -1,9 +1,12 @@
+/* The gutter keeps the fields clear of the scrollbar. */
 .inspector {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
   min-height: 0;
+  padding-right: var(--space-3);
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .header {

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import type { Show } from '../../../shared/show';
+import { pressScene } from '../show/scenes';
 import type { PlaybackState } from '../show/usePlayback';
 import { isTextEntry, panelAction, type PanelAction } from './shortcuts';
 
@@ -37,7 +38,8 @@ export function runPanelAction(action: PanelAction, show: Show, playback: Playba
       break;
     case 'scene': {
       const sceneId = show.panelScenes?.[action.index];
-      if (sceneId !== undefined) window.engine.send({ type: 'goScene', sceneId });
+      const scene = show.scenes.find((s) => s.id === sceneId);
+      if (scene) window.engine.send(pressScene(playback.active, scene));
       break;
     }
     case 'grandMaster': {

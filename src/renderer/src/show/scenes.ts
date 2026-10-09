@@ -1,5 +1,6 @@
-// Scene list logic for the Show view. Pure, so it is testable without a DOM.
-import type { ActiveByLayer } from '../../../shared/protocol';
+// Scene logic for the Show view, Perform and the Fallback Panel. Pure, so it
+// is testable without a DOM.
+import type { ActiveByLayer, EngineCommand } from '../../../shared/protocol';
 import type { Scene, Show } from '../../../shared/show';
 
 export interface SceneFilter {
@@ -20,6 +21,14 @@ export function filterScenes(scenes: readonly Scene[], { query, tag }: SceneFilt
 // Whether `scene` is the active Scene in its Layer.
 export function isActive(active: ActiveByLayer, scene: Scene): boolean {
   return active[scene.layer] === scene.id;
+}
+
+// What a Scene button sends: Go, or a clear of the Scene's Layer when it is
+// already active there, the same as a Release.
+export function pressScene(active: ActiveByLayer, scene: Scene): EngineCommand {
+  return isActive(active, scene)
+    ? { type: 'clearLayer', layerId: scene.layer }
+    : { type: 'goScene', sceneId: scene.id };
 }
 
 // Every tag the Scenes use, once each, sorted.

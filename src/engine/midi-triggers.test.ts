@@ -125,6 +125,20 @@ describe('engine MIDI Triggers', () => {
     expect(active()).toEqual({ 'layer-1': 'wash' });
   });
 
+  it('goes again with a Go Trigger on the active Scene, rather than toggling it off', async () => {
+    const { midi, scenes, map, select, active } = midiEngine();
+    midi.plug('Pads');
+    scenes(scene('wash'));
+    map({ channel: 1, note: 60, scene: 'wash', mode: 'go' });
+    select('Pads');
+    await vi.advanceTimersByTimeAsync(1000);
+
+    midi.send('Pads', noteOn(1, 60));
+    midi.send('Pads', noteOn(1, 60));
+
+    expect(active()).toEqual({ 'layer-1': 'wash' });
+  });
+
   it("clears the Scene's Layer with a Release Trigger, leaving other Layers on", async () => {
     const { midi, edit, scenes, map, select, active } = midiEngine();
     midi.plug('Pads');

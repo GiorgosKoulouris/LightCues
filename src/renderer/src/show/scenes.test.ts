@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Scene } from '../../../shared/show';
-import { filterScenes, freeId, isActive, parseTags, sceneTags } from './scenes';
+import { filterScenes, freeId, isActive, parseTags, pressScene, sceneTags } from './scenes';
 
 const scene = (id: string, name: string, tags: string[] = []): Scene => ({
   id,
@@ -62,5 +62,21 @@ describe('isActive', () => {
     expect(isActive({ 'layer-1': 'a' }, warm)).toBe(true);
     expect(isActive({ 'layer-1': 'b' }, warm)).toBe(false);
     expect(isActive({ 'layer-2': 'a' }, warm)).toBe(false);
+  });
+});
+
+describe('pressScene', () => {
+  const warm = scene('a', 'Warm');
+
+  it('goes to the Scene when it is not active, even with its Layer on', () => {
+    expect(pressScene({}, warm)).toEqual({ type: 'goScene', sceneId: 'a' });
+    expect(pressScene({ 'layer-1': 'b' }, warm)).toEqual({ type: 'goScene', sceneId: 'a' });
+  });
+
+  it('clears its Layer when the Scene is active', () => {
+    expect(pressScene({ 'layer-1': 'a' }, warm)).toEqual({
+      type: 'clearLayer',
+      layerId: 'layer-1',
+    });
   });
 });

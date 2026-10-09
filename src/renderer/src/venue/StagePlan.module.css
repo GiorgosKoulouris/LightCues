@@ -33,16 +33,13 @@
   stroke: var(--border);
 }
 
-.audiencePlane {
-  stroke: var(--text-faint);
-}
-
 .gridLine {
   stroke: var(--border);
 }
 
 .label {
   fill: var(--text-faint);
+  font-size: var(--text-sm);
 }
 
 .fixture {
@@ -52,21 +49,23 @@
 .marker {
   fill: var(--warning);
   stroke: var(--warning);
-  stroke-width: 0.05;
+  stroke-width: 1.5;
 }
 
+/* Fixture markers are drawn in screen pixels. */
 .overhead .marker {
   fill: none;
-  stroke-dasharray: 0.1 0.06;
+  stroke-dasharray: 2.5 1.5;
 }
 
 .selected .marker {
   stroke: var(--accent);
-  stroke-width: 0.1;
+  stroke-width: 2.5;
 }
 
 .name {
   fill: var(--text-muted);
+  font-size: var(--text-xs);
   text-anchor: middle;
 }
 

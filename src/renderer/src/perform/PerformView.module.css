@@ -4,7 +4,9 @@
   --side-width: 360px;
   /* Gig-sized targets, larger than `--control-height-lg`. */
   --perform-height: 64px;
-  --scene-width: 180px;
+  /* Scene buttons, below gig size so more of them fit. */
+  --scene-width: 160px;
+  --scene-height: 52px;
 
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -115,9 +117,8 @@
 .scenes .scene {
   justify-content: space-between;
   height: auto;
-  min-height: var(--perform-height);
+  min-height: var(--scene-height);
   padding: var(--space-2) var(--space-3);
-  font-size: var(--text-xl);
   text-align: left;
   white-space: normal;
 }

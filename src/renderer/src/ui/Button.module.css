@@ -71,6 +71,12 @@
   color: var(--text);
 }
 
+/* An icon toggle that is on, such as Fixture labels. */
+.ghost[aria-pressed='true'],
+.ghost[aria-pressed='true']:hover:not(:disabled) {
+  color: var(--accent);
+}
+
 .danger {
   background: var(--danger);
   color: var(--text-on-accent);

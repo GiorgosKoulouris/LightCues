@@ -655,6 +655,54 @@ describe('Rig setup', () => {
   });
 });
 
+describe('Fixture labels', () => {
+  const label = (id: string) => screen.getByTestId(`plan-${id}`).querySelector('text');
+  const toggle = () => screen.getByRole('button', { name: 'Fixture labels' });
+
+  beforeEach(() => localStorage.clear());
+
+  it('hides and shows the labels on the plan, keeping the tooltips', async () => {
+    await renderView();
+    const user = userEvent.setup();
+    expect(toggle()).toHaveAttribute('aria-pressed', 'true');
+    expect(label('par-1')).toHaveTextContent('Par 1');
+
+    await user.click(toggle());
+    expect(toggle()).toHaveAttribute('aria-pressed', 'false');
+    expect(label('par-1')).toBeNull();
+    expect(screen.getByTestId('plan-par-1').querySelector('title')).toHaveTextContent('Par 1');
+
+    await user.click(toggle());
+    expect(label('par-1')).toHaveTextContent('Par 1');
+  });
+
+  it('keeps the labels of the selected Fixtures', async () => {
+    await renderView();
+    const user = userEvent.setup();
+    await user.click(toggle());
+    await user.click(option('Par 2'));
+    expect(label('par-2')).toHaveTextContent('Par 2');
+    expect(label('par-1')).toBeNull();
+  });
+
+  it('remembers the setting after a remount, outside the Venue Patch', async () => {
+    await renderView();
+    await userEvent.setup().click(toggle());
+    cleanup();
+
+    await renderView();
+    expect(toggle()).toHaveAttribute('aria-pressed', 'false');
+    expect(label('par-1')).toBeNull();
+    expect(edits()).toEqual([]);
+  });
+
+  it('is shown on the Fixtures tab only', async () => {
+    await renderView();
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Rig setup' }));
+    expect(screen.queryByRole('button', { name: 'Fixture labels' })).toBeNull();
+  });
+});
+
 describe('Focus Check', () => {
   const focusChecks = () =>
     engine.sent.flatMap((c) => (c.type === 'setFocusCheck' ? [c.direction] : []));
@@ -693,8 +741,9 @@ describe('Focus Check', () => {
       lights: { spot: { intensity: 1, red: 1, green: 1, blue: 1, aim } },
     });
     expect(beam()).not.toBeNull();
-    // Out to the audience plane.
-    expect(plan.getAttribute('viewBox')).not.toEqual(viewBox);
+    // Cut at the plan's edge, which stays put.
+    expect(screen.getByTestId('beam-arrow-spot')).toBeInTheDocument();
+    expect(plan.getAttribute('viewBox')).toEqual(viewBox);
 
     await userEvent.setup().selectOptions(control, '');
     await vi.waitFor(() => expect(beam()).toBeNull());

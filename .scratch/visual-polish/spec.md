@@ -13,6 +13,9 @@ Terms: Scene button, Trigger, Layer, Fallback Panel, Zone (see `CONTEXT.md`).
 3. A toggle to hide Fixture labels on the stage plan (issue 03).
 4. Smaller Perform Scene buttons (issue 04).
 5. Scene buttons toggle (issue 05).
+6. Spacing: the inspector clear of its scrollbar, the Zone picker captions clear of their plans (issue 06).
+7. Stage views use their space: less padding, true scale kept (issue 07).
+8. Rule Zone pickers grow with their column (issue 08).
 
 ## Decisions (2026-10-09)
 
@@ -24,7 +27,7 @@ Terms: Scene button, Trigger, Layer, Fallback Panel, Zone (see `CONTEXT.md`).
 
 ### Stage plan sizes
 
-- Fixture markers are about 10 px across and Fixture labels about 11 px, whatever the stage size or window size.
+- Fixture markers are about 14 px across and Fixture labels about 11 px, whatever the stage size or window size.
 - The Zone grid labels ("Stage Right", "Up", …) are fixed pixel sizes too.
 - The Preview (Show view and Perform) draws its Fixture markers at the same size as the plan. One shared size.
 - Stage geometry (stage, Zones, beam lines, snapping) stays in metres.
@@ -49,9 +52,31 @@ Terms: Scene button, Trigger, Layer, Fallback Panel, Zone (see `CONTEXT.md`).
 - The Show view's Go stays Go: it is for editing.
 - An active Scene can no longer be restarted from its Scene button.
 
+## Decisions (2026-10-09, second pass)
+
+### Spacing
+
+- The Venue Patch inspector keeps a gap between its fields and its scrollbar.
+- The Rule Zone pickers keep a gap between each plan and its "Floor" / "Overhead" caption. Spacing only, no rule line.
+
+### Stage views fit
+
+Applies to the stage plan, the Preview's top-down view and the Rule Zone pickers.
+
+- True scale stays: no stretching, no zoom or pan. A stage whose shape differs from its column still leaves space on two sides.
+- The Front row is drawn 1 m deep, whatever the stage. It is only drawn: a Fixture with y < 0 is in the Front row anyway.
+- No margin in metres around the stage. The view is the stage and the Front row, grown to take in any Fixture outside them. Labels keep their fixed pixel room.
+- The audience plane is no longer drawn, in the Preview or in the Focus Check. Both show the same view as the plan. A beam that leaves the view is cut at its edge and ends in a small arrow.
+
+### Rule Zone pickers
+
+- Each picker fills its share of the width, at true scale, but no taller than about 320 px.
+
 ## Out of scope
 
 - User-adjustable density or button size.
 - Showing labels only on hover.
 - Changing Trigger actions or the Show view.
 - Resizing the Perform controls other than Scene buttons.
+- Stretching the stage, or zoom and pan.
+- The Preview's front elevation.

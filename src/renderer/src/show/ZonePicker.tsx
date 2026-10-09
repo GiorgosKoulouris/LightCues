@@ -1,3 +1,4 @@
+import { useRef, type CSSProperties } from 'react';
 import {
   fixtureZone,
   sameZone,
@@ -11,8 +12,12 @@ import {
 } from '../../../shared/venue-patch';
 import { Button } from '../ui/Button';
 import { cx } from '../ui/cx';
-import { FRONT_DEPTH, stageViewBox, zoneRowBounds } from '../venue/StagePlan';
+import { atPixels, FIXTURE_MARKER_RADIUS, LABEL_GAP, usePixelView } from '../venue/pixelScale';
+import { FRONT_DEPTH, stageView, zoneRowBounds } from '../venue/StagePlan';
 import styles from './ZonePicker.module.css';
+
+// Kept clear around each plan for the Audience label, in screen pixels.
+const LABEL_ROOM = 24;
 
 interface ZonePickerProps {
   // Draws the current Venue Patch's stage and Fixtures, for reference.
@@ -79,11 +84,18 @@ function LevelPlan({
   const { width } = patch.stage;
   const rows = zoneRowBounds(patch.stage);
   const fixtures = patch.fixtures.filter((f) => fixtureZone(patch, f).level === level);
+  // Every Fixture, so both levels show the same view.
+  const view = stageView(patch.stage, patch.fixtures);
+  const svg = useRef<SVGSVGElement>(null);
+  const { scale, viewBox } = usePixelView(svg, view, LABEL_ROOM);
+  // The CSS caps the plan's height by capping its width.
+  const aspect = { '--aspect': view.width / view.height } as CSSProperties;
 
   return (
-    <figure className={styles.plan}>
+    <figure className={styles.plan} style={aspect}>
       <svg
-        viewBox={stageViewBox(patch.stage)}
+        ref={svg}
+        viewBox={viewBox}
         className={styles.svg}
         role="group"
         aria-label={`${level} Zones`}
@@ -115,17 +127,16 @@ function LevelPlan({
         {fixtures.map((fixture) => (
           <circle
             key={fixture.id}
-            cx={fixture.x}
-            cy={-fixture.y}
-            r={0.15}
+            transform={atPixels(fixture.x, -fixture.y, scale)}
+            r={FIXTURE_MARKER_RADIUS}
             className={styles.fixture}
           />
         ))}
         <text
-          x={0}
-          y={FRONT_DEPTH + 0.6}
+          transform={atPixels(0, FRONT_DEPTH, scale)}
+          y={LABEL_GAP}
+          dy="0.8em"
           className={styles.label}
-          fontSize={0.3}
           textAnchor="middle"
         >
           Audience

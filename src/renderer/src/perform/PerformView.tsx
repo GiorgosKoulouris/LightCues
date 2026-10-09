@@ -14,7 +14,7 @@ import { ActiveDot } from '../show/ActiveDot';
 import { ClearLayerButton } from '../show/ClearLayerButton';
 import { ModeSwitch } from '../show/ModeSwitch';
 import { Preview } from '../show/Preview';
-import { isActive } from '../show/scenes';
+import { isActive, pressScene } from '../show/scenes';
 import type { PlaybackState } from '../show/usePlayback';
 import { Button } from '../ui/Button';
 import { cx } from '../ui/cx';
@@ -33,7 +33,7 @@ interface PerformViewProps {
 }
 
 // The gig view: Blackout, the Base Look, the Grand Master, Tap Tempo and Freeze along the top,
-// every Scene as a large button grouped by Layer, each Layer with Clear, and
+// every Scene as a button grouped by Layer, each Layer with a small Clear, and
 // the Preview with Monitor/Blind. Nothing is edited here. It replaces the Fallback Panel strip,
 // whose keys still work.
 export function PerformView({ active, show, patch, playback, tempo }: PerformViewProps) {
@@ -92,7 +92,7 @@ export function PerformView({ active, show, patch, playback, tempo }: PerformVie
   );
 }
 
-// A Layer's Scene buttons, with Clear while one of them is active.
+// A Layer's Scene buttons, with Clear, enabled while one of them is active.
 function LayerSection({ group, playback }: { group: LayerGroup; playback: PlaybackState }) {
   const headingId = useId();
   const { layer, scenes } = group;
@@ -103,7 +103,7 @@ function LayerSection({ group, playback }: { group: LayerGroup; playback: Playba
         <h3 id={headingId} className={styles.heading}>
           {layer.name}
         </h3>
-        <ClearLayerButton layer={layer} active={playback.active} size="lg" />
+        <ClearLayerButton layer={layer} active={playback.active} />
       </div>
       {scenes.length === 0 ? (
         <p className={styles.empty}>No Scenes on this Layer.</p>
@@ -115,7 +115,7 @@ function LayerSection({ group, playback }: { group: LayerGroup; playback: Playba
               size="lg"
               className={styles.scene}
               aria-pressed={isActive(playback.active, scene)}
-              onClick={() => window.engine.send({ type: 'goScene', sceneId: scene.id })}
+              onClick={() => window.engine.send(pressScene(playback.active, scene))}
             >
               <span className={styles.name}>
                 <ActiveDot on={isActive(playback.active, scene)} />

@@ -1,5 +1,4 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
-import { audienceY } from '../../../shared/aim';
 import {
   fixtureRole,
   fixtureZone,
@@ -12,12 +11,19 @@ import {
 } from '../../../shared/venue-patch';
 import { cx } from '../ui/cx';
 import { selectModifiers, type SelectModifiers } from '../ui/List';
+import {
+  atPixels,
+  FIXTURE_MARKER_RADIUS,
+  LABEL_GAP,
+  LABEL_ROOM,
+  usePixelView,
+  type View,
+} from './pixelScale';
 import styles from './StagePlan.module.css';
 
-// Depth of the Front row drawn in front of the stage, in metres.
-export const FRONT_DEPTH = 2;
-const MARGIN = 1;
-const FIXTURE_RADIUS = 0.25;
+// Depth of the Front row drawn in front of the stage, in metres. Only drawn:
+// anything in front of the stage is in the Front row.
+export const FRONT_DEPTH = 1;
 // Dragged positions snap to this, in metres.
 const SNAP = 0.05;
 
@@ -31,8 +37,8 @@ interface StagePlanProps {
   // Resolves once the engine has answered, so the plan can stop showing the
   // dragged position.
   onMove(id: string, position: StagePosition): Promise<unknown>;
-  // Shows the plan out to the audience plane.
-  audience?: boolean;
+  // False hides the Fixture labels, except on the selected and dragged Fixtures.
+  showLabels?: boolean;
   // Drawn over the stage, under the Fixtures.
   children?: ReactNode;
 }
@@ -52,17 +58,21 @@ interface Drag {
 // Top-down view of the stage and its Zone grid, seen with the audience at the
 // bottom: Stage Left is on the right. Fixtures can be dragged; the Zone they
 // would be in shows while dragging. Shift and Ctrl click select several.
+// Every Fixture has a hover tooltip, labelled or not.
 export function StagePlan({
   patch,
   selectedIds,
   onSelect,
   onKeyDown,
   onMove,
-  audience = false,
+  showLabels = true,
   children,
 }: StagePlanProps) {
   const svg = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag>();
+  // From the patch, not the dragged position, so the view holds still while
+  // dragging.
+  const { scale, viewBox } = usePixelView(svg, stageView(patch.stage, patch.fixtures), LABEL_ROOM);
 
   // SVG coordinates are metres with y flipped: stage y = -svg y.
   function stagePoint(event: PointerEvent): { x: number; y: number } {
@@ -123,26 +133,27 @@ export function StagePlan({
     <figure className={styles.figure}>
       <svg
         ref={svg}
-        viewBox={stageViewBox(patch.stage, { audience })}
+        viewBox={viewBox}
         className={styles.plan}
         role="img"
         aria-label="Top-down stage plan"
         tabIndex={0}
         onKeyDown={onKeyDown}
       >
-        <StageGrid stage={patch.stage} audience={audience} />
+        <StageGrid stage={patch.stage} scale={scale} />
         {children}
         {patch.fixtures.map((fixture) => {
           const shown = position(fixture);
           const overhead = fixtureZone(patch, shown).level === 'Overhead';
+          const selected = selectedIds.includes(fixture.id);
           return (
             <g
               key={fixture.id}
-              transform={`translate(${shown.x} ${-shown.y})`}
+              transform={atPixels(shown.x, -shown.y, scale)}
               className={cx(
                 styles.fixture,
                 overhead && styles.overhead,
-                selectedIds.includes(fixture.id) && styles.selected,
+                selected && styles.selected,
               )}
               data-testid={`plan-${fixture.id}`}
               onPointerDown={(e) => startDrag(e, fixture)}
@@ -153,10 +164,12 @@ export function StagePlan({
               <title>
                 {`${fixture.name} (${fixtureRole(patch, fixture)}), ${fixture.universe}.${fixture.address}`}
               </title>
-              <circle r={FIXTURE_RADIUS} className={styles.marker} />
-              <text y={FIXTURE_RADIUS + 0.35} fontSize={0.28} className={styles.name}>
-                {fixture.name}
-              </text>
+              <circle r={FIXTURE_MARKER_RADIUS} className={styles.marker} />
+              {(showLabels || selected || drag?.id === fixture.id) && (
+                <text y={FIXTURE_MARKER_RADIUS} dy="1.1em" className={styles.name}>
+                  {fixture.name}
+                </text>
+              )}
             </g>
           );
         })}
@@ -173,24 +186,24 @@ export function StagePlan({
 }
 
 // The stage, the Front row in front of it, the Zone grid and its labels,
-// top-down in SVG coordinates (see `stageViewBox`). With `audience`, the
-// audience plane too.
-export function StageGrid({ stage, audience = false }: { stage: StageBounds; audience?: boolean }) {
+// top-down in SVG coordinates (see `stageView`). The labels are a fixed screen size: `scale` is the
+// SVG's pixels per metre (see `usePixelView`). They need `LABEL_ROOM` around
+// the view.
+export function StageGrid({ stage, scale }: { stage: StageBounds; scale: number }) {
   const { width, depth } = stage;
+  const label = (x: number, y: number, text: string, place: 'above' | 'below' | 'left') => (
+    <text
+      key={text}
+      transform={atPixels(x, y, scale)}
+      x={place === 'left' ? -LABEL_GAP : 0}
+      y={place === 'above' ? -LABEL_GAP : place === 'below' ? LABEL_GAP : 0}
+      dy={place === 'above' ? 0 : place === 'below' ? '1em' : '0.35em'}
+    >
+      {text}
+    </text>
+  );
   return (
     <>
-      {audience && (
-        <line
-          data-testid="audience-plane"
-          x1={-width / 2 - MARGIN}
-          x2={width / 2 + MARGIN}
-          y1={-audienceY(stage)}
-          y2={-audienceY(stage)}
-          className={styles.audiencePlane}
-          strokeWidth={0.03}
-          strokeDasharray="0.15 0.1"
-        />
-      )}
       <rect
         x={-width / 2}
         y={-depth}
@@ -219,45 +232,34 @@ export function StageGrid({ stage, audience = false }: { stage: StageBounds; aud
           <line x1={-width / 2} x2={width / 2} y1={(-depth * i) / 3} y2={(-depth * i) / 3} />
         </g>
       ))}
-      <g className={styles.label} fontSize={0.3} textAnchor="middle">
-        <text x={-width / 3} y={-depth - 0.3}>
-          Stage Right
-        </text>
-        <text x={0} y={-depth - 0.3}>
-          Centre
-        </text>
-        <text x={width / 3} y={-depth - 0.3}>
-          Stage Left
-        </text>
-        <text x={0} y={FRONT_DEPTH + 0.6}>
-          Audience
-        </text>
+      <g className={styles.label} textAnchor="middle">
+        {label(-width / 3, -depth, 'Stage Right', 'above')}
+        {label(0, -depth, 'Centre', 'above')}
+        {label(width / 3, -depth, 'Stage Left', 'above')}
+        {label(0, FRONT_DEPTH, 'Audience', 'below')}
       </g>
-      <g className={styles.label} fontSize={0.3} textAnchor="end">
-        <text x={-width / 2 - 0.1} y={(-depth * 5) / 6}>
-          Up
-        </text>
-        <text x={-width / 2 - 0.1} y={-depth / 2}>
-          Mid
-        </text>
-        <text x={-width / 2 - 0.1} y={-depth / 6}>
-          Down
-        </text>
-        <text x={-width / 2 - 0.1} y={FRONT_DEPTH / 2}>
-          Front
-        </text>
+      <g className={styles.label} textAnchor="end">
+        {label(-width / 2, (-depth * 5) / 6, 'Up', 'left')}
+        {label(-width / 2, -depth / 2, 'Mid', 'left')}
+        {label(-width / 2, -depth / 6, 'Down', 'left')}
+        {label(-width / 2, FRONT_DEPTH / 2, 'Front', 'left')}
       </g>
     </>
   );
 }
 
 // SVG coordinates are metres with y flipped: stage y = -svg y. The view
-// shows the stage, the Front row, or with `audience` out to the audience
-// plane, and a margin.
-export function stageViewBox(stage: StageBounds, { audience = false } = {}): string {
-  const { width, depth } = stage;
-  const front = audience ? -audienceY(stage) : FRONT_DEPTH;
-  return `${-width / 2 - MARGIN} ${-depth - MARGIN} ${width + 2 * MARGIN} ${depth + front + 2 * MARGIN}`;
+// shows the stage and the Front row, grown to take in any of `fixtures`
+// outside them. No margin: labels and markers have their room in pixels.
+export function stageView(
+  { width, depth }: StageBounds,
+  fixtures: readonly { x: number; y: number }[] = [],
+): View {
+  const left = Math.min(-width / 2, ...fixtures.map((f) => f.x));
+  const right = Math.max(width / 2, ...fixtures.map((f) => f.x));
+  const top = Math.min(-depth, ...fixtures.map((f) => -f.y));
+  const bottom = Math.max(FRONT_DEPTH, ...fixtures.map((f) => -f.y));
+  return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
 // Each Zone row's top and bottom in SVG y, Front first.

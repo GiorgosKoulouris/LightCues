@@ -1,12 +1,19 @@
+import { useRef } from 'react';
 import { BEAM_UP_LENGTH } from '../../../shared/aim';
 import type { FixtureLight } from '../../../shared/protocol';
 import { fixtureZone, type PatchedFixture, type VenuePatch } from '../../../shared/venue-patch';
-import { StageGrid, stageViewBox } from '../venue/StagePlan';
+import {
+  atPixels,
+  FIXTURE_MARKER_RADIUS,
+  LABEL_GAP,
+  LABEL_ROOM,
+  usePixelView,
+} from '../venue/pixelScale';
+import { StageGrid, stageView } from '../venue/StagePlan';
 import { BeamLines, lightColour } from './BeamLines';
 import styles from './Preview.module.css';
 import { usePreview } from './usePreview';
 
-const FIXTURE_RADIUS = 0.25;
 const MARGIN = 1;
 // Half the angle of a drawn beam.
 const BEAM_HALF_ANGLE = (12 * Math.PI) / 180;
@@ -34,20 +41,24 @@ interface ViewProps {
   light(fixture: PatchedFixture): FixtureLight;
 }
 
-// The stage plan out to the audience plane, each Fixture filled with its
-// light, and each lit moving Fixture's beam drawn to where it lands.
+// The stage plan, each Fixture filled with its light, and each lit moving
+// Fixture's beam drawn to where it lands or to the edge of the view.
 function TopDown({ patch, lights, light }: ViewProps & { lights: Record<string, FixtureLight> }) {
+  const svg = useRef<SVGSVGElement>(null);
+  const view = stageView(patch.stage, patch.fixtures);
+  const { scale, viewBox } = usePixelView(svg, view, LABEL_ROOM);
   return (
     <svg
-      viewBox={stageViewBox(patch.stage, { audience: true })}
+      ref={svg}
+      viewBox={viewBox}
       className={styles.view}
       role="img"
       aria-label="Top-down preview"
     >
-      <StageGrid stage={patch.stage} audience />
-      <BeamLines patch={patch} lights={lights} />
+      <StageGrid stage={patch.stage} scale={scale} />
+      <BeamLines patch={patch} lights={lights} view={view} />
       {patch.fixtures.map((fixture) => (
-        <g key={fixture.id} transform={`translate(${fixture.x} ${-fixture.y})`}>
+        <g key={fixture.id} transform={atPixels(fixture.x, -fixture.y, scale)}>
           <title>{fixture.name}</title>
           <FixtureMarker light={light(fixture)} />
         </g>
@@ -64,10 +75,18 @@ function FrontElevation({ patch, light }: ViewProps) {
   const top = Math.max(MIN_VIEW_HEIGHT, ...patch.fixtures.map((f) => f.height + MARGIN));
   const upstageFirst = [...patch.fixtures].sort((a, b) => b.y - a.y);
   // SVG coordinates are metres with y flipped: height = -svg y.
-  const viewBox = `${-width / 2 - MARGIN} ${-top} ${width + 2 * MARGIN} ${top + MARGIN}`;
+  const view = { x: -width / 2 - MARGIN, y: -top, width: width + 2 * MARGIN, height: top + MARGIN };
+  const svg = useRef<SVGSVGElement>(null);
+  const { scale, viewBox } = usePixelView(svg, view, LABEL_ROOM);
 
   return (
-    <svg viewBox={viewBox} className={styles.view} role="img" aria-label="Front elevation preview">
+    <svg
+      ref={svg}
+      viewBox={viewBox}
+      className={styles.view}
+      role="img"
+      aria-label="Front elevation preview"
+    >
       <rect
         x={-width / 2}
         y={0}
@@ -76,16 +95,18 @@ function FrontElevation({ patch, light }: ViewProps) {
         className={styles.floor}
         strokeWidth={0.03}
       />
-      <g className={styles.label} fontSize={0.3} textAnchor="middle">
-        <text x={-width / 3} y={0.6}>
-          Stage Right
-        </text>
-        <text x={0} y={0.6}>
-          Centre
-        </text>
-        <text x={width / 3} y={0.6}>
-          Stage Left
-        </text>
+      <g className={styles.label} textAnchor="middle">
+        {(
+          [
+            [-width / 3, 'Stage Right'],
+            [0, 'Centre'],
+            [width / 3, 'Stage Left'],
+          ] as const
+        ).map(([x, text]) => (
+          <text key={text} transform={atPixels(x, 0.15, scale)} y={LABEL_GAP} dy="1em">
+            {text}
+          </text>
+        ))}
       </g>
       {upstageFirst.map((fixture) => {
         const shown = light(fixture);
@@ -99,7 +120,7 @@ function FrontElevation({ patch, light }: ViewProps) {
                 fillOpacity={0.55 * shown.intensity}
               />
             )}
-            <g transform={`translate(${fixture.x} ${-fixture.height})`}>
+            <g transform={atPixels(fixture.x, -fixture.height, scale)}>
               <FixtureMarker light={shown} />
             </g>
           </g>
@@ -109,12 +130,13 @@ function FrontElevation({ patch, light }: ViewProps) {
   );
 }
 
-// A Fixture's body: dark, lit in its colour by its intensity.
+// A Fixture's body: dark, lit in its colour by its intensity. In screen
+// pixels, the same size as on the stage plan.
 function FixtureMarker({ light }: { light: FixtureLight }) {
   return (
     <>
-      <circle r={FIXTURE_RADIUS} className={styles.body} strokeWidth={0.04} />
-      <circle r={FIXTURE_RADIUS} fill={lightColour(light)} fillOpacity={light.intensity} />
+      <circle r={FIXTURE_MARKER_RADIUS} className={styles.body} strokeWidth={1.5} />
+      <circle r={FIXTURE_MARKER_RADIUS} fill={lightColour(light)} fillOpacity={light.intensity} />
     </>
   );
 }

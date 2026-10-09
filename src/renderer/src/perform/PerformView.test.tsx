@@ -96,6 +96,17 @@ describe('PerformView', () => {
     ]);
   });
 
+  it('toggles a Scene button: goes to an inactive Scene, clears the Layer of the active one', async () => {
+    renderView();
+    await userEvent.click(screen.getByRole('button', { name: 'Warm' }));
+    await userEvent.click(screen.getByRole('button', { name: /Blue/ }));
+    expect(engine.sent).toEqual([
+      { type: 'startPreview' },
+      { type: 'goScene', sceneId: 'warm' },
+      { type: 'clearLayer', layerId: 'layer-1' },
+    ]);
+  });
+
   it('runs Blackout, the Base Look and the Grand Master', async () => {
     renderView();
     await userEvent.click(screen.getByRole('button', { name: /Blackout/ }));

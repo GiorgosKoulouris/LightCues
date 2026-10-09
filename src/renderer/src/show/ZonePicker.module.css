@@ -1,6 +1,7 @@
 .picker {
-  /* Each level's plan. */
+  /* Each level's plan: grows from this width, but no taller than the height. */
   --plan-width: 200px;
+  --plan-max-height: 320px;
 
   display: flex;
   flex: 2 1 calc(var(--plan-width) * 2);
@@ -34,8 +35,12 @@
 }
 
 .plan {
+  display: flex;
   flex: 1 1 var(--plan-width);
-  max-width: calc(var(--plan-width) * 1.5);
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: calc(var(--plan-max-height) * var(--aspect, 1));
+  margin: 0;
 }
 
 .svg {
@@ -68,6 +73,7 @@
 
 .label {
   fill: var(--text-faint);
+  font-size: var(--text-sm);
 }
 
 .caption {
