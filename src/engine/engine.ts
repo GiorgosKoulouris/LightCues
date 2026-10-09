@@ -9,6 +9,7 @@ import {
 } from '../shared/protocol';
 import { findTrigger } from '../shared/show';
 import { profileName } from '../shared/profile-edit';
+import { withoutContents } from './log-safe';
 import {
   createMidiInput,
   type MidiInputStorage,
@@ -396,7 +397,7 @@ function openLibrary(storage: LibraryStorage | undefined): ProfileLibrary {
   try {
     return createProfileLibrary(storage?.read());
   } catch (error) {
-    console.error('Profile Library is unreadable; starting empty.', error);
+    console.error('Profile Library is unreadable; starting empty.', withoutContents(error));
     storage?.setAside();
     return createProfileLibrary();
   }

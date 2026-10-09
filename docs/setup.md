@@ -83,13 +83,19 @@ See [Commands in the README](../README.md#commands).
 | --- | --- | --- |
 | `src/shared/` | everywhere | Typed message contract (`protocol.ts`) and the Fixture Profile model (`fixture-profile.ts`). |
 | `src/engine/` | engine utilityProcess | No Electron or UI imports. Testable under plain Node. Includes OFL import, the Profile Library, Outputs (`serial-ports.ts` is the only file that loads `serialport`) and MIDI input (`midi-ports.ts` is the only file that loads `@julusian/midi`). |
-| `src/main/` | Electron main | Window, engine process start-up (`engine-process.ts` is the utilityProcess entry). |
+| `src/main/` | Electron main | Window, engine process start-up (`engine-process.ts` is the utilityProcess entry), the log file (`log.ts`). |
 | `src/preload/` | renderer, isolated | Exposes `window.engine` (send commands, receive events). |
 | `src/renderer/` | renderer | React UI. |
 
 The UI talks to the engine over a direct MessagePort; main only hands out the ports.
 
 ## 9. Troubleshooting
+
+### Logs
+
+Main and the engine write one log file per day to `%APPDATA%\LightCues\logs\`, named `lightcues-YYYY-MM-DD.log`. The last 14 days are kept. Engine lines start with `[engine]`. Start here after a crash: the engine logs its start and its exit code. Logs hold file paths but no Show, Venue Patch or other file contents.
+
+`npm run dev` also prints every line to the terminal.
 
 ### `npm run dev` fails with `Error: Electron uninstall`
 

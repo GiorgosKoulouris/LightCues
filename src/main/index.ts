@@ -14,6 +14,7 @@ import {
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { format } from 'node:util';
 import {
   CHECK_FOR_UPDATES_CHANNEL,
   CHOOSE_LIBRARY_TO_OPEN_CHANNEL,
@@ -45,6 +46,7 @@ import {
   type UpdateAvailable,
 } from '../shared/protocol';
 import { fileStorage } from '../engine/file-storage';
+import { createLog, lineSplitter } from './log';
 import { isAppPage } from './navigation';
 import { createUpdateCheck, isReleasePageUrl } from './update-check';
 
@@ -59,6 +61,35 @@ function libraryPath(): string {
   return join(app.getPath('userData'), 'profile-library.json');
 }
 
+// The log file, in `userData/logs`. A packaged app has no console, so this is
+// the only trace of a crash at a gig. Paths may be logged; document and file
+// contents may not.
+const logFile = createLog(join(app.getPath('userData'), 'logs'), () => new Date());
+
+// Main's own lines go to the log file and the console, which `npm run dev`
+// shows.
+function logTo(echo: (...args: unknown[]) => void) {
+  return (...args: unknown[]): void => {
+    echo(...args);
+    logFile.write(format(...args));
+  };
+}
+const log = logTo(console.log);
+const logError = logTo(console.error);
+
+// Copies an engine output stream to the log file, line by line with an
+// `[engine]` prefix, and to main's own stream.
+function logEngineOutput(stream: NodeJS.ReadableStream | null, echo: NodeJS.WriteStream): void {
+  if (!stream) return;
+  const lines = lineSplitter((line) => logFile.write(`[engine] ${line}`));
+  stream.setEncoding('utf8');
+  stream.on('data', (chunk: string) => {
+    echo.write(chunk);
+    lines.push(chunk);
+  });
+  stream.on('end', () => lines.end());
+}
+
 function startEngine(): UtilityProcess {
   const userData = app.getPath('userData');
   const engine = utilityProcess.fork(
@@ -70,10 +101,13 @@ function startEngine(): UtilityProcess {
     ],
     {
       serviceName: 'LightCues Engine',
+      stdio: 'pipe',
     },
   );
-  engine.on('spawn', () => console.log(`Engine started (pid ${engine.pid})`));
-  engine.on('exit', (code) => console.error(`Engine exited with code ${code}`));
+  logEngineOutput(engine.stdout, process.stdout);
+  logEngineOutput(engine.stderr, process.stderr);
+  engine.on('spawn', () => log(`Engine started (pid ${engine.pid})`));
+  engine.on('exit', (code) => logError(`Engine exited with code ${code}`));
   return engine;
 }
 
@@ -197,7 +231,7 @@ function handleUpdateCheck(window: BrowserWindow): void {
     fetch: (url, init) => net.fetch(url, init),
     now: Date.now,
     storage: fileStorage(join(app.getPath('userData'), 'update-check.json')),
-    log: (message) => console.error(message),
+    log: (message) => logError(message),
   });
   const result = new Promise<UpdateAvailable | undefined>((done) => {
     window.webContents.once('did-finish-load', () => {
@@ -315,6 +349,13 @@ function restrictNavigation(pageUrl: string): void {
     });
   });
 }
+
+// Logs main's own errors. The monitor leaves Electron's handling of an
+// uncaught exception as it is.
+process.on('uncaughtExceptionMonitor', (error) => logFile.write(format('Main error:', error)));
+process.on('unhandledRejection', (reason) => logError('Main unhandled rejection:', reason));
+
+log(`LightCues ${app.getVersion()} starting`);
 
 void app.whenReady().then(() => {
   const engine = startEngine();

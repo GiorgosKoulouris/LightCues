@@ -1,6 +1,6 @@
 # Rotating log file for main and the engine
 
-Status: ready-for-agent
+Status: ready-for-human
 
 See spec, "Logs".
 
@@ -21,3 +21,15 @@ Main and the engine log only to the console. A packaged app has no console, so a
 - No document or file contents in any log line. Search `src/` for `console.` calls that print documents.
 - README Troubleshooting (or docs/setup.md for now) says where the logs are.
 - `npm run check` passes.
+
+Choices beyond the issue:
+
+- Retention keeps the last 14 days, today included: on 10-09, files from 09-26 on stay.
+- File names use the local date. Each line starts with local time in ISO 8601 with its UTC offset, e.g. `2026-10-09T14:30:05.007+03:00`. Every line of a multi-line message (a stack trace) gets its own timestamp.
+- Writes are synchronous, so the last lines before a crash are on disk. A failed write is ignored; the log never stops the app.
+- `JSON.parse` errors quote part of the input. The three startup `console.error` calls for an unreadable Profile Library, MIDI Input selection or recent files now log "The file is not valid JSON." instead (`src/engine/log-safe.ts`). The unsupported Profile Library version error quotes the version only when it is a number.
+- Main logs `LightCues <version> starting`, unhandled rejections, and uncaught exceptions (through `uncaughtExceptionMonitor`, so Electron's own handling stays). The update check's errors go to the log too.
+- `serve.ts` already used `console.error`; no change.
+- Logs are documented in `docs/setup.md` Troubleshooting.
+
+Left for a human: the packaged build on Windows. Run `npm run package`, install, launch, then close. `%APPDATA%\LightCues\logs\lightcues-<today>.log` exists and holds `LightCues <version> starting`, `Engine started (pid N)` and `Engine exited with code N`. Then mark this issue resolved.
