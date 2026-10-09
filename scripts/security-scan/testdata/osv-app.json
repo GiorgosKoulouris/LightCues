@@ -1,0 +1,92 @@
+{
+  "results": [
+    {
+      "source": {
+        "path": "/tmp/app/node_modules/debug/package.json",
+        "type": "unknown"
+      },
+      "packages": [
+        {
+          "package": {
+            "name": "debug",
+            "version": "4.4.0",
+            "ecosystem": "npm"
+          },
+          "licenses": ["MIT"]
+        }
+      ]
+    },
+    {
+      "source": {
+        "path": "/tmp/app/node_modules/fast-xml-parser/package.json",
+        "type": "unknown"
+      },
+      "packages": [
+        {
+          "package": {
+            "name": "fast-xml-parser",
+            "version": "5.11.2",
+            "ecosystem": "npm"
+          },
+          "licenses": ["MIT"],
+          "vulnerabilities": [
+            {
+              "id": "GHSA-xxxx-test-0001",
+              "aliases": ["CVE-2099-0001"],
+              "summary": "fast-xml-parser test advisory",
+              "database_specific": {
+                "cwe_ids": ["CWE-1284"],
+                "github_reviewed": true,
+                "github_reviewed_at": "2026-10-05T23:47:34Z",
+                "nvd_published_at": "2026-09-24T14:18:21Z",
+                "severity": "HIGH"
+              },
+              "severity": [
+                {
+                  "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+                  "type": "CVSS_V3"
+                },
+                {
+                  "score": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N",
+                  "type": "CVSS_V4"
+                }
+              ],
+              "schema_version": "1.9.0",
+              "published": "2026-09-24T15:31:31Z",
+              "modified": "2026-10-06T00:00:08.436043466Z"
+            }
+          ],
+          "groups": [
+            {
+              "ids": ["GHSA-xxxx-test-0001"],
+              "aliases": ["CVE-2099-0001", "GHSA-xxxx-test-0001"],
+              "max_severity": "7.5"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "source": {
+        "path": "/tmp/app/package.json",
+        "type": "unknown"
+      },
+      "packages": [
+        {
+          "package": {
+            "name": "lightcues",
+            "version": "0.1.1",
+            "ecosystem": "npm"
+          },
+          "licenses": ["UNKNOWN"]
+        }
+      ]
+    }
+  ],
+  "experimental_config": {
+    "licenses": {
+      "summary": true,
+      "allowlist": []
+    }
+  }
+}

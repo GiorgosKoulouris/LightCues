@@ -12,13 +12,18 @@ Not every merge is a release. A docs-only batch goes to `main` untagged.
    ```
    Commit it. It is squashed into the batch with the rest (see [staging.md](staging.md)).
 2. **Stage and merge** as usual. CI on `stage` checks the version is valid semver.
-3. **Tag the merged commit and push the tag.**
+3. **Suggested: run the security scan** on the merged commit. Advice, not a gate. See [security-scan.md](../security-scan.md).
+   ```sh
+   git checkout main && git pull
+   npm run security:scan -- --ref main     # or ask Claude to "run the security scan on main"
+   ```
+4. **Tag the merged commit and push the tag.**
    ```sh
    git checkout main && git pull
    git tag v0.2.0
    git push origin v0.2.0
    ```
-4. **Check the GitHub Release.** Wait for the release run to go green. The GitHub Release lists `LightCues-Setup-0.2.0.exe`, `LightCues-Setup-0.2.0.exe.blockmap` and `latest.yml`, with generated notes.
+5. **Check the GitHub Release.** Wait for the release run to go green. The GitHub Release lists `LightCues-Setup-0.2.0.exe`, `LightCues-Setup-0.2.0.exe.blockmap` and `latest.yml`, with generated notes.
 
 ## Rules the release run enforces
 

@@ -5,7 +5,11 @@ export default defineConfig({
   test: {
     projects: [
       {
-        test: { name: 'logic', include: ['src/**/*.test.ts'], environment: 'node' },
+        test: {
+          name: 'logic',
+          include: ['src/**/*.test.ts', 'scripts/**/*.test.mjs'],
+          environment: 'node',
+        },
       },
       {
         // Component tests (Testing Library + jsdom).

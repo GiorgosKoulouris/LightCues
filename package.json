@@ -23,7 +23,9 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "npm run typecheck && npm run lint && npm run format:check && npm test"
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
+    "security:scan": "node scripts/security-scan.mjs",
+    "security:test-rules": "semgrep --test --metrics=off security/semgrep"
   },
   "engines": {
     "node": ">=22.12.0"

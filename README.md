@@ -31,6 +31,7 @@ The app targets Windows. Engine and logic work can also run in the [devcontainer
 | --- | --- | --- |
 | `test`, `typecheck`, `lint`, `format`, `check` | ✓ | ✓ |
 | `build` | ✓ | ✓ |
+| `security:scan`, `security:test-rules` | ✓ | |
 | `package` (Windows installer) | | ✓ |
 | `dev`, `start` (runs the Electron app) | | ✓ |
 | DMX Outputs, rtpMIDI | | ✓ |
@@ -78,6 +79,8 @@ npm test
 | `npm run format` | Format with Prettier. |
 | `npm run format:check` | Check formatting without writing. |
 | `npm run check` | Typecheck, lint, format check and tests, in that order. Run before merging. |
+| `npm run security:scan` | Security scan raw outputs. Devcontainer only. See [Security scan](#security-scan). |
+| `npm run security:test-rules` | Test the custom Electron semgrep rules. Devcontainer only. |
 
 ## CI
 
@@ -92,6 +95,19 @@ GitHub Actions on `windows-latest` ([.github/workflows/](.github/workflows/)):
 | Push to `dev` | Nothing |
 
 `stage` is the squashed batch on its way to `main`. See [docs/agents/staging.md](docs/agents/staging.md). Releases: [docs/agents/releasing.md](docs/agents/releasing.md).
+
+## Security scan
+
+An ad hoc scan, not part of CI. It builds the app from one commit in a temporary worktree and checks what ships in the installer:
+
+- dependency advisories (osv-scanner),
+- source code (semgrep, with custom Electron rules),
+- the Electron runtime against its release feed,
+- licenses.
+
+Claude then reviews the Electron security surface and writes one report to `reports/security/` (gitignored).
+
+Runs in the [devcontainer](.devcontainer/README.md) only. Ask Claude to "run the security scan", or run `npm run security:scan` for the raw outputs without a report. Options, reading the report and accepting risks: [docs/security-scan.md](docs/security-scan.md).
 
 ## Architecture
 

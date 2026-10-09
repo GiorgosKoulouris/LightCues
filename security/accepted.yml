@@ -1,0 +1,18 @@
+# Accepted risks for the security scan.
+# A finding listed here is still reported, under "Accepted risks". Past
+# reviewBy it counts as a finding again and is flagged as expired.
+#
+# Each entry:
+#   id        Finding id from raw/findings.json. A CVE or GHSA alias also matches.
+#   package   name@version, for a dependency finding. Or:
+#   path      Repo-relative file, for a code finding. Matches any line.
+#   reason    Why the risk is accepted.
+#   accepted  Date accepted, YYYY-MM-DD.
+#   reviewBy  Date to review it again, YYYY-MM-DD.
+#
+# Example:
+# - id: GHSA-xxxx-xxxx-xxxx
+#   package: fast-xml-parser@5.11.2
+#   reason: Only parses show files the user picked. No network input.
+#   accepted: 2026-10-09
+#   reviewBy: 2027-01-09

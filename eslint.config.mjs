@@ -5,11 +5,21 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig(
-  { ignores: ['out/**', 'dist/**', 'node_modules/**'] },
+  {
+    // Semgrep rule fixtures: deliberately insecure, never compiled.
+    ignores: ['out/**', 'dist/**', 'node_modules/**', 'security/semgrep/**'],
+  },
   js.configs.recommended,
   tseslint.configs.recommended,
   {
-    files: ['src/main/**', 'src/preload/**', 'src/engine/**', 'src/shared/**', '*.config.*'],
+    files: [
+      'src/main/**',
+      'src/preload/**',
+      'src/engine/**',
+      'src/shared/**',
+      'scripts/**',
+      '*.config.*',
+    ],
     languageOptions: { globals: globals.node },
   },
   {

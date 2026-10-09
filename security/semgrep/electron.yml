@@ -1,0 +1,323 @@
+# Electron hardening rules for the security scan (ADR 0009). Run the rule
+# tests with `npm run security:test-rules`. The fixtures are the `ruleid:` and
+# `ok:` lines in the electron.*ts files.
+#
+# Semgrep loads every YAML file in this folder as rules, so keep test
+# targets as .ts files.
+
+rules:
+  # --- webPreferences -------------------------------------------------------
+  # These keys exist only in Electron's webPreferences, so any object literal
+  # counts: a BrowserWindow's options, a variable passed as `webPreferences`,
+  # or setWindowOpenHandler's overrideBrowserWindowOptions. `sandbox` is a
+  # common name, so that rule also needs the `webPreferences` key.
+
+  - id: electron-node-integration-on
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      `nodeIntegration: true` gives the page Node.js. Any XSS or loaded remote
+      content then runs code on the user's machine. Leave it off and expose a
+      narrow API from the preload.
+    pattern: '{..., nodeIntegration: true, ...}'
+    metadata:
+      references:
+        - https://www.electronjs.org/docs/latest/tutorial/security#2-do-not-enable-nodejs-integration-for-remote-content
+
+  - id: electron-context-isolation-off
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      `contextIsolation: false` runs the preload in the page's JavaScript
+      world. The page can then tamper with the preload's globals and reach
+      Electron APIs. Keep it on and use contextBridge.
+    pattern: '{..., contextIsolation: false, ...}'
+    metadata:
+      references:
+        - https://www.electronjs.org/docs/latest/tutorial/security#3-enable-context-isolation
+
+  - id: electron-sandbox-off
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      `sandbox: false` takes the renderer out of the Chromium sandbox and gives
+      the preload full Node.js. A renderer exploit then owns the user's
+      account. Keep the sandbox on.
+    match:
+      any:
+        - '{..., webPreferences: {..., sandbox: false, ...}, ...}'
+        - all:
+            - inside: |
+                $PREFS = {..., sandbox: false, ...};
+                ...
+            - '{..., webPreferences: $PREFS, ...}'
+    metadata:
+      references:
+        - https://www.electronjs.org/docs/latest/tutorial/security#4-enable-process-sandboxing
+
+  - id: electron-web-security-off
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      `webSecurity: false` turns off the same-origin policy, so any page can
+      read any origin and local files. Keep it on.
+    pattern: '{..., webSecurity: false, ...}'
+    metadata:
+      references:
+        - https://www.electronjs.org/docs/latest/tutorial/security#6-do-not-disable-websecurity
+
+  - id: electron-insecure-content-allowed
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      `allowRunningInsecureContent: true` lets an HTTPS page run scripts and
+      styles loaded over HTTP, which a network attacker can replace. Leave it
+      off.
+    pattern: '{..., allowRunningInsecureContent: true, ...}'
+    metadata:
+      references:
+        - https://www.electronjs.org/docs/latest/tutorial/security#8-do-not-enable-allowrunninginsecurecontent
+
+  # --- shell.openExternal ---------------------------------------------------
+
+  - id: electron-open-external-non-literal
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: >-
+      `shell.openExternal` with a non-literal URL. If the renderer or a file
+      controls it, `file:`, `smb:` or app protocol URLs can launch programs.
+      Allow-list the scheme and host first, or pass a fixed URL.
+    patterns:
+      - pattern-either:
+          - pattern: shell.openExternal($URL, ...)
+          - pattern: $ELECTRON.shell.openExternal($URL, ...)
+      - pattern-not: shell.openExternal('...', ...)
+      - pattern-not: $ELECTRON.shell.openExternal('...', ...)
+    metadata:
+      references:
+        - https://www.electronjs.org/docs/latest/tutorial/security#15-do-not-use-shellopenexternal-with-untrusted-content
+
+  # --- IPC ------------------------------------------------------------------
+
+  - id: electron-ipc-unvalidated-payload
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: >-
+      IPC handler uses payload `$P` with no check. Heuristic. TypeScript types
+      are not checked at runtime, and a compromised renderer can send any
+      value. Check its type and range, compare it to known values, or parse it
+      with a schema before use.
+    match:
+      all:
+        # A handler on ipcMain or webContents.ipc: inline, a function declared
+        # in the same block, or an arrow declared earlier in it. `function` patterns also
+        # match arrow functions.
+        - any:
+            - $IPC.$METHOD($CHANNEL, function ($EVENT, ..., $P, ...) { $...BODY })
+            - $IPC.$METHOD($CHANNEL, function ($EVENT, ..., {..., $P, ...}, ...) { $...BODY })
+            - all:
+                - any:
+                    - inside: |
+                        function $HANDLER(...) { ... }
+                        ...
+                        $IPC.$METHOD($CHANNEL, $HANDLER);
+                    # Function declarations are hoisted.
+                    - inside: |
+                        $IPC.$METHOD($CHANNEL, $HANDLER);
+                        ...
+                        function $HANDLER(...) { ... }
+                - function $HANDLER($EVENT, ..., $P, ...) { $...BODY }
+            - all:
+                - inside: |
+                    $HANDLER = function (...) { ... };
+                    ...
+                    $IPC.$METHOD($CHANNEL, $HANDLER);
+                - $HANDLER = function ($EVENT, ..., $P, ...) { $...BODY }
+      where:
+        - metavariable: $IPC
+          regex: ^(ipcMain|.*\.ipc)$
+        - metavariable: $METHOD
+          regex: ^(handle|handleOnce|on|once)$
+        - metavariable: $...BODY
+          all:
+            # A use passes, stores, iterates or dereferences $P. A bare
+            # condition (`if ($P)`, `$P ? a : b`, `!$P`) is not a use: no value
+            # can abuse it.
+            - any:
+                - $F(..., $P, ...)
+                - new $C(..., $P, ...)
+                - $P.$PROP
+                - $P[$KEY]
+                - $OBJ[$P]
+                - $TARGET = $P
+                - '{..., $NAME: $P, ...}'
+                - '[..., $P, ...]'
+                - for (const $ITEM of $P) $LOOP
+                - $P ?? $OTHER
+                - $P || $OTHER
+                - $OTHER ?? $P
+                - $OTHER || $P
+                - $P + $OTHER
+                - $OTHER + $P
+                - '`...${$P}...`'
+            # Checked uses: inside an `if` on a check, after an `if` on a
+            # check that returns or throws, or inside a schema parse.
+            - not:
+                inside:
+                  any:
+                    - if ($COND) $THEN
+                    - |
+                      if ($COND) return ...;
+                      ...
+                    - |
+                      if ($COND) { ... return ...; }
+                      ...
+                    - |
+                      if ($COND) throw $ERROR;
+                      ...
+                    - |
+                      if ($COND) { ... throw $ERROR; }
+                      ...
+                  where:
+                    - metavariable: $COND
+                      any:
+                        - typeof $P
+                        - $P instanceof $TYPE
+                        - all:
+                            - $CHECK(..., $P, ...)
+                          where:
+                            - metavariable: $CHECK
+                              regex: ^(Array\.isArray|Number\.is\w+|([\w.]+\.)?(is|validate)[A-Z]\w*|[\w.]+\.(includes|has))$
+                        # A compare with undefined or null only checks presence.
+                        - all:
+                            - any:
+                                - $P === $KNOWN
+                                - $P !== $KNOWN
+                                - $KNOWN === $P
+                                - $KNOWN !== $P
+                          where:
+                            - metavariable: $KNOWN
+                              regex: ^(?!(undefined|null)$)
+            # Statement form: the expression form does not match here.
+            - not:
+                inside:
+                  any:
+                    - $SCHEMA.parse($P);
+                    - $SCHEMA.safeParse($P);
+
+  - id: electron-expose-ipc-renderer
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      The preload exposes `ipcRenderer`, a generic channel forwarder, or a
+      listener that gets the raw IPC event (its `sender` is `ipcRenderer`).
+      Any script in the page can then call every IPC channel, including
+      Electron internals. Expose one function per channel with a fixed
+      channel name, and pass listeners the payload only.
+    patterns:
+      - pattern-either:
+          - pattern-inside: contextBridge.exposeInMainWorld($KEY, $API)
+          - pattern-inside: |
+              const $API = $INIT;
+              ...
+              contextBridge.exposeInMainWorld($KEY, $API);
+      - pattern-either:
+          - pattern: contextBridge.exposeInMainWorld($KEY, ipcRenderer)
+          - patterns:
+              - pattern: '{..., $NAME: $VALUE, ...}'
+              - metavariable-pattern:
+                  metavariable: $VALUE
+                  pattern-either:
+                    - pattern: ipcRenderer
+                    - pattern: ipcRenderer.$METHOD
+                    - pattern: ipcRenderer.$METHOD.bind(...)
+              - focus-metavariable: $VALUE
+          # The channel or the listener comes from the exposed function's
+          # parameters, or all arguments come from one spread. `function`
+          # patterns also match arrow functions and methods.
+          - patterns:
+              - pattern-inside: function $FN(..., $CHANNEL, ...) { ... }
+              - pattern: ipcRenderer.$METHOD($CHANNEL, ...)
+          - pattern: ipcRenderer.$METHOD(...$ARGS)
+          - patterns:
+              - pattern-inside: function $FN(..., $LISTENER, ...) { ... }
+              - pattern: ipcRenderer.$LISTEN($CHANNEL, $LISTENER)
+              - metavariable-regex:
+                  metavariable: $LISTEN
+                  regex: ^(on|once|addListener)$
+    metadata:
+      references:
+        - https://www.electronjs.org/docs/latest/tutorial/context-isolation#security-considerations
+
+  # --- Navigation and new windows -------------------------------------------
+
+  - id: electron-missing-navigation-guards
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: >-
+      Window without both `setWindowOpenHandler` and a `will-navigate` guard.
+      A `target=_blank` link or `window.open` opens a new Electron window with
+      default settings. A link or redirect can move this window, with its
+      preload API, to any page. Deny both by default.
+    match:
+      all:
+        - new BrowserWindow(...)
+        # Guarded: both guards in the code after the window is created, in a
+        # helper the window or its webContents is passed to, or in an
+        # `app.on('web-contents-created', …)` handler anywhere in the file.
+        - not:
+            inside:
+              all:
+                - |
+                  $WINDOW = new BrowserWindow(...);
+                  $...AFTER
+              where:
+                - metavariable: $...AFTER
+                  pattern: $A.setWindowOpenHandler(...)
+                - metavariable: $...AFTER
+                  pattern: $B.on('will-navigate', ...)
+        - not:
+            all:
+              - any:
+                  - inside: |
+                      function $HELPER(..., $PARAM, ...) { $...HELPER_BODY }
+                      ...
+                  - inside: |
+                      ...
+                      function $HELPER(..., $PARAM, ...) { $...HELPER_BODY }
+              - any:
+                  - inside: |
+                      $WINDOW = new BrowserWindow(...);
+                      ...
+                      $HELPER(..., $WINDOW, ...);
+                  - inside: |
+                      $WINDOW = new BrowserWindow(...);
+                      ...
+                      $HELPER(..., $WINDOW.webContents, ...);
+              - new BrowserWindow(...)
+            where:
+              - metavariable: $...HELPER_BODY
+                pattern: $A.setWindowOpenHandler(...)
+              - metavariable: $...HELPER_BODY
+                pattern: $B.on('will-navigate', ...)
+        - not:
+            any:
+              - inside: |
+                  $APP_GUARD;
+                  ...
+              - inside: |
+                  ...
+                  $APP_GUARD;
+            where:
+              - metavariable: $APP_GUARD
+                all:
+                  - $APP.on('web-contents-created', function ($EV, $CONTENTS) { $...APP_BODY })
+                where:
+                  - metavariable: $...APP_BODY
+                    pattern: $A.setWindowOpenHandler(...)
+                  - metavariable: $...APP_BODY
+                    pattern: $B.on('will-navigate', ...)
+    metadata:
+      references:
+        - https://www.electronjs.org/docs/latest/tutorial/security#13-disable-or-limit-navigation
+        - https://www.electronjs.org/docs/latest/tutorial/security#14-disable-or-limit-creation-of-new-windows

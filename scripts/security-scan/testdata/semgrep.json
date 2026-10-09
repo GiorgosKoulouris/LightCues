@@ -1,0 +1,61 @@
+{
+  "version": "1.179.0",
+  "results": [
+    {
+      "check_id": "javascript.lang.security.audit.eval-detected.eval-detected",
+      "path": "src/main/index.ts",
+      "start": {
+        "line": 4,
+        "col": 3,
+        "offset": 98
+      },
+      "end": {
+        "line": 4,
+        "col": 18,
+        "offset": 113
+      },
+      "extra": {
+        "message": "eval is bad",
+        "metadata": {
+          "cwe": ["CWE-95"]
+        },
+        "severity": "ERROR",
+        "fingerprint": "requires login",
+        "lines": "requires login",
+        "validation_state": "NO_VALIDATOR",
+        "engine_kind": "OSS"
+      }
+    },
+    {
+      "check_id": "no-eval",
+      "path": "src/engine/show.test.ts",
+      "start": {
+        "line": 9,
+        "col": 3,
+        "offset": 98
+      },
+      "end": {
+        "line": 4,
+        "col": 18,
+        "offset": 113
+      },
+      "extra": {
+        "message": "eval is bad",
+        "metadata": {
+          "cwe": ["CWE-95"]
+        },
+        "severity": "WARNING",
+        "fingerprint": "requires login",
+        "lines": "requires login",
+        "validation_state": "NO_VALIDATOR",
+        "engine_kind": "OSS"
+      }
+    }
+  ],
+  "errors": [],
+  "paths": {
+    "scanned": ["src/main/index.ts", "src/engine/show.test.ts"]
+  },
+  "engine_requested": "OSS",
+  "skipped_rules": []
+}
