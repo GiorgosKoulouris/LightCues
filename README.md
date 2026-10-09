@@ -81,7 +81,7 @@ In **Show**, on the **Triggers** tab:
 ### 5. Perform
 
 ![Animation: Scenes fired one after another in Perform, with the Preview changing colour and the moving heads following](docs/images/demo.gif)
-*Firing Scenes from Perform, sped up. MIDI notes fire the same buttons.*
+*Scenes fired by hand with the Perform buttons, no MIDI, sped up. A MIDI Trigger fires them the same way.*
 
 Open **Perform** at the gig. It shows Blackout, Base Look, Grand Master, Tap Tempo and Freeze along the top, every Scene button by Layer, and the Preview. The top bar shows the MIDI Input: red means lost, and Triggers do not fire until it returns.
 
