@@ -1,6 +1,6 @@
 # Rotating log file for main and the engine
 
-Status: ready-for-human
+Status: resolved
 
 See spec, "Logs".
 
@@ -33,3 +33,7 @@ Choices beyond the issue:
 - Logs are documented in `docs/setup.md` Troubleshooting.
 
 Left for a human: the packaged build on Windows. Run `npm run package`, install, launch, then close. `%APPDATA%\LightCues\logs\lightcues-<today>.log` exists and holds `LightCues <version> starting`, `Engine started (pid N)` and `Engine exited with code N`. Then mark this issue resolved.
+
+### 2026-10-09: resolved
+
+Packaged build checked on Windows by the maintainer: the log file exists after a launch and holds the engine start line.
