@@ -1,130 +1,115 @@
 # <img src="build/icon.svg" alt="" width="64" height="64" align="absmiddle"> LightCues
 
-A Windows lighting controller for live music shows.
+Lights for your gig that follow your DAW, at any venue.
 
-Program a Show once and run it at any venue. Scenes target stage Zones and fixture Roles, not specific fixtures. Each venue gets its own Venue Patch describing the rig, and the Show adapts to it. A DAW or MIDI controller fires Scenes during the gig. A Fallback Panel keeps manual control available if MIDI drops.
+<!-- Hero screenshot: Perform view (public-face issue 03). -->
 
-## How it works
+Building from source: [docs/development.md](docs/development.md).
 
-- A **Show** holds Scenes and MIDI Triggers. It is venue-independent.
-- A **Venue Patch** describes one venue's rig: Fixtures, their Profiles, DMX addresses and stage positions.
-- A **Scene** is a look or effect. Its Rules target **Zones** (a fixed stage grid) × **Roles** (Wash, Spot/Beam, Blinder, …).
-- Scenes play in **Layers**. Each Layer holds one Scene, and Layers stack.
-- **Triggers** map incoming MIDI messages to Scene actions: Go, Flash or Release.
-- The **Fallback Panel** is always visible: Blackout, Base Look, Grand Master and chosen Scene buttons, all with keyboard shortcuts.
+## What it does
 
-Full glossary: [CONTEXT.md](CONTEXT.md). Design decisions: [docs/adr/](docs/adr/).
+- Your DAW or MIDI controller fires the lights. Each song's MIDI notes start Scenes, with no one at the desk.
+- You program the Show once. Scenes aim at parts of the stage (Zones) and kinds of light (Roles: Wash, Spot/Beam, Blinder, …), not at particular Fixtures.
+- A new venue means re-patching, not re-programming. Make a Venue Patch for the house rig, place the Fixtures on the stage plan, and the Show adapts.
+- If MIDI drops, the current look holds. The Fallback Panel is on screen in every view, and Perform has the same controls: Blackout, Base Look, Grand Master, Tap Tempo, Freeze and your chosen Scene buttons, each with a key.
 
-## Hardware
+## Requirements
 
-| Kind | Supported |
-| --- | --- |
-| DMX Outputs | Enttec DMX USB Pro and DMXking ultraDMX (Enttec protocol over USB serial) |
-| MIDI | Any Windows MIDI port. [rtpMIDI](https://www.tobias-erichsen.de/software/rtpmidi.html) for network MIDI from a DAW laptop, [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html) for local virtual ports |
-| Fixture Profiles | Imported from [Open Fixture Library](https://open-fixture-library.org/) or [GDTF](https://gdtf-share.com/) files, or made in the app |
-
-## Where to run what
-
-The app targets Windows. Engine and logic work can also run in the [devcontainer](.devcontainer/README.md).
-
-| Task | Devcontainer | Windows host |
-| --- | --- | --- |
-| `test`, `typecheck`, `lint`, `format`, `check` | ✓ | ✓ |
-| `build` | ✓ | ✓ |
-| `security:scan`, `security:test-rules` | ✓ | |
-| `package` (Windows installer) | | ✓ |
-| `dev`, `start` (runs the Electron app) | | ✓ |
-| DMX Outputs, rtpMIDI | | ✓ |
-
-The container and the host each need their own `npm install`. In the container, `node_modules` is a separate Docker volume.
+- Windows 10 or 11, 64-bit.
+- A DMX interface: Enttec DMX USB Pro or DMXking ultraDMX.
+- Optional, for MIDI: a DAW or MIDI controller. From a DAW on another laptop, use [rtpMIDI](https://www.tobias-erichsen.de/software/rtpmidi.html) (network MIDI). From a DAW on the same PC, use [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html) (virtual MIDI ports).
+- Fixture Profiles: import [Open Fixture Library](https://open-fixture-library.org/) (`.json`) or [GDTF](https://gdtf-share.com/) (`.gdtf`) files, or make them in the app.
 
 ## Install
 
-Download `LightCues-Setup-<version>.exe` from the [GitHub Releases page](https://github.com/GiorgosKoulouris/LightCues/releases) and run it. It installs for the current user, without admin rights. The installer is not code-signed yet: on the SmartScreen warning, choose **More info** → **Run anyway**. LightCues checks GitHub for a newer release once a day and shows a notice in the Sidebar, never in Perform. It downloads nothing: install new versions over the old one. At the bottom of the Sidebar, untick **Check on startup** to turn the check off, or use the button beside it to check now.
+1. Download `LightCues-Setup-<version>.exe` from the [Releases page](https://github.com/GiorgosKoulouris/LightCues/releases).
+2. Run it. By default it installs for your user only, without admin rights.
+3. The installer is not code-signed yet. On the blue SmartScreen warning, choose **More info** → **Run anyway**.
 
-The Profile Library and the chosen MIDI Input are kept in `%APPDATA%\LightCues`. Shows and Venue Patches are saved wherever you choose.
+LightCues checks GitHub for a new release once a day and shows a notice in the Sidebar, never in Perform. It downloads nothing: install the new version over the old one. To turn the check off, untick **Check on startup** at the bottom of the Sidebar. The button beside it checks now.
 
-## Quickstart
+The Profile Library and the chosen MIDI Input are kept in `%APPDATA%\LightCues`. Shows and Venue Patches are saved where you choose.
 
-Prerequisites (Windows): Git, Node.js 22.12 or newer (see [.nvmrc](.nvmrc)), Visual Studio Build Tools 2022 with the C++ workload, and Python 3. Full details and troubleshooting: [docs/setup.md](docs/setup.md).
+## First Show
 
-```powershell
-git clone https://github.com/GiorgosKoulouris/LightCues.git LightCues
-cd LightCues
-git switch dev
-npm install
-npm run dev
-```
+<!-- Open the example Show and Venue Patch, to try LightCues without hardware: added with try-without-hardware issue 03. -->
 
-The window should show "Engine replied in N ms". That means the engine process is running.
+The Sidebar switches between four views: Show, Venue Patch, Profile Library and Perform (Ctrl+1 to Ctrl+4). Show and Venue Patch each have New, Open…, Save and Save As… buttons.
 
-Run the tests:
+### 1. Import Profiles
 
-```powershell
-npm test
-```
+<!-- Screenshot: Profile import (public-face issue 03). -->
 
-## Commands
+In **Profile Library**, click **Import fixture** and choose an OFL `.json` or GDTF `.gdtf` file for each fixture type in the rig. **New Profile** makes one by hand. The Profile Library is kept on this PC, across Shows and venues.
 
-| Command | What it does |
-| --- | --- |
-| `npm run dev` | Start the app with hot reload. Windows host only. |
-| `npm run build` | Build main, engine, preload and renderer into `out/`. |
-| `npm start` | Run the built app. Windows host only. |
-| `npm run package` | Build the Windows x64 installer, its blockmap and `latest.yml` into `dist/`. Never publishes. Windows host only: on Linux the NSIS step needs Wine. |
-| `npm test` | Run the test suite (Vitest). |
-| `npm run test:watch` | Run Vitest in watch mode. |
-| `npm run typecheck` | Typecheck engine, Electron side and renderer separately. |
-| `npm run lint` | ESLint. Also blocks Electron/UI imports in `src/engine` and `src/shared`. |
-| `npm run format` | Format with Prettier. |
-| `npm run format:check` | Check formatting without writing. |
-| `npm run check` | Typecheck, lint, format check and tests, in that order. Run before merging. |
-| `npm run security:scan` | Security scan raw outputs. Devcontainer only. See [Security scan](#security-scan). |
-| `npm run security:test-rules` | Test the custom Electron semgrep rules. Devcontainer only. |
+### 2. Patch the Venue
 
-## CI
+<!-- Screenshot: Venue Patch stage plan (public-face issue 03). -->
 
-GitHub Actions on `windows-latest` ([.github/workflows/](.github/workflows/)):
+In **Venue Patch**:
 
-| Event | What runs |
-| --- | --- |
-| Push to `stage` | Semver check on the `package.json` version, `npm run check`, `npm run package`. The installer is uploaded as a workflow artifact, kept 7 days. |
-| Push to `main` | Same as `stage`. Also warns when code changed since the last `v*` tag and HEAD is untagged. |
-| Push of tag `vX.Y.Z` | Fails unless the tag equals `v` + the `package.json` version and is on `main`. Then `npm run check`, `npm run package`, and a GitHub Release with the installer, its blockmap and `latest.yml` ([release.yml](.github/workflows/release.yml)). |
-| Pull request to `main` | `npm run check` |
-| Push to `dev` | Nothing |
+1. In the **Rig setup** tab, set the stage width and depth. Click **Add Universe** and pick its Output, the DMX interface. Its status shows **Sending** once it works.
+2. In the **Fixtures** tab, click **Add Fixture** and pick the Profile, Mode, Universe and DMX address.
+3. Drag each Fixture to its place on the stage plan. In the inspector, check its Role and Zone. For moving heads, set how they are mounted.
+4. **Save** the Venue Patch. Make one per venue.
 
-`stage` is the squashed batch on its way to `main`. See [docs/agents/staging.md](docs/agents/staging.md). Releases: [docs/agents/releasing.md](docs/agents/releasing.md).
+### 3. Build a Scene
 
-## Security scan
+<!-- Screenshot: Scene and Rule editor (public-face issue 03). -->
 
-An ad hoc scan, not part of CI. It builds the app from one commit in a temporary worktree and checks what ships in the installer:
+In **Show**, on the **Scenes** tab:
 
-- dependency advisories (osv-scanner),
-- source code (semgrep, with custom Electron rules),
-- the Electron runtime against its release feed,
-- licenses.
+1. Click **New Scene** and name it.
+2. Click **Add Rule**. Pick its Zones on the stage plans and its Roles, then set intensity, colour, Direction or an Effect. Later Rules override earlier ones.
+3. Pick the Scene's Layer. A Scene replaces the one playing in its Layer. Different Layers stack.
 
-Claude then reviews the Electron security surface and writes one report to `reports/security/` (gitignored).
+The Preview shows the result on the stage plan. Switch to **Blind** to edit without changing the real lights.
 
-Runs in the [devcontainer](.devcontainer/README.md) only. Ask Claude to "run the security scan", or run `npm run security:scan` for the raw outputs without a report. Options, reading the report and accepting risks: [docs/security-scan.md](docs/security-scan.md).
+### 4. Map a MIDI Trigger
 
-## Architecture
+In **Show**, on the **Triggers** tab:
 
-Electron app with three processes ([ADR 0002](docs/adr/0002-electron-with-separate-engine-process.md)):
+1. Choose the **MIDI Input**: your rtpMIDI session, loopMIDI port or MIDI controller's port.
+2. Click **Learn** and play the note, or type the channel and note.
+3. Pick the Scene and the mode: Go (start and stay), Flash (while held) or Release (clear the Layer). Click **Map**.
+4. **Save** the Show.
 
-- **Engine** (`src/engine/`): an Electron utilityProcess. MIDI in, Scene resolution, DMX out, files, undo history. No Electron or UI imports, so it is testable under plain Node.
-- **Main** (`src/main/`): creates the window, starts the engine and hands out MessagePorts.
-- **Renderer** (`src/renderer/`): React UI. It talks to the engine directly over a MessagePort.
+### 5. Perform
 
-`src/shared/` holds the typed message contract and the data models used by both sides. See [docs/setup.md §8](docs/setup.md#8-source-layout) for the full layout.
+<!-- Demo GIF: MIDI fires Scenes, Perform and Preview react (public-face issue 03). -->
+
+Open **Perform** at the gig. It shows Blackout, Base Look, Grand Master, Tap Tempo and Freeze along the top, every Scene button by Layer, and the Preview. The top bar shows the MIDI Input: red means lost, and Triggers do not fire until it returns.
+
+Fallback Panel keys: **B** Blackout, **0** Base Look, **1**–**9** Scene buttons, **-** / **+** Grand Master, **T** Tap Tempo, **F** Freeze. Pick the Base Look and the panel's Scene buttons in the Show settings.
+
+## Troubleshooting
+
+### The DMX interface is not found
+
+The Output list in **Rig setup** shows only USB serial devices with an FTDI chip, by serial number and COM port.
+
+- Check **Device Manager → Ports (COM & LPT)** for a COM port when the interface is plugged in.
+- No COM port: install the [FTDI VCP driver](https://ftdichip.com/drivers/vcp-drivers/) (Enttec) or the driver from DMXking's site, then replug.
+- **Not connected** next to an Output: the saved Output is unplugged. Plug it back in. LightCues reconnects on its own.
+
+### The MIDI port is missing
+
+- rtpMIDI: open rtpMIDI and connect the session to the DAW laptop. The session then appears as a MIDI Input.
+- loopMIDI: start loopMIDI and add a port. Leave it running.
+- A saved MIDI Input that is not connected shows as "(not found)" in the list. LightCues reconnects when the port returns.
+
+### Logs
+
+LightCues writes one log file per day to `%APPDATA%\LightCues\logs\`, named `lightcues-YYYY-MM-DD.log`. The last 14 days are kept. Attach the log from the day of the problem to a bug report. Logs hold file paths but no Show or Venue Patch contents.
+
+## Links
+
+- Glossary of the terms in capitals: [CONTEXT.md](CONTEXT.md)
+<!-- Security policy: link SECURITY.md once it exists (repo-hygiene issue 02). -->
 
 ## Contributing
 
-- Work on the `dev` branch. `dev` reaches `main` squashed, through `stage`. See [docs/agents/staging.md](docs/agents/staging.md).
-- Run `npm run check` before merging. CI runs it again on `stage` and on pull requests to `main`.
-- Issues and specs are markdown files under `.scratch/<feature>/`. See [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md).
-- Use the domain terms from [CONTEXT.md](CONTEXT.md) in code, UI and docs.
+Bug reports and Fixture requests welcome as GitHub Issues. Pull requests by arrangement: open an issue first.
 
 ## License
 

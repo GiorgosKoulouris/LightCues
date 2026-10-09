@@ -60,12 +60,13 @@ Not needed for engine work. The engine is testable without hardware.
 ```powershell
 git clone https://github.com/GiorgosKoulouris/LightCues.git LightCues
 cd LightCues
-git switch dev
 npm install
 npm run dev
 ```
 
-The window should show "Engine replied in N ms". That confirms the engine process is running.
+This builds `main`. To work on `dev`, see [Contributing](development.md#contributing).
+
+The top bar's right end should show a green dot and "Engine": the engine process is running.
 
 `serialport` and `@julusian/midi` ship N-API prebuilds (win32-x64 included). N-API binaries load in both Node and Electron, so there is no rebuild step: the same install serves `npm test` and `npm run dev`. A native module without N-API prebuilds needs a `postinstall` step that rebuilds it for Electron. If that fails, the cause is usually step 2.
 
@@ -75,7 +76,7 @@ The window should show "Engine replied in N ms". That confirms the engine proces
 
 ## 7. Commands
 
-See [Commands in the README](../README.md#commands).
+See [Commands](development.md#commands).
 
 ## 8. Source layout
 
