@@ -14,3 +14,7 @@ See spec, "Decisions". The file is agent work. The GitHub setting is yours.
 
 - The Security tab shows the policy and the "Report a vulnerability" button.
 - `npm run format:check` passes.
+
+## Comments
+
+2026-10-09 (from `public-face/02`): the README's Links section has an HTML comment for `SECURITY.md`. Replace it with the link.

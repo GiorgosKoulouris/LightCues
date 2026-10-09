@@ -20,3 +20,7 @@ See spec, "Demo content".
 - In the dev build on Windows: Open example → Perform → fire each Trigger from a MIDI port (loopMIDI) or the Fallback Panel. The Preview and the channel monitor react.
 - Save after opening the example asks for a location.
 - `npm run check` passes.
+
+## Comments
+
+2026-10-09 (from `public-face/02`): the README's First Show has an HTML comment where "open the example" goes. Replace it with the steps to open the demo Show and Venue Patch.
