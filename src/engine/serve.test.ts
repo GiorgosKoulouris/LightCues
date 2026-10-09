@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { EngineConnect, EngineGrantPath } from '../shared/protocol';
+import type {
+  EngineConnect,
+  EngineGrantPath,
+  EngineRestore,
+  EngineSnapshot,
+} from '../shared/protocol';
 import type { ParentPortLike, PortLike } from './serve';
 import { serve } from './serve';
 
@@ -7,14 +12,19 @@ type Listener = (e: { data: unknown; ports?: PortLike[] }) => void;
 
 const connect: EngineConnect = { type: 'connect' };
 
+// What the engine sent the parent, apart from its snapshots.
+const acks = (sent: unknown[]) => sent.filter((m) => (m as { type?: unknown }).type !== 'snapshot');
+
 function fakePort() {
   const listeners: Listener[] = [];
+  const closeListeners: (() => void)[] = [];
   const sent: unknown[] = [];
   let started = false;
   let closed = false;
   const port = {
-    on(_event: 'message', listener: Listener) {
-      listeners.push(listener);
+    on(event: 'message' | 'close', listener: Listener) {
+      if (event === 'close') closeListeners.push(listener as () => void);
+      else listeners.push(listener);
     },
     postMessage(message: unknown) {
       sent.push(message);
@@ -33,11 +43,64 @@ function fakePort() {
     isClosed: () => closed,
     deliver: (data: unknown, ports: PortLike[] = []) =>
       listeners.forEach((l) => l({ data, ports })),
+    // The other end closes, e.g. the window is gone.
+    closeRemote: () => closeListeners.forEach((l) => l()),
   };
 }
 
+// An engine on the Virtual Output, with no ports to scan.
+const virtualOnly = { now: () => 0, serialPorts: { list: async () => [], open: vi.fn() } };
+
+type FakePort = ReturnType<typeof fakePort>;
+
+// Monitors Universe 1 before it is mapped, then lets `next` return the UI
+// port to carry on with, maps Universe 1 to the Virtual Output there and
+// returns the frames that port got.
+async function framesAfter(next: (ui: FakePort, parent: FakePort) => FakePort) {
+  const parent = fakePort();
+  const first = fakePort();
+  serve(parent.port as ParentPortLike, virtualOnly);
+  parent.deliver(connect, [first.port]);
+  first.deliver({ type: 'monitorUniverse', universe: 1 });
+  const ui = next(first, parent);
+  ui.deliver({
+    type: 'editVenue',
+    requestId: 1,
+    edit: { type: 'putUniverse', universe: { number: 1, output: 'virtual' } },
+  });
+  await vi.advanceTimersByTimeAsync(500);
+  return ui.sent.filter((m) => (m as { type?: unknown }).type === 'dmxFrame');
+}
+
 describe('serve', () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('sends the monitored Universe once it is sent', async () => {
+    vi.useFakeTimers();
+    expect(await framesAfter((ui) => ui)).toHaveLength(1);
+  });
+
+  it('stops the channel monitor when the UI port closes', async () => {
+    vi.useFakeTimers();
+    const frames = await framesAfter((ui) => {
+      ui.closeRemote();
+      return ui;
+    });
+    expect(frames).toEqual([]);
+  });
+
+  it('stops the channel monitor when a newer UI port replaces the last one', async () => {
+    vi.useFakeTimers();
+    const frames = await framesAfter((_ui, parent) => {
+      const newUi = fakePort();
+      parent.deliver(connect, [newUi.port]);
+      return newUi;
+    });
+    expect(frames).toEqual([]);
+  });
 
   it('answers commands arriving on a UI port handed over by the parent', () => {
     const parent = fakePort();
@@ -91,7 +154,7 @@ describe('serve', () => {
     parent.deliver(grant);
     ui.deliver({ type: 'saveVenue', requestId: 2, path: 'C:/gigs/club.lcvenue' });
 
-    expect(parent.sent).toEqual([{ type: 'pathGranted', path: 'C:/gigs/club.lcvenue' }]);
+    expect(acks(parent.sent)).toEqual([{ type: 'pathGranted', path: 'C:/gigs/club.lcvenue' }]);
     expect(ui.sent).toContainEqual({
       type: 'venueDone',
       requestId: 1,
@@ -107,7 +170,7 @@ describe('serve', () => {
 
     parent.deliver({ type: 'grantPath', path: 7 });
 
-    expect(parent.sent).toEqual([]);
+    expect(acks(parent.sent)).toEqual([]);
   });
 
   it('drops UI messages that are not a command and answers the next one', () => {
@@ -144,5 +207,62 @@ describe('serve', () => {
 
     expect(error).toHaveBeenCalledWith('Engine command ping failed.', expect.any(Error));
     expect(ui.sent).toEqual([{ type: 'pong', id: 5, uptimeMs: 0 }]);
+  });
+
+  it('sends the whole snapshot on start, then each part that changes', () => {
+    const parent = fakePort();
+    const ui = fakePort();
+    serve(parent.port as ParentPortLike, { now: () => 0 });
+    parent.deliver(connect, [ui.port]);
+
+    ui.deliver({
+      type: 'editShow',
+      requestId: 1,
+      edit: { type: 'putLayer', layer: { id: 'layer-2', name: 'Accents' } },
+    });
+
+    expect(parent.sent[0]).toMatchObject({
+      type: 'snapshot',
+      show: { unsaved: false },
+      venue: { unsaved: false },
+      playback: { grandMaster: 1 },
+      midiInput: {},
+    });
+    expect(parent.sent.slice(1)).toEqual([
+      { type: 'snapshot', show: expect.objectContaining({ unsaved: true }) },
+    ]);
+  });
+
+  it('restores a snapshot from the parent and replies with the result', () => {
+    const before = fakePort();
+    serve(before.port as ParentPortLike, { now: () => 0 });
+    const { show, venue, playback, midiInput } = before.sent[0] as EngineSnapshot;
+    const restore: EngineRestore = {
+      type: 'restore',
+      snapshot: { show, venue, midiInput, playback: { ...playback, grandMaster: 0.3 } },
+    };
+    const after = fakePort();
+    serve(after.port as ParentPortLike, { now: () => 0 });
+
+    after.deliver(restore);
+
+    // The reply, then the whole restored snapshot.
+    expect(after.sent.slice(-2)).toEqual([
+      { type: 'restored', result: 'restored' },
+      expect.objectContaining({
+        type: 'snapshot',
+        show,
+        playback: expect.objectContaining({ grandMaster: 0.3 }),
+      }),
+    ]);
+  });
+
+  it('ignores a restore without a snapshot', () => {
+    const parent = fakePort();
+    serve(parent.port as ParentPortLike, { now: () => 0 });
+
+    parent.deliver({ type: 'restore' });
+
+    expect(acks(parent.sent)).toEqual([]);
   });
 });

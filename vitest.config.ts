@@ -7,7 +7,7 @@ export default defineConfig({
       {
         test: {
           name: 'logic',
-          include: ['src/**/*.test.ts', 'scripts/**/*.test.mjs'],
+          include: ['src/**/*.test.ts', 'scripts/**/*.test.{mjs,ts}'],
           environment: 'node',
         },
       },

@@ -4,3 +4,5 @@ out/
 dist/
 fixtures/
 /reports/
+# Playwright output (npm run e2e).
+test-results/

@@ -12,11 +12,21 @@ const HISTORY_LIMIT = 200;
 
 export function createHistory<T>(initial: T, { now }: { now: () => number }) {
   let current = initial;
-  let saved = initial;
+  // Undefined when no saved document is in the history, after a restore of
+  // an unsaved one.
+  let saved: T | undefined = initial;
   let past: T[] = [];
   let future: T[] = [];
   // The last edit's merge key and time, while the next may merge with it.
   let mergeable: { key: string; at: number } | undefined;
+
+  function restore(document: T, unsaved: boolean): void {
+    current = document;
+    saved = unsaved ? undefined : document;
+    past = [];
+    future = [];
+    mergeable = undefined;
+  }
 
   return {
     current: () => current,
@@ -60,11 +70,10 @@ export function createHistory<T>(initial: T, { now }: { now: () => number }) {
     },
 
     // A new or opened document: saved, with no history.
-    reset(document: T): void {
-      current = saved = document;
-      past = [];
-      future = [];
-      mergeable = undefined;
-    },
+    reset: (document: T) => restore(document, false),
+
+    // A document brought back after an engine restart, with no history. An
+    // unsaved one stays unsaved until it is saved.
+    restore,
   };
 }

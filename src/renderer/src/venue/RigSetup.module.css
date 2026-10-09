@@ -72,6 +72,12 @@
   font-size: var(--text-sm);
 }
 
+.hint {
+  margin-left: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
 /* Universe field and Add, the button lined up with the field. */
 .add {
   display: flex;

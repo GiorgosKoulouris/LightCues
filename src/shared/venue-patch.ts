@@ -66,6 +66,10 @@ export interface Universe {
   output?: string;
 }
 
+// The id of the Output with no hardware. Any number of Universes can map to
+// it; a real Output takes one.
+export const VIRTUAL_OUTPUT = 'virtual';
+
 export const MOUNTS = ['Hung', 'Standing'] as const;
 export type Mount = (typeof MOUNTS)[number];
 
@@ -299,7 +303,7 @@ function validateUniverses(universes: Universe[]): string[] {
     if (!Number.isInteger(number) || number < 1) {
       errors.push(`Universe ${number}: number must be a whole number from 1`);
     }
-    if (output === undefined) continue;
+    if (output === undefined || output === VIRTUAL_OUTPUT) continue;
     const other = byOutput.get(output);
     if (other === undefined) byOutput.set(output, number);
     else errors.push(`Universes ${other} and ${number} are both mapped to Output "${output}"`);

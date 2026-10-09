@@ -1,4 +1,5 @@
 import { dirname } from 'node:path';
+import { withoutContents } from './log-safe';
 
 // Where the last files are kept between runs, on this machine.
 export interface RecentFilesStorage {
@@ -84,7 +85,10 @@ function read(storage: RecentFilesStorage | undefined): Saved {
     }
     return saved;
   } catch (error) {
-    console.error('Saved recent files are unreadable; starting without them.', error);
+    console.error(
+      'Saved recent files are unreadable; starting without them.',
+      withoutContents(error),
+    );
     return {};
   }
 }

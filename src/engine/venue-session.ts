@@ -1,5 +1,5 @@
 import type { FixtureProfile } from '../shared/fixture-profile';
-import type { EngineCommand, EngineEvent, VenueEdit } from '../shared/protocol';
+import type { DocumentSnapshot, EngineCommand, EngineEvent, VenueEdit } from '../shared/protocol';
 import {
   addUniverse,
   emptyPatch,
@@ -85,7 +85,8 @@ export function createVenueSession({
     return known === undefined ? {} : { folder: known };
   }
 
-  function open(from: string): string[] {
+  // `asNew` keeps no file, so Save asks where and the file is not reopened.
+  function open(from: string, asNew = false): string[] {
     if (!files) return ['Venue files are not available'];
     if (!granted(from)) return [`Could not open ${from}: ${NOT_CHOSEN}`];
     try {
@@ -93,7 +94,7 @@ export function createVenueSession({
     } catch (error) {
       return [`Could not open ${from}: ${(error as Error).message}`];
     }
-    path = from;
+    path = asNew ? undefined : from;
     recent?.set(path);
     emitVenue();
     changed?.();
@@ -158,6 +159,18 @@ export function createVenueSession({
     patch: () => history.current(),
     // Opens a file. An empty list of errors means it opened.
     open,
+    snapshot: (): DocumentSnapshot<VenuePatch> => ({
+      document: history.current(),
+      ...(path === undefined ? {} : { path }),
+      unsaved: history.state().unsaved,
+    }),
+    // Brings back the Venue Patch of an engine that stopped, without its history.
+    restore(snapshot: DocumentSnapshot<VenuePatch>): void {
+      history.restore(snapshot.document, snapshot.unsaved);
+      path = snapshot.path;
+      emitVenue();
+      changed?.();
+    },
     handle(command: VenueCommand): void {
       switch (command.type) {
         case 'getVenue':
@@ -172,7 +185,11 @@ export function createVenueSession({
           replaced?.();
           break;
         case 'openVenue':
-          emit({ type: 'venueDone', requestId: command.requestId, errors: open(command.path) });
+          emit({
+            type: 'venueDone',
+            requestId: command.requestId,
+            errors: open(command.path, command.asNew),
+          });
           break;
         case 'saveVenue':
           emit({ type: 'venueDone', requestId: command.requestId, errors: save(command.path) });

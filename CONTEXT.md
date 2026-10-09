@@ -15,7 +15,7 @@ The manufacturer/model definition of a fixture type: its modes, channels and cap
 _Avoid_: Fixture definition, personality
 
 **Cell**:
-One repeated section of a multi-cell Fixture (a pixel, a wash section). A Fixture Profile has no cell model: each Cell's channels are flattened into the mode, named e.g. "Red (Cell 2)". Not a Zone.
+One repeated section of a multi-cell Fixture (a pixel, a wash section). A Fixture Profile has no cell model: each Cell's channels are flattened into the mode, named e.g. "Red (Cell 2)" from GDTF or "Red 2" from Open Fixture Library. Not a Zone.
 _Avoid_: Pixel, segment
 
 **Profile Library**:
@@ -26,8 +26,13 @@ _Avoid_: Fixture library, catalogue
 One independent set of 512 DMX channels.
 
 **Output**:
-A physical or network DMX interface port to which a Universe is mapped.
+A physical, network or virtual DMX interface port to which a Universe is mapped.
+Virtual Output: an Output with no hardware, for trying a Show and for tests.
 _Avoid_: Interface, node, dongle
+
+**Channel monitor**:
+A panel in the Venue Patch view showing the 512 values an Output gets for one Universe, in Blind too. Not the same as Monitor, the mode.
+_Avoid_: DMX view, channel view
 
 **Venue Patch**:
 The per-venue description of the rig: which Fixtures exist, their Profile, Universe, address and position on stage.

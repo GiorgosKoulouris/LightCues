@@ -248,3 +248,35 @@ describe('engine library folder', () => {
     expect(first.profilesFolder()).toBe('C:/backup');
   });
 });
+
+describe('engine examples', () => {
+  it('opens an example as new: no path, not remembered, Save asks where', () => {
+    const files = new Map<string, string>();
+    const recent = {};
+    const first = launch(files, recent);
+    first.run('saveVenue', 'C:/gigs/club.lcvenue');
+    first.run('saveShow', 'C:/shows/tour.lcshow');
+    const examples = 'C:/LightCues/resources/examples/demo';
+    files.set(`${examples}.lcvenue`, files.get('C:/gigs/club.lcvenue')!);
+    files.set(`${examples}.lcshow`, files.get('C:/shows/tour.lcshow')!);
+    for (const [type, path] of [
+      ['openVenue', `${examples}.lcvenue`],
+      ['openShow', `${examples}.lcshow`],
+    ] as const) {
+      first.engine.grantPath(path);
+      first.engine.handle({ type, requestId: 100, path, asNew: true });
+    }
+
+    expect(first.venue()).toMatchObject({ unsaved: false, canUndo: false });
+    expect(first.venuePath()).toBeUndefined();
+    expect(first.showPath()).toBeUndefined();
+    first.engine.handle({ type: 'saveShow', requestId: 101 });
+    expect(first.events.findLast((e) => e.type === 'showDone')).toMatchObject({
+      errors: ['Choose a file to save the Show to'],
+    });
+
+    const next = launch(files, recent);
+    expect(next.venuePath()).toBeUndefined();
+    expect(next.showPath()).toBeUndefined();
+  });
+});

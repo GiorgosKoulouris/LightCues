@@ -4,6 +4,7 @@ import type {
   EngineEvent,
   FixtureLight,
   PlaybackMode,
+  PlaybackSnapshot,
 } from '../shared/protocol';
 import { sameNote, type Direction, type MidiNote, type Show, type Trigger } from '../shared/show';
 import type { VenuePatch } from '../shared/venue-patch';
@@ -34,6 +35,13 @@ export type PlaybackCommand = Extract<
       | 'setFocusCheck';
   }
 >;
+
+// The playback part of a snapshot, without the Tempo.
+export type LiveLook = Omit<PlaybackSnapshot, 'bpm' | 'tempoSource'>;
+
+// How long ago restored Scenes count as activated, in seconds: longer than
+// any fade-in.
+const RESTORED_AGE_S = 1e6;
 
 export interface PlaybackOptions {
   emit: (event: EngineEvent) => void;
@@ -154,6 +162,39 @@ export function createPlayback({ emit, now, beat, show, patch }: PlaybackOptions
           focusCheck = command.direction;
           break;
       }
+      emitPlayback();
+    },
+    // The live look for an engine restart, without the Tempo. A held Flash
+    // counts as its Scene.
+    snapshot(): LiveLook {
+      const order = Object.entries(active).sort(([, a], [, b]) => a.since - b.since);
+      return {
+        active: order.map(([layer, { scene }]) => ({ layer, scene })),
+        mode,
+        grandMaster,
+        blackout,
+        freeze: frozenBeat !== undefined,
+      };
+    },
+    // Brings back the live look of an engine that stopped: its Scenes at
+    // full, at once, stacked in the same order. Scenes no longer in their
+    // Layer are left out. The Focus Check is off.
+    restore(look: LiveLook): void {
+      flashes.clear();
+      const { scenes } = show();
+      const kept = look.active.filter(({ layer, scene }) =>
+        scenes.some((s) => s.id === scene && s.layer === layer),
+      );
+      // Activated long ago, so every fade is done, in the same order.
+      const start = seconds() - RESTORED_AGE_S;
+      active = Object.fromEntries(
+        kept.map(({ layer, scene }, i) => [layer, { scene, since: start + i }]),
+      );
+      mode = look.mode;
+      grandMaster = clamp(look.grandMaster) || 0;
+      blackout = look.blackout;
+      frozenBeat = look.freeze ? beat() : undefined;
+      focusCheck = undefined;
       emitPlayback();
     },
     // Fires a Trigger on its note-on. Flash holds the Scene until `noteOff`.

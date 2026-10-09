@@ -38,6 +38,15 @@ export function useVenuePatch() {
     return venueRequest((requestId) => window.engine.send({ type: 'openVenue', requestId, path }));
   }, [venue?.folder]);
 
+  // Opens a granted file as a new, unsaved Venue Patch, as for the example.
+  const openAsNew = useCallback(
+    (path: string) =>
+      venueRequest((requestId) =>
+        window.engine.send({ type: 'openVenue', requestId, path, asNew: true }),
+      ),
+    [],
+  );
+
   // Saves in place, or asks for a file when there is none or `as` is set.
   const save = useCallback(
     async ({ as = false } = {}): Promise<string[] | undefined> => {
@@ -54,7 +63,7 @@ export function useVenuePatch() {
     [venue?.path, venue?.folder],
   );
 
-  return { venue, edit, newVenue, undo, redo, open, save };
+  return { venue, edit, newVenue, undo, redo, open, openAsNew, save };
 }
 
 async function venueRequest(send: (requestId: number) => void): Promise<string[]> {

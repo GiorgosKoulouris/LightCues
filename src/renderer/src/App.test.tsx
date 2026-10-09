@@ -1,8 +1,16 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EngineCommand, EngineEvent, MidiInputStatus } from '../../shared/protocol';
-import type { Show } from '../../shared/show';
+import type {
+  EngineCommand,
+  EngineEvent,
+  EngineRecoveryBridge,
+  MidiInputStatus,
+  RestoreResult,
+  UpdateAvailable,
+  UpdatesBridge,
+} from '../../shared/protocol';
+import { emptyShow, type Show } from '../../shared/show';
 import { emptyPatch } from '../../shared/venue-patch';
 import { App } from './App';
 import { installFakeEngine, type FakeEngine } from './test-engine';
@@ -60,6 +68,10 @@ function answer(command: EngineCommand): EngineEvent[] {
       return [{ type: 'profiles', entries: [] }];
     case 'listOutputs':
       return [{ type: 'outputs', outputs: [] }];
+    case 'openVenue':
+      return [{ type: 'venueDone', requestId: command.requestId, errors: [] }];
+    case 'openShow':
+      return [{ type: 'showDone', requestId: command.requestId, errors: [] }];
     default:
       return [];
   }
@@ -71,7 +83,43 @@ const dialogs = {
   chooseShowToSave: vi.fn(async () => undefined),
   chooseVenueToOpen: vi.fn(async () => undefined),
   chooseVenueToSave: vi.fn(async () => undefined),
+  openExample: vi.fn(async () => EXAMPLE),
 };
+const EXAMPLE = {
+  venue: 'C:/LightCues/examples/demo.lcvenue',
+  show: 'C:/LightCues/examples/demo.lcshow',
+};
+
+const RELEASE: UpdateAvailable = {
+  version: '0.2.0',
+  url: 'https://github.com/GiorgosKoulouris/LightCues/releases/tag/v0.2.0',
+};
+let updates: { [K in keyof UpdatesBridge]: ReturnType<typeof vi.fn<UpdatesBridge[K]>> };
+
+// A fake `window.engineRecovery`: a test tells it the engine restarted or is
+// down, as main does.
+function fakeRecovery() {
+  const restarted = new Set<(result: RestoreResult) => void>();
+  const down = new Set<() => void>();
+  const bridge = {
+    onRestarted: (listener: (result: RestoreResult) => void) => {
+      restarted.add(listener);
+      return () => void restarted.delete(listener);
+    },
+    onDown: (listener: () => void) => {
+      down.add(listener);
+      return () => void down.delete(listener);
+    },
+    isDown: vi.fn(async () => false),
+    saveFromSnapshot: vi.fn<EngineRecoveryBridge['saveFromSnapshot']>(async () => undefined),
+  };
+  return {
+    bridge,
+    restart: (result: RestoreResult) => act(() => restarted.forEach((l) => l(result))),
+    down: () => act(() => down.forEach((l) => l())),
+  };
+}
+let recovery: ReturnType<typeof fakeRecovery>;
 
 async function renderApp() {
   render(
@@ -95,6 +143,16 @@ beforeEach(() => {
   vi.stubGlobal('dialogs', dialogs);
   vi.stubGlobal('closeGuard', { setUnsaved: vi.fn(), onSaveBeforeClose: vi.fn(() => () => {}) });
   Object.values(dialogs).forEach((fn) => fn.mockClear());
+  updates = {
+    available: vi.fn(async () => undefined),
+    enabled: vi.fn(async () => true),
+    setEnabled: vi.fn(),
+    checkNow: vi.fn(async () => ({ state: 'upToDate' as const })),
+    openReleasePage: vi.fn(),
+  };
+  vi.stubGlobal('updates', updates);
+  recovery = fakeRecovery();
+  vi.stubGlobal('engineRecovery', recovery.bridge);
 });
 afterEach(() => {
   // Unmounts while the fake engine is still there.
@@ -255,5 +313,145 @@ describe('App top bar and strip', () => {
     if (ping?.type !== 'ping') throw new Error('No ping sent');
     engine.emit({ type: 'pong', id: ping.id, uptimeMs: 1000 });
     expect(screen.getByText('Engine')).toBeInTheDocument();
+  });
+});
+
+describe('App update notice', () => {
+  const notice = () => screen.queryByRole('status', { name: 'Update available' });
+
+  it('shows a newer release and opens its page', async () => {
+    updates.available.mockResolvedValue(RELEASE);
+    await renderApp();
+    expect(await screen.findByText('LightCues 0.2.0 is available')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Open release page' }));
+    expect(updates.openReleasePage).toHaveBeenCalledWith(RELEASE.url);
+  });
+
+  it('shows nothing without a newer release', async () => {
+    await renderApp();
+    expect(notice()).toBeNull();
+  });
+
+  it('never shows in Perform, and shows again on leaving it', async () => {
+    updates.available.mockResolvedValue(RELEASE);
+    await renderApp();
+    await screen.findByText('LightCues 0.2.0 is available');
+    await userEvent.keyboard('{Control>}4{/Control}');
+    expect(notice()).toBeNull();
+    await userEvent.keyboard('{Control>}1{/Control}');
+    expect(notice()).toBeInTheDocument();
+  });
+
+  it('shows the startup setting, and saves it', async () => {
+    await renderApp();
+    const setting = await screen.findByRole('checkbox', { name: 'Check on startup' });
+    expect(setting).toBeChecked();
+    await userEvent.click(setting);
+    expect(updates.setEnabled).toHaveBeenCalledWith(false);
+    expect(setting).not.toBeChecked();
+  });
+
+  it('shows the startup setting off when it was turned off', async () => {
+    updates.enabled.mockResolvedValue(false);
+    await renderApp();
+    expect(await screen.findByRole('checkbox', { name: 'Check on startup' })).not.toBeChecked();
+  });
+
+  it('checks on request and shows a newer release', async () => {
+    updates.checkNow.mockResolvedValue({ state: 'available', release: RELEASE });
+    await renderApp();
+    await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    expect(updates.checkNow).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText('LightCues 0.2.0 is available')).toBeInTheDocument();
+  });
+
+  it('says when the app is up to date', async () => {
+    updates.checkNow.mockResolvedValue({ state: 'upToDate' });
+    await renderApp();
+    await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    expect(await screen.findByText('LightCues is up to date')).toBeInTheDocument();
+  });
+
+  it('says when the check failed', async () => {
+    updates.checkNow.mockResolvedValue({ state: 'failed' });
+    await renderApp();
+    await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    expect(await screen.findByText('Could not check for updates')).toBeInTheDocument();
+  });
+});
+
+describe('App engine recovery', () => {
+  it.each<[RestoreResult, string]>([
+    ['restored', 'Engine restarted. Output resumed.'],
+    ['baseLook', 'Engine restarted in Base Look.'],
+    ['empty', 'Engine restarted without the open Show and Venue Patch.'],
+  ])('says how a restart went: %s', async (result, message) => {
+    await renderApp();
+    recovery.restart(result);
+    expect(await screen.findByText(message)).toBeInTheDocument();
+  });
+
+  it('shows the engine down for good, and saves the documents from the snapshot', async () => {
+    recovery.bridge.saveFromSnapshot.mockResolvedValue('C:/gigs/rescued.lcshow');
+    await renderApp();
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    recovery.down();
+    const banner = await screen.findByRole('alert');
+    expect(banner).toHaveTextContent(
+      'The engine keeps crashing. Save your work and restart LightCues.',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Save Show as…' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save Venue Patch as…' }));
+
+    expect(recovery.bridge.saveFromSnapshot.mock.calls).toEqual([['show'], ['venue']]);
+    expect(await screen.findAllByText('Saved C:/gigs/rescued.lcshow')).not.toHaveLength(0);
+  });
+
+  it('shows the engine down after a reload', async () => {
+    recovery.bridge.isDown.mockResolvedValue(true);
+    await renderApp();
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  it('says when a save from the snapshot fails', async () => {
+    recovery.bridge.isDown.mockResolvedValue(true);
+    recovery.bridge.saveFromSnapshot.mockRejectedValue(new Error('EACCES'));
+    await renderApp();
+    await userEvent.click(await screen.findByRole('button', { name: 'Save Show as…' }));
+    expect(await screen.findByText('Could not save the Show: EACCES')).toBeInTheDocument();
+  });
+});
+
+describe('App example', () => {
+  const opens = () => engine.sent.filter((c) => c.type === 'openVenue' || c.type === 'openShow');
+  const emptyState = { unsaved: false, canUndo: false, canRedo: false };
+
+  it('offers the example while nothing is open and opens both files as new', async () => {
+    await renderApp();
+    expect(screen.queryByText('New here?')).toBeNull();
+    engine.emit({ type: 'show', show: emptyShow(), ...emptyState });
+
+    const hint = screen.getByRole('complementary', { name: 'Example' });
+    await userEvent.click(within(hint).getByRole('button', { name: 'Open example' }));
+
+    expect(dialogs.openExample).toHaveBeenCalledTimes(1);
+    expect(opens()).toEqual([
+      { type: 'openVenue', requestId: expect.any(Number), path: EXAMPLE.venue, asNew: true },
+      { type: 'openShow', requestId: expect.any(Number), path: EXAMPLE.show, asNew: true },
+    ]);
+  });
+
+  it('asks before the example replaces unsaved changes', async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole('button', { name: 'Open example' }));
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('The Show has unsaved changes.');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(dialogs.openExample).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Open example' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(dialogs.openExample).toHaveBeenCalledTimes(1);
+    expect(opens()).toHaveLength(2);
   });
 });

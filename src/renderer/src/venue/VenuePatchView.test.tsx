@@ -653,6 +653,20 @@ describe('Rig setup', () => {
     );
     expect(edits()).toEqual([{ type: 'putUniverse', universe: { number: 1, output: 'usb-1' } }]);
   });
+
+  it('maps a Universe to the Virtual Output, saying it needs no hardware', async () => {
+    await openRig();
+    engine.emit({
+      type: 'outputs',
+      outputs: [{ id: 'virtual', name: 'Virtual Output', state: 'unused' }],
+    });
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: 'Output of Universe 1' }),
+      'Virtual Output',
+    );
+    expect(edits()).toEqual([{ type: 'putUniverse', universe: { number: 1, output: 'virtual' } }]);
+    expect(await screen.findByText('No hardware. See the channel monitor.')).toBeInTheDocument();
+  });
 });
 
 describe('Fixture labels', () => {
@@ -749,5 +763,39 @@ describe('Focus Check', () => {
     await vi.waitFor(() => expect(beam()).toBeNull());
     expect(engine.sent.at(-1)).toEqual({ type: 'stopPreview' });
     expect(plan.getAttribute('viewBox')).toEqual(viewBox);
+  });
+});
+
+describe('Channel monitor', () => {
+  const monitorCommands = () =>
+    engine.sent.filter((c) => c.type === 'monitorUniverse' || c.type === 'stopMonitor');
+
+  it('opens and closes from its toggle, on either tab, and closes when the view is left', async () => {
+    const view = (active: boolean) => (
+      <UiProvider>
+        <VenuePatchView active={active} />
+      </UiProvider>
+    );
+    const { rerender } = render(view(true));
+    const toggle = await screen.findByRole('button', { name: 'Channel monitor' });
+    const user = userEvent.setup();
+    expect(screen.queryByRole('region', { name: 'Channel monitor' })).toBeNull();
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('region', { name: 'Channel monitor' })).toBeInTheDocument();
+    expect(monitorCommands()).toEqual([{ type: 'monitorUniverse', universe: 1 }]);
+
+    await user.click(screen.getByRole('tab', { name: 'Rig setup' }));
+    expect(screen.getByRole('region', { name: 'Channel monitor' })).toBeInTheDocument();
+
+    rerender(view(false));
+    expect(monitorCommands().at(-1)).toEqual({ type: 'stopMonitor' });
+    rerender(view(true));
+    expect(monitorCommands().at(-1)).toEqual({ type: 'monitorUniverse', universe: 1 });
+
+    await user.click(toggle);
+    expect(screen.queryByRole('region', { name: 'Channel monitor' })).toBeNull();
+    expect(monitorCommands().at(-1)).toEqual({ type: 'stopMonitor' });
   });
 });

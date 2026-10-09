@@ -11,7 +11,10 @@
     "src/preload/**/*",
     "src/engine/**/*",
     "src/shared/**/*",
+    "scripts/**/*.ts",
+    "e2e/**/*.ts",
     "electron.vite.config.ts",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "playwright.config.ts"
   ]
 }

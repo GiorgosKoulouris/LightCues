@@ -105,6 +105,12 @@ describe('Profile Library', () => {
       'Unsupported Profile Library version: 3',
     );
   });
+
+  it('quotes only a number version, since the startup error is logged', () => {
+    const saved = JSON.stringify({ version: 'secret text', profiles: [] });
+
+    expect(() => createProfileLibrary(saved)).toThrow(/^Unsupported Profile Library version$/);
+  });
 });
 
 function handMade(overrides: Partial<FixtureProfile> = {}): FixtureProfile {

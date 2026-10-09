@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- LightCues app icon: a truss bar with three beams. Source for build/icon.ico (npm run icon). -->
+  <defs>
+    <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7aafff" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#5b9dff" stop-opacity="0.35"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="#15181e"/>
+  <path d="M70 62 L88 62 L112 206 L36 206 Z" fill="url(#beam)" opacity="0.7"/>
+  <path d="M119 62 L137 62 L170 206 L86 206 Z" fill="url(#beam)"/>
+  <path d="M168 62 L186 62 L220 206 L144 206 Z" fill="url(#beam)" opacity="0.7"/>
+  <rect x="40" y="40" width="176" height="18" rx="9" fill="#e3e6eb"/>
+</svg>

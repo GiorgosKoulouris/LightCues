@@ -1,5 +1,6 @@
 import type { EngineEvent, MidiInputStatus } from '../shared/protocol';
 import type { MidiNote } from '../shared/show';
+import { withoutContents } from './log-safe';
 
 // How often MIDI input ports are listed to find a lost port and its return.
 const SCAN_INTERVAL_MS = 1000;
@@ -116,6 +117,8 @@ export function createMidiInput({ ports, storage, emit, onNote, onClock }: MidiI
       scan();
     },
     emitStatus: () => emitStatus({ always: true }),
+    // The selected port's name, if any.
+    selected: () => selected,
   };
 }
 
@@ -125,7 +128,7 @@ function savedSelection(storage: MidiInputStorage | undefined): string | undefin
     const { selected } = JSON.parse(storage?.read() ?? '{}') as { selected?: unknown };
     return typeof selected === 'string' ? selected : undefined;
   } catch (error) {
-    console.error('Saved MIDI input is unreadable; starting without one.', error);
+    console.error('Saved MIDI input is unreadable; starting without one.', withoutContents(error));
     return undefined;
   }
 }

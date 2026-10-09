@@ -119,7 +119,10 @@ function load(saved: string): SavedLibrary {
 
 function versionError(version: unknown): string | undefined {
   if (version === VERSION_1 || version === VERSION) return undefined;
-  return `Unsupported Profile Library version: ${String(version)}`;
+  // Only a number is quoted: the startup error is logged, and the log keeps no
+  // file contents.
+  const quoted = typeof version === 'number' ? `: ${version}` : '';
+  return `Unsupported Profile Library version${quoted}`;
 }
 
 // Reads a user-picked library file. Unlike startup loading, it checks every

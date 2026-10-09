@@ -1,0 +1,1814 @@
+{
+  "version": 2,
+  "stage": {
+    "width": 8,
+    "depth": 6
+  },
+  "universes": [
+    {
+      "number": 1,
+      "output": "virtual"
+    },
+    {
+      "number": 2,
+      "output": "virtual"
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "par-1",
+      "name": "Front PAR 1",
+      "universe": 1,
+      "address": 1,
+      "x": -3,
+      "y": -1,
+      "height": 4,
+      "profileId": "showtec/club-par-12-4-rgbw",
+      "mode": "RGBW"
+    },
+    {
+      "id": "par-2",
+      "name": "Front PAR 2",
+      "universe": 1,
+      "address": 5,
+      "x": -1,
+      "y": -1,
+      "height": 4,
+      "profileId": "showtec/club-par-12-4-rgbw",
+      "mode": "RGBW"
+    },
+    {
+      "id": "par-3",
+      "name": "Front PAR 3",
+      "universe": 1,
+      "address": 9,
+      "x": 1,
+      "y": -1,
+      "height": 4,
+      "profileId": "showtec/club-par-12-4-rgbw",
+      "mode": "RGBW"
+    },
+    {
+      "id": "par-4",
+      "name": "Front PAR 4",
+      "universe": 1,
+      "address": 13,
+      "x": 3,
+      "y": -1,
+      "height": 4,
+      "profileId": "showtec/club-par-12-4-rgbw",
+      "mode": "RGBW"
+    },
+    {
+      "id": "blinder-sr",
+      "name": "Blinder SR",
+      "universe": 1,
+      "address": 21,
+      "x": -3.5,
+      "y": 0.3,
+      "height": 0.3,
+      "profileId": "showtec/led-blinder-2-cob",
+      "mode": "2-channel"
+    },
+    {
+      "id": "blinder-sl",
+      "name": "Blinder SL",
+      "universe": 1,
+      "address": 23,
+      "x": 3.5,
+      "y": 0.3,
+      "height": 0.3,
+      "role": "Strobe",
+      "profileId": "showtec/led-blinder-2-cob",
+      "mode": "2-channel"
+    },
+    {
+      "id": "bar",
+      "name": "LED Bar",
+      "universe": 1,
+      "address": 31,
+      "x": 0,
+      "y": 5.5,
+      "height": 0.2,
+      "profileId": "stairville/led-bar-240-8",
+      "mode": "24-channel"
+    },
+    {
+      "id": "head-sr",
+      "name": "Head SR",
+      "universe": 2,
+      "address": 1,
+      "x": -2,
+      "y": 5,
+      "height": 4.5,
+      "mounting": {
+        "mount": "Hung",
+        "rotation": 0,
+        "panInvert": false,
+        "tiltInvert": false,
+        "panOffset": 0,
+        "tiltOffset": 0
+      },
+      "profileId": "eurolite/led-tmh-9",
+      "mode": "12-channel"
+    },
+    {
+      "id": "head-sl",
+      "name": "Head SL",
+      "universe": 2,
+      "address": 13,
+      "x": 2,
+      "y": 5,
+      "height": 4.5,
+      "mounting": {
+        "mount": "Hung",
+        "rotation": 0,
+        "panInvert": false,
+        "tiltInvert": false,
+        "panOffset": 0,
+        "tiltOffset": 0
+      },
+      "role": "Effect",
+      "profileId": "eurolite/led-tmh-9",
+      "mode": "12-channel"
+    }
+  ],
+  "profiles": [
+    {
+      "id": "showtec/club-par-12-4-rgbw",
+      "manufacturer": "Showtec",
+      "model": "Club PAR 12/4 RGBW",
+      "defaultRole": "Wash",
+      "modes": [
+        {
+          "name": "RGBW",
+          "channels": [
+            {
+              "kind": "control",
+              "name": "Red",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "red"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Green",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "green"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Blue",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "blue"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "White",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "white"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "DRGBW Strobe & Program",
+          "channels": [
+            {
+              "kind": "control",
+              "name": "Dimmer",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "intensity"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Red",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "red"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Green",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "green"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Blue",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "blue"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "White",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "white"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Strobe",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 12,
+                  "capability": {
+                    "type": "shutter",
+                    "effect": "closed"
+                  }
+                },
+                {
+                  "from": 13,
+                  "to": 255,
+                  "capability": {
+                    "type": "strobe",
+                    "hz": [
+                      0,
+                      20
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Built in programs",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 9,
+                  "capability": {
+                    "type": "none"
+                  }
+                },
+                {
+                  "from": 10,
+                  "to": 19,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "Effect"
+                  }
+                },
+                {
+                  "from": 20,
+                  "to": 29,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "Effect"
+                  }
+                },
+                {
+                  "from": 30,
+                  "to": 39,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "Effect"
+                  }
+                },
+                {
+                  "from": 40,
+                  "to": 49,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "Effect"
+                  }
+                },
+                {
+                  "from": 50,
+                  "to": 59,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "Effect"
+                  }
+                },
+                {
+                  "from": 60,
+                  "to": 69,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "Effect"
+                  }
+                },
+                {
+                  "from": 70,
+                  "to": 79,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "Effect"
+                  }
+                },
+                {
+                  "from": 80,
+                  "to": 89,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "Effect"
+                  }
+                },
+                {
+                  "from": 90,
+                  "to": 99,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "Effect"
+                  }
+                },
+                {
+                  "from": 100,
+                  "to": 109,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "Effect"
+                  }
+                },
+                {
+                  "from": 110,
+                  "to": 119,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "Effect"
+                  }
+                },
+                {
+                  "from": 120,
+                  "to": 129,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "Effect"
+                  }
+                },
+                {
+                  "from": 130,
+                  "to": 139,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "Effect"
+                  }
+                },
+                {
+                  "from": 140,
+                  "to": 255,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "Effect"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Program Speed",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "EffectSpeed"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Fade Time",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "Time"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "showtec/led-blinder-2-cob",
+      "manufacturer": "Showtec",
+      "model": "LED Blinder 2 COB",
+      "defaultRole": "Blinder",
+      "modes": [
+        {
+          "name": "1-channel",
+          "channels": [
+            {
+              "kind": "control",
+              "name": "Dimmer Master",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "intensity"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "2-channel",
+          "channels": [
+            {
+              "kind": "control",
+              "name": "Dimmer L",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "intensity"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Dimmer R",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "intensity"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "3-channel",
+          "channels": [
+            {
+              "kind": "control",
+              "name": "Dimmer L",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "intensity"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Dimmer R",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "intensity"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Dimmer Master",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "intensity"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "4-channel",
+          "channels": [
+            {
+              "kind": "control",
+              "name": "Dimmer L",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "intensity"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Dimmer R",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "intensity"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Strobe",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 15,
+                  "capability": {
+                    "type": "none"
+                  }
+                },
+                {
+                  "from": 16,
+                  "to": 255,
+                  "capability": {
+                    "type": "strobeSpeed"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Dimmer Master",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "intensity"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "stairville/led-bar-240-8",
+      "manufacturer": "Stairville",
+      "model": "LED Bar 240/8",
+      "defaultRole": "Pixel/Bar",
+      "modes": [
+        {
+          "name": "2-channel",
+          "channels": [
+            {
+              "kind": "control",
+              "name": "Programs",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 7,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 8,
+                  "to": 15,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 16,
+                  "to": 23,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 24,
+                  "to": 31,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 32,
+                  "to": 39,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 40,
+                  "to": 47,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 48,
+                  "to": 55,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 56,
+                  "to": 63,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 64,
+                  "to": 231,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "Effect"
+                  }
+                },
+                {
+                  "from": 232,
+                  "to": 255,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "Effect"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Show Speed / Sound Sensitivity",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "Switching channel"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "3-channel",
+          "channels": [
+            {
+              "kind": "control",
+              "name": "Red Master",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "red"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Green Master",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "green"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Blue Master",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "blue"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "5-channel",
+          "channels": [
+            {
+              "kind": "control",
+              "name": "Red Master",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "red"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Green Master",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "green"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Blue Master",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "blue"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Dimmer",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "intensity"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Strobe",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 2,
+                  "capability": {
+                    "type": "shutter",
+                    "effect": "open"
+                  }
+                },
+                {
+                  "from": 3,
+                  "to": 255,
+                  "capability": {
+                    "type": "strobe"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "24-channel",
+          "channels": [
+            {
+              "kind": "control",
+              "name": "Red 1",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "red"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Green 1",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "green"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Blue 1",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "blue"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Red 2",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "red"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Green 2",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "green"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Blue 2",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "blue"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Red 3",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "red"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Green 3",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "green"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Blue 3",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "blue"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Red 4",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "red"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Green 4",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "green"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Blue 4",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "blue"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Red 5",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "red"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Green 5",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "green"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Blue 5",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "blue"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Red 6",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "red"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Green 6",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "green"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Blue 6",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "blue"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Red 7",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "red"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Green 7",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "green"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Blue 7",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "blue"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Red 8",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "red"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Green 8",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "green"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Blue 8",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "blue"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "eurolite/led-tmh-9",
+      "manufacturer": "Eurolite",
+      "model": "LED TMH-9",
+      "defaultRole": "Spot/Beam",
+      "modes": [
+        {
+          "name": "4-channel",
+          "channels": [
+            {
+              "kind": "control",
+              "name": "Pan",
+              "defaultValue": 128,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "pan",
+                    "degrees": [
+                      0,
+                      540
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Tilt",
+              "defaultValue": 128,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "tilt",
+                    "degrees": [
+                      0,
+                      180
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Color macros",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 15,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 16,
+                  "to": 31,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 32,
+                  "to": 47,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 48,
+                  "to": 63,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 64,
+                  "to": 79,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 80,
+                  "to": 95,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 96,
+                  "to": 111,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 112,
+                  "to": 127,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 128,
+                  "to": 143,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 144,
+                  "to": 159,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 160,
+                  "to": 175,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 176,
+                  "to": 191,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 192,
+                  "to": 207,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 208,
+                  "to": 223,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 224,
+                  "to": 239,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 240,
+                  "to": 255,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Shutter",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 20,
+                  "capability": {
+                    "type": "none"
+                  }
+                },
+                {
+                  "from": 21,
+                  "to": 30,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "Maintenance"
+                  }
+                },
+                {
+                  "from": 31,
+                  "to": 200,
+                  "capability": {
+                    "type": "strobe"
+                  }
+                },
+                {
+                  "from": 201,
+                  "to": 250,
+                  "capability": {
+                    "type": "strobe"
+                  }
+                },
+                {
+                  "from": 251,
+                  "to": 255,
+                  "capability": {
+                    "type": "shutter",
+                    "effect": "open"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "12-channel",
+          "channels": [
+            {
+              "kind": "control",
+              "name": "Pan",
+              "defaultValue": 128,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "pan",
+                    "degrees": [
+                      0,
+                      540
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Tilt",
+              "defaultValue": 128,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "tilt",
+                    "degrees": [
+                      0,
+                      180
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Pan / Tilt Speed",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "PanTiltSpeed"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Red",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "red"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Green",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "green"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Blue",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "blue"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "White",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "emitter",
+                    "emitter": "white"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Color macros",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 15,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 16,
+                  "to": 31,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 32,
+                  "to": 47,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 48,
+                  "to": 63,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 64,
+                  "to": 79,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 80,
+                  "to": 95,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 96,
+                  "to": 111,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 112,
+                  "to": 127,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 128,
+                  "to": 143,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 144,
+                  "to": 159,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 160,
+                  "to": 175,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 176,
+                  "to": 191,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 192,
+                  "to": 207,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 208,
+                  "to": 223,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 224,
+                  "to": 239,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                },
+                {
+                  "from": 240,
+                  "to": 255,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "ColorPreset"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Shutter",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 20,
+                  "capability": {
+                    "type": "none"
+                  }
+                },
+                {
+                  "from": 21,
+                  "to": 30,
+                  "capability": {
+                    "type": "unsupported",
+                    "feature": "Maintenance"
+                  }
+                },
+                {
+                  "from": 31,
+                  "to": 200,
+                  "capability": {
+                    "type": "strobe"
+                  }
+                },
+                {
+                  "from": 201,
+                  "to": 250,
+                  "capability": {
+                    "type": "strobe"
+                  }
+                },
+                {
+                  "from": 251,
+                  "to": 255,
+                  "capability": {
+                    "type": "shutter",
+                    "effect": "open"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "control",
+              "name": "Dimmer Intensity",
+              "defaultValue": 0,
+              "ranges": [
+                {
+                  "from": 0,
+                  "to": 255,
+                  "capability": {
+                    "type": "intensity"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "fine",
+              "name": "Pan fine",
+              "of": "Pan",
+              "byte": 1,
+              "defaultValue": 0
+            },
+            {
+              "kind": "fine",
+              "name": "Tilt fine",
+              "of": "Tilt",
+              "byte": 1,
+              "defaultValue": 0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -38,10 +38,12 @@ export type EngineCommand =
   // Drops the pending import.
   | { type: 'cancelLibraryImport' }
   // The current Venue Patch. `path` is an .lcvenue file; `saveVenue` without
-  // one saves to the file the patch was opened from or last saved to.
+  // one saves to the file the patch was opened from or last saved to. Open
+  // `asNew` reads the file into a new patch with no file, as for an example:
+  // Save then asks where, and the file is not reopened on launch.
   | { type: 'getVenue' }
   | { type: 'newVenue' }
-  | { type: 'openVenue'; requestId: number; path: string }
+  | { type: 'openVenue'; requestId: number; path: string; asNew?: boolean }
   | { type: 'saveVenue'; requestId: number; path?: string }
   | { type: 'editVenue'; requestId: number; edit: VenueEdit }
   // Undo or redo the last edit; nothing when there is none. New and Open
@@ -52,7 +54,7 @@ export type EngineCommand =
   // The current Show, handled like the Venue Patch. `path` is an .lcshow file.
   | { type: 'getShow' }
   | { type: 'newShow' }
-  | { type: 'openShow'; requestId: number; path: string }
+  | { type: 'openShow'; requestId: number; path: string; asNew?: boolean }
   | { type: 'saveShow'; requestId: number; path?: string }
   | { type: 'editShow'; requestId: number; edit: ShowEdit }
   | { type: 'undoShow' }
@@ -93,7 +95,11 @@ export type EngineCommand =
   | { type: 'getReopenErrors' }
   // While started, the engine sends `preview` events.
   | { type: 'startPreview' }
-  | { type: 'stopPreview' };
+  | { type: 'stopPreview' }
+  // While a Universe is monitored, the engine sends its `dmxFrame`s. A new
+  // monitorUniverse replaces the Universe monitored before.
+  | { type: 'monitorUniverse'; universe: number }
+  | { type: 'stopMonitor' };
 
 // Monitor sends the active Scenes to the Outputs. Blind holds the Outputs at
 // the frames sent last.
@@ -268,7 +274,12 @@ export type EngineEvent =
   // How every Fixture in the Venue Patch looks now, by Fixture id. In Monitor
   // it is what the Outputs send; in Blind, what they would send. Sent while
   // the preview is started, on start and after every change.
-  | { type: 'preview'; lights: Record<string, FixtureLight> };
+  | { type: 'preview'; lights: Record<string, FixtureLight> }
+  // The DMX values last sent for the monitored Universe, channel 1 first: what
+  // its Output gets, real or virtual, in Blind too. Sent on monitorUniverse
+  // and then on change, at most 10 times a second. None while nothing is
+  // sent for the Universe.
+  | { type: 'dmxFrame'; universe: number; values: number[] };
 
 // Whether a Show or Venue Patch has unsaved changes, and edits to undo or redo.
 export interface DocumentState {
@@ -289,6 +300,54 @@ export type EngineGrantPath = { type: 'grantPath'; path: string };
 // so a command could otherwise beat its grant.
 export type EnginePathGranted = { type: 'pathGranted'; path: string };
 
+// What a restarted engine needs to carry on where the last one stopped
+// (ADR 0011). Main keeps the latest one in memory; it never goes to disk.
+// Undo history is not in it.
+export interface EngineSnapshot {
+  show: DocumentSnapshot<Show>;
+  venue: DocumentSnapshot<VenuePatch>;
+  playback: PlaybackSnapshot;
+  // The selected MIDI Input's name, absent when none is selected.
+  midiInput: { selected?: string };
+}
+
+// A Show or Venue Patch, the file it was opened from or last saved to, and
+// whether it has changes not written there.
+export interface DocumentSnapshot<T> {
+  document: T;
+  path?: string;
+  unsaved: boolean;
+}
+
+// The live look. `active` lists the active Scene per Layer, the one activated
+// first first, so the Layers stack as they did. A Tempo from MIDI Clock is
+// sent as `clock`; a new engine holds it until the clock ticks again.
+export interface PlaybackSnapshot {
+  active: { layer: string; scene: string }[];
+  mode: PlaybackMode;
+  grandMaster: number;
+  blackout: boolean;
+  freeze: boolean;
+  bpm: number;
+  tempoSource: TempoSource;
+}
+
+// Sent by the engine to main on the parent port: the whole snapshot once on
+// start, then each part when it changes. Playback parts come at most every
+// 100 ms, the latest last.
+export type EngineSnapshotMessage = { type: 'snapshot' } & Partial<EngineSnapshot>;
+
+// Sent by main to a restarted engine, after re-granting the paths the last
+// one had and before connecting the window.
+export type EngineRestore = { type: 'restore'; snapshot: EngineSnapshot };
+
+// How a restore went: all of it, the documents with the Base Look in place of
+// the live look, or nothing.
+export type RestoreResult = 'restored' | 'baseLook' | 'empty';
+
+// The engine's reply to a restore, on the parent port.
+export type EngineRestored = { type: 'restored'; result: RestoreResult };
+
 // IPC channel on which the main process hands the renderer its engine port.
 export const ENGINE_PORT_CHANNEL = 'engine:port';
 
@@ -306,6 +365,8 @@ export const CHOOSE_SHOW_TO_OPEN_CHANNEL = 'dialog:chooseShowToOpen';
 export const CHOOSE_SHOW_TO_SAVE_CHANNEL = 'dialog:chooseShowToSave';
 export const CHOOSE_LIBRARY_TO_OPEN_CHANNEL = 'dialog:chooseLibraryToOpen';
 export const CHOOSE_LIBRARY_TO_SAVE_CHANNEL = 'dialog:chooseLibraryToSave';
+// Asks main for the example files, granted like a dialog's choice.
+export const OPEN_EXAMPLE_CHANNEL = 'dialog:openExample';
 export const SHOW_LIBRARY_BACKUP_CHANNEL = 'shell:showLibraryBackup';
 // The folder beside the Profile Library file that holds its backups.
 export const LIBRARY_BACKUPS_FOLDER = 'backups';
@@ -324,7 +385,82 @@ export interface DialogBridge {
   // Reveals a Profile Library backup in Explorer. Main ignores any path
   // outside the backups folder.
   showLibraryBackup(path: string): void;
+  // Grants the engine the example files and resolves to their paths. Open
+  // them `asNew`: they are in the install folder, which an update replaces.
+  openExample(): Promise<ExamplePaths>;
 }
+
+// The example Venue Patch and Show that ship with the app.
+export interface ExamplePaths {
+  venue: string;
+  show: string;
+}
+
+// IPC channels for the update check, which main makes (ADR 0012). The
+// renderer only shows the result and the setting.
+export const UPDATE_AVAILABLE_CHANNEL = 'updates:available';
+export const UPDATE_ENABLED_CHANNEL = 'updates:enabled';
+export const CHECK_FOR_UPDATES_CHANNEL = 'updates:checkNow';
+export const SET_UPDATE_ENABLED_CHANNEL = 'updates:setEnabled';
+export const OPEN_RELEASE_PAGE_CHANNEL = 'shell:openReleasePage';
+
+// A release newer than the running app.
+export interface UpdateAvailable {
+  version: string;
+  // Its GitHub release page.
+  url: string;
+}
+
+// The result of a check the user asked for.
+export type UpdateCheckOutcome =
+  { state: 'available'; release: UpdateAvailable } | { state: 'upToDate' } | { state: 'failed' };
+
+// What the preload script exposes to the renderer as `window.updates`.
+export interface UpdatesBridge {
+  // Resolves once the launch check is done, a few seconds after launch: the
+  // newer release, or undefined.
+  available(): Promise<UpdateAvailable | undefined>;
+  // Whether the check runs on startup. On by default.
+  enabled(): Promise<boolean>;
+  // Saved for the next launch. Turning it on does not check until then.
+  setEnabled(enabled: boolean): void;
+  // Checks now, whatever the setting and however recent the last check.
+  checkNow(): Promise<UpdateCheckOutcome>;
+  // Opens a release page in the default browser. Main ignores any other URL.
+  openReleasePage(url: string): void;
+}
+
+// IPC channels for engine recovery (ADR 0011). Main tells the renderer how a
+// restarted engine's restore went, and when the engine is down for good.
+// While it is down, the renderer can ask whether it is, and have main save a
+// document from the snapshot through a Save dialog.
+export const ENGINE_RESTARTED_CHANNEL = 'engine:restarted';
+export const ENGINE_DOWN_CHANNEL = 'engine:down';
+export const ENGINE_IS_DOWN_CHANNEL = 'engine:isDown';
+export const SAVE_FROM_SNAPSHOT_CHANNEL = 'engine:saveFromSnapshot';
+
+// What the preload script exposes to the renderer as `window.engineRecovery`.
+// Each `on…` returns an unsubscribe function.
+export interface EngineRecoveryBridge {
+  onRestarted(listener: (result: RestoreResult) => void): () => void;
+  onDown(listener: () => void): () => void;
+  isDown(): Promise<boolean>;
+  // Resolves to the path written, or undefined when the user cancels.
+  // Rejects when the file could not be written.
+  saveFromSnapshot(document: EngineDocument): Promise<string | undefined>;
+}
+
+// Engine commands that only ask for state. The preload sends the last of
+// each again to a restarted engine, so every view gets its state back.
+export const STATE_REQUESTS: readonly EngineCommand['type'][] = [
+  'listProfiles',
+  'getVenue',
+  'getShow',
+  'getPlayback',
+  'listOutputs',
+  'listMidiInputs',
+  'getTempo',
+];
 
 // IPC channels guarding the window against closing with unsaved changes.
 // The renderer reports each document's unsaved state; on close, main may ask
@@ -336,6 +472,13 @@ export const SAVED_BEFORE_CLOSE_CHANNEL = 'window:savedBeforeClose';
 // The documents that can have unsaved changes, in the order they are saved.
 export const DOCUMENTS = { show: 'Show', venue: 'Venue Patch', profile: 'Profile' } as const;
 export type DocumentKind = keyof typeof DOCUMENTS;
+
+// The documents the engine holds, and so its snapshot.
+export type EngineDocument = Exclude<DocumentKind, 'profile'>;
+
+export function isEngineDocument(value: unknown): value is EngineDocument {
+  return isDocumentKind(value) && value !== 'profile';
+}
 
 // Whether a value from the renderer names a document. Inherited keys such as
 // `toString` do not count.

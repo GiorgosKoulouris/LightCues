@@ -4,16 +4,20 @@ import {
   dialog,
   ipcMain,
   MessageChannelMain,
+  net,
   shell,
   utilityProcess,
   type FileFilter,
   type IpcMainEvent,
   type UtilityProcess,
+  type WebContents,
 } from 'electron';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { format } from 'node:util';
 import {
+  CHECK_FOR_UPDATES_CHANNEL,
   CHOOSE_LIBRARY_TO_OPEN_CHANNEL,
   CHOOSE_LIBRARY_TO_SAVE_CHANNEL,
   CHOOSE_SHOW_TO_OPEN_CHANNEL,
@@ -21,23 +25,40 @@ import {
   CHOOSE_VENUE_TO_OPEN_CHANNEL,
   CHOOSE_VENUE_TO_SAVE_CHANNEL,
   DOCUMENTS,
+  ENGINE_DOWN_CHANNEL,
+  ENGINE_IS_DOWN_CHANNEL,
   ENGINE_PORT_CHANNEL,
+  ENGINE_RESTARTED_CHANNEL,
   LIBRARY_BACKUPS_FOLDER,
   MIDI_INPUT_ARG,
+  OPEN_EXAMPLE_CHANNEL,
+  OPEN_RELEASE_PAGE_CHANNEL,
   RECENT_FILES_ARG,
   PROFILE_LIBRARY_ARG,
   SAVE_BEFORE_CLOSE_CHANNEL,
+  SAVE_FROM_SNAPSHOT_CHANNEL,
   SAVED_BEFORE_CLOSE_CHANNEL,
+  SET_UPDATE_ENABLED_CHANNEL,
   SHOW_LIBRARY_BACKUP_CHANNEL,
   UNSAVED_CHANNEL,
+  UPDATE_AVAILABLE_CHANNEL,
+  UPDATE_ENABLED_CHANNEL,
   isDocumentKind,
+  isEngineDocument,
   unsavedMessage,
   type DocumentKind,
   type EngineConnect,
+  type ExamplePaths,
   type EngineGrantPath,
   type EnginePathGranted,
+  type UpdateAvailable,
 } from '../shared/protocol';
+import { diskShowFiles, diskVenueFiles, fileStorage } from '../engine/file-storage';
+import { snapshotFile } from './engine-snapshot';
+import { superviseEngine } from './engine-supervisor';
+import { createLog, lineSplitter } from './log';
 import { isAppPage } from './navigation';
+import { createUpdateCheck, isReleasePageUrl } from './update-check';
 
 const VENUE_FILTERS = [{ name: 'LightCues Venue Patch', extensions: ['lcvenue'] }];
 const SHOW_FILTERS = [{ name: 'LightCues Show', extensions: ['lcshow'] }];
@@ -48,6 +69,35 @@ const LIBRARY_OPEN_FILTERS = [{ name: 'Profile Library', extensions: ['lclibrary
 // The Profile Library file. The engine keeps its backups in a folder beside it.
 function libraryPath(): string {
   return join(app.getPath('userData'), 'profile-library.json');
+}
+
+// The log file, in `userData/logs`. A packaged app has no console, so this is
+// the only trace of a crash at a gig. Paths may be logged; document and file
+// contents may not.
+const logFile = createLog(join(app.getPath('userData'), 'logs'), () => new Date());
+
+// Main's own lines go to the log file and the console, which `npm run dev`
+// shows.
+function logTo(echo: (...args: unknown[]) => void) {
+  return (...args: unknown[]): void => {
+    echo(...args);
+    logFile.write(format(...args));
+  };
+}
+const log = logTo(console.log);
+const logError = logTo(console.error);
+
+// Copies an engine output stream to the log file, line by line with an
+// `[engine]` prefix, and to main's own stream.
+function logEngineOutput(stream: NodeJS.ReadableStream | null, echo: NodeJS.WriteStream): void {
+  if (!stream) return;
+  const lines = lineSplitter((line) => logFile.write(`[engine] ${line}`));
+  stream.setEncoding('utf8');
+  stream.on('data', (chunk: string) => {
+    echo.write(chunk);
+    lines.push(chunk);
+  });
+  stream.on('end', () => lines.end());
 }
 
 function startEngine(): UtilityProcess {
@@ -61,28 +111,90 @@ function startEngine(): UtilityProcess {
     ],
     {
       serviceName: 'LightCues Engine',
+      stdio: 'pipe',
     },
   );
-  engine.on('spawn', () => console.log(`Engine started (pid ${engine.pid})`));
-  engine.on('exit', (code) => console.error(`Engine exited with code ${code}`));
+  logEngineOutput(engine.stdout, process.stdout);
+  logEngineOutput(engine.stderr, process.stderr);
+  engine.on('spawn', () => log(`Engine started (pid ${engine.pid})`));
+  engine.on('exit', (code) => logError(`Engine exited with code ${code}`));
   return engine;
 }
 
+type Supervisor = ReturnType<typeof superviseEngine<UtilityProcess>>;
+
 // Gives the window a direct MessagePort to the engine, so UI traffic never
-// passes through the main process. Runs on every load, so reloads reconnect.
-function connectWindowToEngine(window: BrowserWindow, engine: UtilityProcess): void {
+// passes through the main process.
+function connectWindow(window: BrowserWindow, engine: UtilityProcess): void {
+  const { port1, port2 } = new MessageChannelMain();
+  const connect: EngineConnect = { type: 'connect' };
+  engine.postMessage(connect, [port1]);
+  window.webContents.postMessage(ENGINE_PORT_CHANNEL, null, [port2]);
+}
+
+// Connects the window to the current engine on every load, so reloads
+// reconnect. An engine that is down gets no port.
+function connectWindowToEngine(window: BrowserWindow, supervisor: Supervisor): void {
   window.webContents.on('did-finish-load', () => {
-    const { port1, port2 } = new MessageChannelMain();
-    const connect: EngineConnect = { type: 'connect' };
-    engine.postMessage(connect, [port1]);
-    window.webContents.postMessage(ENGINE_PORT_CHANNEL, null, [port2]);
+    if (!supervisor.isDown()) connectWindow(window, supervisor.current());
   });
+}
+
+// Starts the engine and restarts it after a crash (ADR 0011). A restarted
+// engine reaches the window, if there is one, on a new port; the renderer
+// hears how its restore went, or that the engine is down for good.
+function startSupervisedEngine(window: () => BrowserWindow | undefined): Supervisor {
+  const supervisor = superviseEngine({
+    start: startEngine,
+    now: Date.now,
+    log: (message) => log(message),
+    connect: (engine) => {
+      const current = window();
+      if (current) connectWindow(current, engine);
+    },
+    restarted: (result) => window()?.webContents.send(ENGINE_RESTARTED_CHANNEL, result),
+    down: () => window()?.webContents.send(ENGINE_DOWN_CHANNEL),
+  });
+  app.on('before-quit', () => supervisor.quitting());
+  ipcMain.handle(ENGINE_IS_DOWN_CHANNEL, () => supervisor.isDown());
+  ipcMain.handle(SAVE_FROM_SNAPSHOT_CHANNEL, (event, document: unknown) =>
+    saveFromSnapshot(supervisor, event.sender, document),
+  );
+  return supervisor;
+}
+
+// Saves a document from the snapshot while the engine is down: main shows
+// the Save dialog and writes the file itself. Resolves to the path, or
+// undefined on Cancel. Anything else from the renderer saves nothing.
+async function saveFromSnapshot(
+  supervisor: Supervisor,
+  sender: WebContents,
+  document: unknown,
+): Promise<string | undefined> {
+  const snapshot = supervisor.snapshot();
+  if (!supervisor.isDown() || !snapshot || !isEngineDocument(document)) {
+    return undefined;
+  }
+  const window = BrowserWindow.fromWebContents(sender);
+  const options = {
+    filters: document === 'show' ? SHOW_FILTERS : VENUE_FILTERS,
+    defaultPath: snapshot[document].path,
+  };
+  const result = await (window
+    ? dialog.showSaveDialog(window, options)
+    : dialog.showSaveDialog(options));
+  if (result.canceled || !result.filePath) return undefined;
+  const files = document === 'show' ? diskShowFiles : diskVenueFiles;
+  files.write(result.filePath, snapshotFile(snapshot, document));
+  log(`Saved the ${DOCUMENTS[document]} from the snapshot to ${result.filePath}`);
+  return result.filePath;
 }
 
 // Grants the engine a path the user picked and waits for its ack. Only then
 // may the renderer have the path: its commands reach the engine on another
 // port, so they could otherwise arrive before the grant.
-function grantPath(engine: UtilityProcess, path: string): Promise<void> {
+function grantPath(supervisor: Supervisor, path: string): Promise<void> {
+  const engine = supervisor.current();
   return new Promise((granted, failed) => {
     // An engine that already exited fires no `exit` again.
     if (engine.pid === undefined) return failed(new Error('The engine is not running'));
@@ -90,6 +202,7 @@ function grantPath(engine: UtilityProcess, path: string): Promise<void> {
       const ack = message as EnginePathGranted | undefined;
       if (ack?.type !== 'pathGranted' || ack.path !== path) return;
       stop();
+      supervisor.granted(path);
       granted();
     }
     function onExit(): void {
@@ -107,12 +220,12 @@ function grantPath(engine: UtilityProcess, path: string): Promise<void> {
   });
 }
 
-// Native Open/Save dialogs for one kind of file. The engine reads and writes
-// the chosen path, once granted. Cancel grants nothing. Without a current
-// file, Save suggests `name` in the folder. Open may accept more files than
-// Save writes. Renderer values that are not strings count as absent.
+// Native Open/Save dialogs for one kind of file. The current engine reads and
+// writes the chosen path, once granted; a restarted one is granted it again.
+// Cancel grants nothing. Without a current file, Save suggests `name` in the
+// folder. Open may accept more files than Save writes. Renderer values that are not strings count as absent.
 function handleFileDialogs(
-  engine: UtilityProcess,
+  supervisor: Supervisor,
   openChannel: string,
   saveChannel: string,
   filters: FileFilter[],
@@ -129,7 +242,7 @@ function handleFileDialogs(
       ? dialog.showOpenDialog(window, options)
       : dialog.showOpenDialog(options));
     const path = result.canceled ? undefined : result.filePaths[0];
-    if (path !== undefined) await grantPath(engine, path);
+    if (path !== undefined) await grantPath(supervisor, path);
     return path;
   });
   ipcMain.handle(saveChannel, async (event, current: unknown, folder: unknown, name: unknown) => {
@@ -146,7 +259,7 @@ function handleFileDialogs(
       ? dialog.showSaveDialog(window, options)
       : dialog.showSaveDialog(options));
     const path = result.canceled ? undefined : result.filePath;
-    if (path !== undefined) await grantPath(engine, path);
+    if (path !== undefined) await grantPath(supervisor, path);
     return path;
   });
 }
@@ -164,6 +277,27 @@ function suggestedPath(folder: string | undefined, name: string | undefined): st
   return existing === undefined ? name : join(existing, name);
 }
 
+// The example Venue Patch and Show: in the install's resources folder
+// (electron-builder `extraResources`), or the repo's `examples/` in
+// development.
+function examplePaths(): ExamplePaths {
+  const folder = app.isPackaged
+    ? join(process.resourcesPath, 'examples')
+    : join(app.getAppPath(), 'examples');
+  return { venue: join(folder, 'demo.lcvenue'), show: join(folder, 'demo.lcshow') };
+}
+
+// Grants the engine both example files, like a dialog's choice (ADR 0010),
+// and gives the renderer their paths.
+function handleOpenExample(supervisor: Supervisor): void {
+  ipcMain.handle(OPEN_EXAMPLE_CHANNEL, async () => {
+    const paths = examplePaths();
+    await grantPath(supervisor, paths.venue);
+    await grantPath(supervisor, paths.show);
+    return paths;
+  });
+}
+
 // Reveals a library backup in Explorer. Only files in the backups folder, so
 // the renderer cannot reveal arbitrary paths.
 function handleShowLibraryBackup(): void {
@@ -174,10 +308,43 @@ function handleShowLibraryBackup(): void {
   });
 }
 
+// How long after the window's first load the update check runs, so it never
+// slows the launch.
+const UPDATE_CHECK_DELAY_MS = 10_000;
+
+// Checks for a newer release once, after the window's first load, and when
+// the user asks. Main makes the request, so the renderer's CSP stays closed.
+// The renderer asks for the startup result, so a reload still gets it.
+// Opens only this project's release pages.
+function handleUpdateCheck(window: BrowserWindow): void {
+  const check = createUpdateCheck({
+    currentVersion: app.getVersion(),
+    fetch: (url, init) => net.fetch(url, init),
+    now: Date.now,
+    storage: fileStorage(join(app.getPath('userData'), 'update-check.json')),
+    log: (message) => logError(message),
+  });
+  const result = new Promise<UpdateAvailable | undefined>((done) => {
+    window.webContents.once('did-finish-load', () => {
+      setTimeout(() => void check.run().then(done), UPDATE_CHECK_DELAY_MS);
+    });
+  });
+  ipcMain.handle(UPDATE_AVAILABLE_CHANNEL, () => result);
+  ipcMain.handle(UPDATE_ENABLED_CHANNEL, () => check.enabled());
+  ipcMain.handle(CHECK_FOR_UPDATES_CHANNEL, () => check.checkNow());
+  ipcMain.on(SET_UPDATE_ENABLED_CHANNEL, (_event, enabled: unknown) => {
+    if (typeof enabled === 'boolean') check.setEnabled(enabled);
+  });
+  ipcMain.on(OPEN_RELEASE_PAGE_CHANNEL, (_event, url: unknown) => {
+    if (isReleasePageUrl(url)) void shell.openExternal(url);
+  });
+}
+
 // Asks before closing a window whose Show or Venue Patch has unsaved
 // changes. Save runs the renderer's own save flow for each document in turn;
-// the window closes only once all of them worked.
-function guardClose(window: BrowserWindow): void {
+// the window closes only once all of them worked. While the engine is down,
+// nothing can save that way, so it only warns.
+function guardClose(window: BrowserWindow, engineDown: () => boolean): void {
   const contents = window.webContents;
   const unsaved = new Set<DocumentKind>();
   // The documents still to save, the one being saved first.
@@ -199,7 +366,7 @@ function guardClose(window: BrowserWindow): void {
     saving = saved ? saving.slice(1) : [];
     if (!saved) return;
     if (saving[0]) contents.send(SAVE_BEFORE_CLOSE_CHANNEL, saving[0]);
-    else close();
+    else closeNow();
   }
   ipcMain.on(UNSAVED_CHANNEL, onUnsaved);
   ipcMain.on(SAVED_BEFORE_CLOSE_CHANNEL, onSaved);
@@ -214,7 +381,7 @@ function guardClose(window: BrowserWindow): void {
     unsaved.clear();
   });
 
-  function close(): void {
+  function closeNow(): void {
     closing = true;
     window.close();
   }
@@ -224,6 +391,18 @@ function guardClose(window: BrowserWindow): void {
     event.preventDefault();
     if (saving.length > 0) return;
     const documents = (Object.keys(DOCUMENTS) as DocumentKind[]).filter((d) => unsaved.has(d));
+    if (engineDown()) {
+      const close = dialog.showMessageBoxSync(window, {
+        type: 'warning',
+        buttons: ['Close Anyway', 'Cancel'],
+        defaultId: 1,
+        cancelId: 1,
+        message: unsavedMessage(documents),
+        detail: 'The engine has stopped. Use Save Show as… and Save Venue Patch as… first.',
+      });
+      if (close === 0) closeNow();
+      return;
+    }
     const choice = dialog.showMessageBoxSync(window, {
       type: 'warning',
       buttons: ['Save', "Don't Save", 'Cancel'],
@@ -236,22 +415,25 @@ function guardClose(window: BrowserWindow): void {
       saving = documents;
       contents.send(SAVE_BEFORE_CLOSE_CHANNEL, documents[0]);
     } else if (choice === 1) {
-      close();
+      closeNow();
     }
   });
 }
 
-function createWindow(engine: UtilityProcess, pageUrl: string): void {
+function createWindow(supervisor: Supervisor, pageUrl: string): BrowserWindow {
   const window = new BrowserWindow({
     width: 1280,
     height: 800,
+    // The packaged exe carries build/icon.ico. Dev runs set it here, or show Electron's default icon.
+    ...(app.isPackaged ? {} : { icon: join(__dirname, '../../build/icon.ico') }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
     },
   });
-  connectWindowToEngine(window, engine);
-  guardClose(window);
+  connectWindowToEngine(window, supervisor);
+  guardClose(window, supervisor.isDown);
   void window.loadURL(pageUrl);
+  return window;
 }
 
 // The renderer page: the dev server in development, the built file otherwise.
@@ -274,8 +456,16 @@ function restrictNavigation(pageUrl: string): void {
   });
 }
 
+// Logs main's own errors. The monitor leaves Electron's handling of an
+// uncaught exception as it is.
+process.on('uncaughtExceptionMonitor', (error) => logFile.write(format('Main error:', error)));
+process.on('unhandledRejection', (reason) => logError('Main unhandled rejection:', reason));
+
+log(`LightCues ${app.getVersion()} starting`);
+
 void app.whenReady().then(() => {
-  const engine = startEngine();
+  let window: BrowserWindow | undefined;
+  const engine = startSupervisedEngine(() => window);
   handleFileDialogs(
     engine,
     CHOOSE_VENUE_TO_OPEN_CHANNEL,
@@ -291,9 +481,12 @@ void app.whenReady().then(() => {
     LIBRARY_OPEN_FILTERS,
   );
   handleShowLibraryBackup();
+  handleOpenExample(engine);
   const pageUrl = rendererUrl();
   restrictNavigation(pageUrl);
-  createWindow(engine, pageUrl);
+  window = createWindow(engine, pageUrl);
+  window.on('closed', () => (window = undefined));
+  handleUpdateCheck(window);
 });
 
 app.on('window-all-closed', () => app.quit());

@@ -84,6 +84,16 @@ export function createTempo({ now, emit }: TempoOptions) {
       const span = time - taps[0]!;
       if (span > 0) set(time, (60000 * (taps.length - 1)) / span, 'tap');
     },
+    source: () => source,
+    // Brings back the Tempo of an engine that stopped. A clock's Tempo is
+    // held until the clock ticks again.
+    restore(restoredBpm: number, restoredSource: TempoSource): void {
+      if (!(restoredBpm > 0) || !Number.isFinite(restoredBpm)) return;
+      anchor = { at: now(), beat: Math.round(beatAt(now())) };
+      bpm = restoredBpm;
+      source = restoredSource === 'clock' ? 'held' : restoredSource;
+      emitTempo();
+    },
     emitTempo,
   };
 }

@@ -58,7 +58,7 @@ These apply to every run, whatever the request:
    ```sh
    git push --force-with-lease origin stage
    ```
-   The push runs CI (see [README § CI](../../README.md#ci)). Wait for a green run. If the batch touches the app, download the `LightCues-Setup-<version>` artifact from the run (kept 7 days), install it on Windows and check the app starts.
+   The push runs CI (see [docs/development.md § CI](../development.md#ci)). Wait for a green run. If the batch touches the app, download the `LightCues-Setup-<version>` artifact from the run (kept 7 days), install it on Windows and check the app starts.
 10. **Merge and clean up.** When the user asks: fast-forward `main` to `stage` (`git checkout main && git merge --ff-only stage`) and push `main`. Then:
     - With nothing held back, reset `dev` to `main`.
     - With commits held back, leave `dev` as it is: it already sits on `main`. Resetting would drop the held-back commits.

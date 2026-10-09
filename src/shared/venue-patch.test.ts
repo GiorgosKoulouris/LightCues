@@ -327,6 +327,20 @@ describe('Venue Patch', () => {
     });
   });
 
+  it('maps any number of Universes to the Virtual Output', () => {
+    let patch = emptyPatch(stage);
+    for (const number of [1, 2]) {
+      const result = putUniverse(patch, { number, output: 'virtual' });
+      if ('errors' in result) throw new Error(result.errors.join('\n'));
+      patch = result.patch;
+    }
+
+    expect(patch.universes).toEqual([
+      { number: 1, output: 'virtual' },
+      { number: 2, output: 'virtual' },
+    ]);
+  });
+
   it('removes the Fixtures of a removed Universe', () => {
     let patch = patched(emptyPatch(stage), fixture());
     const two = putUniverse(patch, { number: 2 });

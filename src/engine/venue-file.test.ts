@@ -98,6 +98,16 @@ describe('.lcvenue file', () => {
     expect(loadVenueFile(saved).fixtures).toEqual([hung, standing]);
   });
 
+  it('reopens Universes mapped to the Virtual Output', () => {
+    const universes = [
+      { number: 1, output: 'virtual' },
+      { number: 2, output: 'virtual' },
+    ];
+    const saved = saveVenueFile({ ...patch(), universes });
+
+    expect(loadVenueFile(saved).universes).toEqual(universes);
+  });
+
   it('opens a version 1 file, whose Fixtures have no Mounting', () => {
     const bar = fixture({ profileId: 'acme/led-bar' });
     const v1 = {
