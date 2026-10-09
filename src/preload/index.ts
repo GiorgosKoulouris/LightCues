@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import {
+  CHECK_FOR_UPDATES_CHANNEL,
   CHOOSE_LIBRARY_TO_OPEN_CHANNEL,
   CHOOSE_LIBRARY_TO_SAVE_CHANNEL,
   CHOOSE_SHOW_TO_OPEN_CHANNEL,
@@ -86,6 +87,7 @@ const updates: UpdatesBridge = {
   available: () => ipcRenderer.invoke(UPDATE_AVAILABLE_CHANNEL),
   enabled: () => ipcRenderer.invoke(UPDATE_ENABLED_CHANNEL),
   setEnabled: (enabled) => ipcRenderer.send(SET_UPDATE_ENABLED_CHANNEL, enabled),
+  checkNow: () => ipcRenderer.invoke(CHECK_FOR_UPDATES_CHANNEL),
   openReleasePage: (url) => ipcRenderer.send(OPEN_RELEASE_PAGE_CHANNEL, url),
 };
 

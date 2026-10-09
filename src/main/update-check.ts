@@ -1,6 +1,6 @@
 // Checks GitHub for a newer release. Check only: nothing is downloaded or
 // installed, so a live tool never changes mid-gig. See ADR 0012.
-import type { UpdateAvailable } from '../shared/protocol';
+import type { UpdateAvailable, UpdateCheckOutcome } from '../shared/protocol';
 
 const LATEST_RELEASE_API =
   'https://api.github.com/repos/GiorgosKoulouris/LightCues/releases/latest';
@@ -70,7 +70,25 @@ export function createUpdateCheck({
     return parseRelease(await response.json());
   }
 
+  // Asks GitHub and remembers when, even if that failed. A failure is logged
+  // and keeps the release found before. Resolves to whether it worked.
+  async function ask(): Promise<boolean> {
+    saved.checkedAt = now();
+    let worked = true;
+    try {
+      const latest = await fetchLatest();
+      if (latest) saved.latest = latest;
+      else delete saved.latest;
+    } catch (error) {
+      log(`Update check failed: ${message(error)}`);
+      worked = false;
+    }
+    save();
+    return worked;
+  }
+
   return {
+    // Whether the check runs on startup.
     enabled: () => saved.enabled,
 
     setEnabled(enabled: boolean): void {
@@ -79,23 +97,20 @@ export function createUpdateCheck({
       save();
     },
 
-    // Asks GitHub unless turned off or asked in the last day, even if that
-    // failed. Resolves to the newer release, or undefined. A failure is
-    // logged and keeps the release found before.
+    // The startup check: asks GitHub unless turned off or asked in the last
+    // day. Resolves to the newer release, or undefined.
     async run(): Promise<UpdateAvailable | undefined> {
       if (!saved.enabled) return undefined;
       const { checkedAt } = saved;
-      if (checkedAt !== undefined && now() - checkedAt < CHECK_INTERVAL_MS) return newer();
-      saved.checkedAt = now();
-      try {
-        const latest = await fetchLatest();
-        if (latest) saved.latest = latest;
-        else delete saved.latest;
-      } catch (error) {
-        log(`Update check failed: ${message(error)}`);
-      }
-      save();
+      if (checkedAt === undefined || now() - checkedAt >= CHECK_INTERVAL_MS) await ask();
       return newer();
+    },
+
+    // A check the user asked for: always asks GitHub, setting or not.
+    async checkNow(): Promise<UpdateCheckOutcome> {
+      if (!(await ask())) return { state: 'failed' };
+      const release = newer();
+      return release ? { state: 'available', release } : { state: 'upToDate' };
     },
   };
 }

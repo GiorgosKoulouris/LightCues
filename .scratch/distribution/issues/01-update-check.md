@@ -27,15 +27,16 @@ Done and covered by `npm run check`:
 
 - `src/main/update-check.ts`: core with tests in `update-check.test.ts`. State in `update-check.json` in `userData`. `run()` resolves to the newer release (`UpdateAvailable`) or undefined.
 - Main runs it 10 s after the first load. The renderer pulls the result over IPC (`updates:available`), so a reload still gets it. `shell:openReleasePage` opens only `isReleasePageUrl` URLs.
-- Sidebar footer: the notice ("LightCues X.Y.Z is available", "Open release page"), hidden in Perform, and the "Check for updates" checkbox. App tests cover both.
+- Sidebar footer: the notice ("LightCues X.Y.Z is available", "Open release page"), hidden in Perform, the "Check on startup" checkbox, and a "Check for updates" icon button beside it. App tests cover all three.
 - ADR 0012. README and `docs/agents/releasing.md` updated.
 
 Choices beyond the issue:
 
 - The last release found is remembered, so a launch within the day still shows the notice without a request.
 - A failed check counts toward the daily limit, as the spec says "at most once a day". The release found earlier is kept.
-- Turning the setting on mid-session checks from the next launch. Turning it off hides the notice at once.
+- Turning the setting on mid-session checks from the next launch. Turning it off keeps a notice already shown.
+- Added on request: the "Check for updates" button checks at once (`updates:checkNow`), whatever the setting or the daily limit, and counts toward that limit. It says "LightCues is up to date" or "Could not check for updates"; a newer release shows the notice.
 - Code says "release page", not "release": in CONTEXT.md, Release is a Trigger action.
 
-Left for a human: the manual check on Windows. Set `package.json` to a version below the latest release, run `npm run dev`, wait about 10 s. The notice shows outside Perform, hides in Perform, and the button opens the release page in the browser. Then delete this issue.
+Left for a human: the manual check on Windows. Set `package.json` to a version below the latest release, run `npm run dev`, wait about 10 s. The notice shows outside Perform, hides in Perform, and the button opens the release page in the browser. Also try the check button with the startup check off. Then delete this issue.
 

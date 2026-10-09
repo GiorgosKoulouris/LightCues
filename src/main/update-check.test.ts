@@ -190,6 +190,42 @@ describe('update check', () => {
   });
 });
 
+describe('checking on request', () => {
+  it('asks GitHub even when the startup check is off or ran today', async () => {
+    const { check, fetch } = setup(release('v0.2.0'));
+    await check.run();
+    check.setEnabled(false);
+    expect(await check.checkNow()).toEqual({
+      state: 'available',
+      release: { version: '0.2.0', url: RELEASE_URL },
+    });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports the app up to date', async () => {
+    expect(await setup(release('v0.1.1')).check.checkNow()).toEqual({ state: 'upToDate' });
+    expect(await setup(release('v0.2.0-beta.1')).check.checkNow()).toEqual({
+      state: 'upToDate',
+    });
+  });
+
+  it('reports a failure, and logs it', async () => {
+    const fetch = vi.fn(async () => {
+      throw new TypeError('fetch failed');
+    });
+    const { check, log } = setup(undefined, { fetch });
+    expect(await check.checkNow()).toEqual({ state: 'failed' });
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('fetch failed'));
+  });
+
+  it('counts toward the daily limit of the startup check', async () => {
+    const { check, fetch } = setup(release('v0.2.0'));
+    await check.checkNow();
+    expect(await check.run()).toMatchObject({ version: '0.2.0' });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('isReleasePageUrl', () => {
   it('allows a release page of the project', () => {
     expect(isReleasePageUrl(RELEASE_URL)).toBe(true);

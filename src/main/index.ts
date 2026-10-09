@@ -15,6 +15,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
+  CHECK_FOR_UPDATES_CHANNEL,
   CHOOSE_LIBRARY_TO_OPEN_CHANNEL,
   CHOOSE_LIBRARY_TO_SAVE_CHANNEL,
   CHOOSE_SHOW_TO_OPEN_CHANNEL,
@@ -186,9 +187,10 @@ function handleShowLibraryBackup(): void {
 // slows the launch.
 const UPDATE_CHECK_DELAY_MS = 10_000;
 
-// Checks for a newer release once, after the window's first load. Main makes
-// the request, so the renderer's CSP stays closed. The renderer asks for the
-// result, so a reload still gets it. Opens only this project's release pages.
+// Checks for a newer release once, after the window's first load, and when
+// the user asks. Main makes the request, so the renderer's CSP stays closed.
+// The renderer asks for the startup result, so a reload still gets it.
+// Opens only this project's release pages.
 function handleUpdateCheck(window: BrowserWindow): void {
   const check = createUpdateCheck({
     currentVersion: app.getVersion(),
@@ -204,6 +206,7 @@ function handleUpdateCheck(window: BrowserWindow): void {
   });
   ipcMain.handle(UPDATE_AVAILABLE_CHANNEL, () => result);
   ipcMain.handle(UPDATE_ENABLED_CHANNEL, () => check.enabled());
+  ipcMain.handle(CHECK_FOR_UPDATES_CHANNEL, () => check.checkNow());
   ipcMain.on(SET_UPDATE_ENABLED_CHANNEL, (_event, enabled: unknown) => {
     if (typeof enabled === 'boolean') check.setEnabled(enabled);
   });

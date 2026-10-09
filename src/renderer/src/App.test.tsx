@@ -111,6 +111,7 @@ beforeEach(() => {
     available: vi.fn(async () => undefined),
     enabled: vi.fn(async () => true),
     setEnabled: vi.fn(),
+    checkNow: vi.fn(async () => ({ state: 'upToDate' as const })),
     openReleasePage: vi.fn(),
   };
   vi.stubGlobal('updates', updates);
@@ -303,21 +304,40 @@ describe('App update notice', () => {
     expect(notice()).toBeInTheDocument();
   });
 
-  it('shows the setting, and turning it off saves it and hides the notice', async () => {
-    updates.available.mockResolvedValue(RELEASE);
+  it('shows the startup setting, and saves it', async () => {
     await renderApp();
-    const setting = await screen.findByRole('checkbox', { name: 'Check for updates' });
-    await screen.findByText('LightCues 0.2.0 is available');
+    const setting = await screen.findByRole('checkbox', { name: 'Check on startup' });
     expect(setting).toBeChecked();
     await userEvent.click(setting);
     expect(updates.setEnabled).toHaveBeenCalledWith(false);
     expect(setting).not.toBeChecked();
-    expect(notice()).toBeNull();
   });
 
-  it('shows the setting off when it was turned off', async () => {
+  it('shows the startup setting off when it was turned off', async () => {
     updates.enabled.mockResolvedValue(false);
     await renderApp();
-    expect(await screen.findByRole('checkbox', { name: 'Check for updates' })).not.toBeChecked();
+    expect(await screen.findByRole('checkbox', { name: 'Check on startup' })).not.toBeChecked();
+  });
+
+  it('checks on request and shows a newer release', async () => {
+    updates.checkNow.mockResolvedValue({ state: 'available', release: RELEASE });
+    await renderApp();
+    await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    expect(updates.checkNow).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText('LightCues 0.2.0 is available')).toBeInTheDocument();
+  });
+
+  it('says when the app is up to date', async () => {
+    updates.checkNow.mockResolvedValue({ state: 'upToDate' });
+    await renderApp();
+    await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    expect(await screen.findByText('LightCues is up to date')).toBeInTheDocument();
+  });
+
+  it('says when the check failed', async () => {
+    updates.checkNow.mockResolvedValue({ state: 'failed' });
+    await renderApp();
+    await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    expect(await screen.findByText('Could not check for updates')).toBeInTheDocument();
   });
 });

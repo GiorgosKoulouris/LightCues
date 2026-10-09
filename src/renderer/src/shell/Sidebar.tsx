@@ -4,15 +4,16 @@ import {
   LayoutGrid,
   Library,
   MonitorPlay,
+  RefreshCw,
   type LucideIcon,
 } from 'lucide-react';
-import { Button } from '../ui/Button';
+import { Button, IconButton } from '../ui/Button';
 import { Checkbox } from '../ui/Checkbox';
 import { cx } from '../ui/cx';
 import { Tooltip } from '../ui/Tooltip';
 import { viewShortcut } from './shortcuts';
 import styles from './Sidebar.module.css';
-import { useUpdates } from './useUpdates';
+import { useUpdates, type CheckNowState } from './useUpdates';
 import { VIEWS, type View } from './views';
 
 const ICONS: Record<View, LucideIcon> = {
@@ -22,8 +23,15 @@ const ICONS: Record<View, LucideIcon> = {
   perform: MonitorPlay,
 };
 
+const CHECK_NOW_MESSAGES: Record<CheckNowState, string> = {
+  checking: 'Checking for updates…',
+  upToDate: 'LightCues is up to date',
+  failed: 'Could not check for updates',
+};
+
 // Switches between the views. Each shows its Ctrl shortcut as a tooltip.
-// Below them, a newer release, never in Perform, and the update setting.
+// Below them, a newer release and how a check asked for ended, never in
+// Perform, then the startup setting and a button to check now.
 export function Sidebar({ view, onView }: { view: View; onView: (view: View) => void }) {
   const updates = useUpdates();
   return (
@@ -54,13 +62,26 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
             </Button>
           </div>
         )}
+        {updates.checkNowState && view !== 'perform' && (
+          <p role="status" className={styles.checkNow}>
+            {CHECK_NOW_MESSAGES[updates.checkNowState]}
+          </p>
+        )}
         {updates.enabled !== undefined && (
-          <Checkbox
-            label="Check for updates"
-            className={styles.setting}
-            checked={updates.enabled}
-            onChange={updates.setEnabled}
-          />
+          <div className={styles.updateSettings}>
+            <Checkbox
+              label="Check on startup"
+              className={styles.setting}
+              checked={updates.enabled}
+              onChange={updates.setEnabled}
+            />
+            <IconButton
+              icon={<RefreshCw aria-hidden />}
+              label="Check for updates"
+              disabled={updates.checkNowState === 'checking'}
+              onClick={updates.checkNow}
+            />
+          </div>
         )}
       </div>
     </nav>

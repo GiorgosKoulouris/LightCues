@@ -330,6 +330,7 @@ export interface DialogBridge {
 // renderer only shows the result and the setting.
 export const UPDATE_AVAILABLE_CHANNEL = 'updates:available';
 export const UPDATE_ENABLED_CHANNEL = 'updates:enabled';
+export const CHECK_FOR_UPDATES_CHANNEL = 'updates:checkNow';
 export const SET_UPDATE_ENABLED_CHANNEL = 'updates:setEnabled';
 export const OPEN_RELEASE_PAGE_CHANNEL = 'shell:openReleasePage';
 
@@ -340,15 +341,21 @@ export interface UpdateAvailable {
   url: string;
 }
 
+// The result of a check the user asked for.
+export type UpdateCheckOutcome =
+  { state: 'available'; release: UpdateAvailable } | { state: 'upToDate' } | { state: 'failed' };
+
 // What the preload script exposes to the renderer as `window.updates`.
 export interface UpdatesBridge {
   // Resolves once the launch check is done, a few seconds after launch: the
   // newer release, or undefined.
   available(): Promise<UpdateAvailable | undefined>;
-  // Whether the check runs. On by default.
+  // Whether the check runs on startup. On by default.
   enabled(): Promise<boolean>;
   // Saved for the next launch. Turning it on does not check until then.
   setEnabled(enabled: boolean): void;
+  // Checks now, whatever the setting and however recent the last check.
+  checkNow(): Promise<UpdateCheckOutcome>;
   // Opens a release page in the default browser. Main ignores any other URL.
   openReleasePage(url: string): void;
 }
