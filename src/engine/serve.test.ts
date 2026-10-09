@@ -17,12 +17,14 @@ const acks = (sent: unknown[]) => sent.filter((m) => (m as { type?: unknown }).t
 
 function fakePort() {
   const listeners: Listener[] = [];
+  const closeListeners: (() => void)[] = [];
   const sent: unknown[] = [];
   let started = false;
   let closed = false;
   const port = {
-    on(_event: 'message', listener: Listener) {
-      listeners.push(listener);
+    on(event: 'message' | 'close', listener: Listener) {
+      if (event === 'close') closeListeners.push(listener as () => void);
+      else listeners.push(listener);
     },
     postMessage(message: unknown) {
       sent.push(message);
@@ -41,11 +43,64 @@ function fakePort() {
     isClosed: () => closed,
     deliver: (data: unknown, ports: PortLike[] = []) =>
       listeners.forEach((l) => l({ data, ports })),
+    // The other end closes, e.g. the window is gone.
+    closeRemote: () => closeListeners.forEach((l) => l()),
   };
 }
 
+// An engine on the Virtual Output, with no ports to scan.
+const virtualOnly = { now: () => 0, serialPorts: { list: async () => [], open: vi.fn() } };
+
+type FakePort = ReturnType<typeof fakePort>;
+
+// Monitors Universe 1 before it is mapped, then lets `next` return the UI
+// port to carry on with, maps Universe 1 to the Virtual Output there and
+// returns the frames that port got.
+async function framesAfter(next: (ui: FakePort, parent: FakePort) => FakePort) {
+  const parent = fakePort();
+  const first = fakePort();
+  serve(parent.port as ParentPortLike, virtualOnly);
+  parent.deliver(connect, [first.port]);
+  first.deliver({ type: 'monitorUniverse', universe: 1 });
+  const ui = next(first, parent);
+  ui.deliver({
+    type: 'editVenue',
+    requestId: 1,
+    edit: { type: 'putUniverse', universe: { number: 1, output: 'virtual' } },
+  });
+  await vi.advanceTimersByTimeAsync(500);
+  return ui.sent.filter((m) => (m as { type?: unknown }).type === 'dmxFrame');
+}
+
 describe('serve', () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('sends the monitored Universe once it is sent', async () => {
+    vi.useFakeTimers();
+    expect(await framesAfter((ui) => ui)).toHaveLength(1);
+  });
+
+  it('stops the channel monitor when the UI port closes', async () => {
+    vi.useFakeTimers();
+    const frames = await framesAfter((ui) => {
+      ui.closeRemote();
+      return ui;
+    });
+    expect(frames).toEqual([]);
+  });
+
+  it('stops the channel monitor when a newer UI port replaces the last one', async () => {
+    vi.useFakeTimers();
+    const frames = await framesAfter((_ui, parent) => {
+      const newUi = fakePort();
+      parent.deliver(connect, [newUi.port]);
+      return newUi;
+    });
+    expect(frames).toEqual([]);
+  });
 
   it('answers commands arriving on a UI port handed over by the parent', () => {
     const parent = fakePort();

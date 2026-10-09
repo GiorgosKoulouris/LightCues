@@ -12,6 +12,7 @@ import {
 import { findTrigger, validateShow } from '../shared/show';
 import { validatePatch } from '../shared/venue-patch';
 import { profileName } from '../shared/profile-edit';
+import { createChannelMonitor } from './channel-monitor';
 import { withoutContents } from './log-safe';
 import {
   createMidiInput,
@@ -181,6 +182,7 @@ export function createEngine({
     });
 
   const preview = createPreview({ emit, lights: () => playback.lights() });
+  const monitor = createChannelMonitor({ emit, frame: (u) => outputs?.sentFrame(u) });
 
   const midiInput =
     midiPorts &&
@@ -473,6 +475,12 @@ export function createEngine({
           break;
         case 'stopPreview':
           preview.stop();
+          break;
+        case 'monitorUniverse':
+          monitor.start(command.universe);
+          break;
+        case 'stopMonitor':
+          monitor.stop();
           break;
       }
     },

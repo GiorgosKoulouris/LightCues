@@ -93,7 +93,11 @@ export type EngineCommand =
   | { type: 'getReopenErrors' }
   // While started, the engine sends `preview` events.
   | { type: 'startPreview' }
-  | { type: 'stopPreview' };
+  | { type: 'stopPreview' }
+  // While a Universe is monitored, the engine sends its `dmxFrame`s. A new
+  // monitorUniverse replaces the Universe monitored before.
+  | { type: 'monitorUniverse'; universe: number }
+  | { type: 'stopMonitor' };
 
 // Monitor sends the active Scenes to the Outputs. Blind holds the Outputs at
 // the frames sent last.
@@ -268,7 +272,12 @@ export type EngineEvent =
   // How every Fixture in the Venue Patch looks now, by Fixture id. In Monitor
   // it is what the Outputs send; in Blind, what they would send. Sent while
   // the preview is started, on start and after every change.
-  | { type: 'preview'; lights: Record<string, FixtureLight> };
+  | { type: 'preview'; lights: Record<string, FixtureLight> }
+  // The DMX values last sent for the monitored Universe, channel 1 first: what
+  // its Output gets, real or virtual, in Blind too. Sent on monitorUniverse
+  // and then on change, at most 10 times a second. None while nothing is
+  // sent for the Universe.
+  | { type: 'dmxFrame'; universe: number; values: number[] };
 
 // Whether a Show or Venue Patch has unsaved changes, and edits to undo or redo.
 export interface DocumentState {

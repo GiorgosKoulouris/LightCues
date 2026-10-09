@@ -15,6 +15,8 @@ import { createEngine, type EngineOptions } from './engine';
 // parentPort, so the engine never imports Electron.
 export interface PortLike {
   on(event: 'message', listener: (e: { data: unknown }) => void): void;
+  // The other end closed, e.g. its window is gone.
+  on(event: 'close', listener: () => void): void;
   postMessage(message: unknown): void;
   start(): void;
   close(): void;
@@ -49,8 +51,9 @@ function isRestore(data: unknown): data is EngineRestore {
 // replaces and closes the previous one. The parent also grants the paths the
 // user picked, and each grant is acked on the parent port. The engine sends
 // its snapshot to the parent, whole on start and then as it changes, and
-// restores one the parent sends after a restart (ADR 0011). A command that
-// throws is logged; it must not end the engine, or DMX output stops.
+// restores one the parent sends after a restart (ADR 0011). The channel
+// monitor stops when its UI port closes or is replaced. A command that throws
+// is logged; it must not end the engine, or DMX output stops.
 export function serve(
   parentPort: ParentPortLike,
   options: Omit<EngineOptions, 'emit' | 'report'> = {},
@@ -95,7 +98,11 @@ export function serve(
     const port = ports[0];
     if (!isConnect(data) || !port) return;
     uiPort?.close();
+    engine.handle({ type: 'stopMonitor' });
     uiPort = port;
+    port.on('close', () => {
+      if (uiPort === port) engine.handle({ type: 'stopMonitor' });
+    });
     port.on('message', ({ data }) => {
       if (!isCommand(data)) return;
       try {

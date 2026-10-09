@@ -395,12 +395,10 @@ async function playbackEngine(output = 'EN1') {
     ...{ id: 'f1', name: 'Dimmer 1', profileId: 'acme/dimmer', mode: '1ch' },
     ...{ universe: 1, address: 1, x: 0, y: 1, height: 0 },
   };
-  for (const edit of [
-    { type: 'putUniverse', universe: { number: 1, output } },
-    { type: 'putFixture', fixture },
-  ] as const) {
+  const editVenue = (edit: VenueEdit) =>
     engine.handle({ type: 'editVenue', requestId: requestId++, edit });
-  }
+  editVenue({ type: 'putUniverse', universe: { number: 1, output } });
+  editVenue({ type: 'putFixture', fixture });
   const editShow = (edit: ShowEdit) =>
     engine.handle({ type: 'editShow', requestId: requestId++, edit });
   editShow({ type: 'putScene', scene: wash });
@@ -409,9 +407,11 @@ async function playbackEngine(output = 'EN1') {
 
   return {
     events,
+    editVenue,
     editShow,
     send: (command: EngineCommand) => engine.handle(command),
     writes: () => serial.port('COM3')?.writes ?? [],
+    unplug: (path: string) => serial.unplug(path),
     lastFrame: (universe: number) => engine.lastFrame(universe),
     // The dimmer's level in the latest frame sent.
     level: () => serial.port('COM3')?.writes.at(-1)?.[5],
@@ -923,5 +923,100 @@ describe('engine Focus Check', () => {
     send({ type: 'redoVenue' });
 
     expect(focusCheck()).toBe('Up');
+  });
+});
+
+describe('engine channel monitor', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const frames = (events: EngineEvent[]) => events.filter((e) => e.type === 'dmxFrame');
+
+  it('sends the monitored Universe only while it is monitored', async () => {
+    const { events, send } = await playbackEngine();
+    send({ type: 'goScene', sceneId: 'wash' });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(frames(events)).toEqual([]);
+
+    send({ type: 'monitorUniverse', universe: 1 });
+    expect(frames(events)).toHaveLength(1);
+    expect(frames(events)[0]).toMatchObject({ type: 'dmxFrame', universe: 1 });
+    expect(frames(events)[0]?.type === 'dmxFrame' && frames(events)[0]?.values).toHaveLength(512);
+
+    send({ type: 'stopMonitor' });
+    const sent = frames(events).length;
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(frames(events)).toHaveLength(sent);
+  });
+
+  it('sends at most 10 frames a second, and only changed ones', async () => {
+    const { events, send, level } = await playbackEngine();
+    send({ type: 'monitorUniverse', universe: 1 });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(frames(events)).toHaveLength(1);
+
+    send({ type: 'goScene', sceneId: 'wash' });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(frames(events).length).toBeGreaterThan(5);
+    expect(frames(events).length).toBeLessThanOrEqual(11);
+
+    await vi.advanceTimersByTimeAsync(1100);
+    const sent = frames(events).length;
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(frames(events)).toHaveLength(sent);
+    expect(frames(events).at(-1)).toMatchObject({ values: expect.arrayContaining([255]) });
+    expect(level()).toBe(255);
+  });
+
+  it('shows what the Output gets in Blind, not the Blind look', async () => {
+    const { events, send, level } = await playbackEngine();
+    send({ type: 'monitorUniverse', universe: 1 });
+    send({ type: 'setMode', mode: 'blind' });
+    send({ type: 'goScene', sceneId: 'wash' });
+    await vi.advanceTimersByTimeAsync(2500);
+
+    expect(level()).toBe(0);
+    expect(frames(events)).toHaveLength(1);
+    const last = frames(events).at(-1);
+    expect(last?.type === 'dmxFrame' && last.values[0]).toBe(0);
+  });
+
+  it('shows what the Virtual Output gets', async () => {
+    const { events, send } = await playbackEngine('virtual');
+    send({ type: 'monitorUniverse', universe: 1 });
+    send({ type: 'goScene', sceneId: 'wash' });
+    await vi.advanceTimersByTimeAsync(2500);
+
+    const last = frames(events).at(-1);
+    expect(last?.type === 'dmxFrame' && last.values[0]).toBe(255);
+  });
+
+  it('sends nothing once the Output stops sending', async () => {
+    const { events, send, unplug } = await playbackEngine();
+    unplug('COM3');
+    await vi.advanceTimersByTimeAsync(100);
+    send({ type: 'monitorUniverse', universe: 1 });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(frames(events)).toEqual([]);
+  });
+
+  it('sends nothing for a Universe nothing is sent for', async () => {
+    const { events, send } = await playbackEngine();
+    send({ type: 'monitorUniverse', universe: 2 });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(frames(events)).toEqual([]);
+  });
+
+  it('switches to the newly monitored Universe', async () => {
+    const { events, send, editVenue } = await playbackEngine();
+    editVenue({ type: 'putUniverse', universe: { number: 2, output: 'virtual' } });
+    send({ type: 'monitorUniverse', universe: 1 });
+    await vi.advanceTimersByTimeAsync(200);
+    send({ type: 'monitorUniverse', universe: 2 });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(frames(events).map((e) => e.type === 'dmxFrame' && e.universe)).toEqual([1, 2]);
   });
 });

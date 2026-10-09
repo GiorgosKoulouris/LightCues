@@ -9,6 +9,19 @@
   color: var(--text-faint);
 }
 
+/* The tab's content, then the channel monitor while it is open. */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  height: 100%;
+}
+
+.body > :first-child {
+  flex: 1;
+  min-height: 0;
+}
+
 /* Fixture list | stage plan | inspector. Each column scrolls on its own. */
 .fixtures {
   position: relative;

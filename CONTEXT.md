@@ -30,6 +30,10 @@ A physical, network or virtual DMX interface port to which a Universe is mapped.
 Virtual Output: an Output with no hardware, for trying a Show and for tests.
 _Avoid_: Interface, node, dongle
 
+**Channel monitor**:
+A panel in the Venue Patch view showing the 512 values an Output gets for one Universe, in Blind too. Not the same as Monitor, the mode.
+_Avoid_: DMX view, channel view
+
 **Venue Patch**:
 The per-venue description of the rig: which Fixtures exist, their Profile, Universe, address and position on stage.
 _Avoid_: Rig file, setup

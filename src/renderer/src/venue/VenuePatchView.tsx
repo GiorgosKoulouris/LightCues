@@ -1,4 +1,4 @@
-import { Tag } from 'lucide-react';
+import { Grid3x3, Tag } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { VenueEdit } from '../../../shared/protocol';
 import { DIRECTIONS, type Direction } from '../../../shared/show';
@@ -24,6 +24,7 @@ import { SidePanel, SidePanelToggle } from '../ui/SidePanel';
 import { Tabs } from '../ui/Tabs';
 import { useToast } from '../ui/Toast';
 import { AddFixtureDialog } from './AddFixtureDialog';
+import { ChannelMonitor } from './ChannelMonitor';
 import { FixtureInspector } from './FixtureInspector';
 import { FixtureList } from './FixtureList';
 import {
@@ -58,7 +59,8 @@ const FOCUS_CHECK_OPTIONS = [
 // undone with Undo. While `active`, Ctrl+N, O, S and Shift+S act on its file,
 // Ctrl+Z and Ctrl+Shift+Z undo and redo, and Ctrl+F searches the Fixtures.
 // The Focus Check, on either tab, ends when the view is left. While it is on,
-// the plan shows the beams out to the audience plane.
+// the plan shows the beams out to the audience plane. The channel monitor, on
+// either tab, shows below while toggled on and the view is active.
 export function VenuePatchView({ active }: { active: boolean }) {
   const { venue, edit, newVenue, undo, redo, open, save } = useVenuePatch();
   const focusCheck = usePlayback()?.focusCheck;
@@ -73,6 +75,7 @@ export function VenuePatchView({ active }: { active: boolean }) {
   // The inspector, below 1280px where it is hidden by default.
   const [sideOpen, setSideOpen] = useState(false);
   const [showLabels, setShowLabels] = usePlanLabels();
+  const [monitoring, setMonitoring] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const { run, fileCommands } = useFileCommands({
@@ -165,6 +168,12 @@ export function VenuePatchView({ active }: { active: boolean }) {
               />
             </>
           )}
+          <IconButton
+            icon={<Grid3x3 />}
+            label="Channel monitor"
+            aria-pressed={monitoring}
+            onClick={() => setMonitoring(!monitoring)}
+          />
           <Select<Direction | ''>
             label="Focus Check"
             hideLabel
@@ -185,67 +194,70 @@ export function VenuePatchView({ active }: { active: boolean }) {
         </>
       }
     >
-      {tab === 'fixtures' ? (
-        <div className={styles.fixtures}>
-          <FixtureList
+      <div className={styles.body}>
+        {tab === 'fixtures' ? (
+          <div className={styles.fixtures}>
+            <FixtureList
+              patch={patch}
+              fixtures={listed}
+              filter={filter}
+              selection={{ ...selection, ids: selectedIds }}
+              searchRef={searchRef}
+              onFilter={setFilter}
+              onSelect={select(listed)}
+              onRemove={() => void removeSelected()}
+              onAdd={() => setAdding(true)}
+            />
+            <StagePlan
+              patch={patch}
+              selectedIds={selectedIds}
+              onSelect={select(sortFixtures(patch, patch.fixtures, filter.grouping))}
+              onKeyDown={onDelete}
+              onMove={(id, position) => change({ type: 'moveFixture', id, position })}
+              showLabels={showLabels}
+            >
+              {focusCheck !== undefined && <FocusCheckBeams patch={patch} />}
+            </StagePlan>
+            <SidePanel label="Inspector" open={sideOpen} onClose={() => setSideOpen(false)}>
+              {selected.length > 0 ? (
+                <FixtureInspector
+                  key={selectedIds.join()}
+                  patch={patch}
+                  show={show}
+                  fixtures={selected}
+                  onPut={(fixtures) => void change({ type: 'putFixtures', fixtures })}
+                  onRemove={() => void removeSelected()}
+                />
+              ) : (
+                <p className={styles.empty}>
+                  Select a Fixture to edit it. Shift or Ctrl click to select several.
+                </p>
+              )}
+            </SidePanel>
+            <AddFixtureDialog
+              open={adding}
+              onOpenChange={setAdding}
+              patch={patch}
+              profiles={entries.map((e) => e.profile)}
+              onAdd={async (fixture) => {
+                const added = await change({ type: 'putFixture', fixture });
+                if (added) setSelection(selectFixture({ ids: [] }, fixture.id, [], {}));
+                return added;
+              }}
+            />
+          </div>
+        ) : (
+          <RigSetup
             patch={patch}
-            fixtures={listed}
-            filter={filter}
-            selection={{ ...selection, ids: selectedIds }}
-            searchRef={searchRef}
-            onFilter={setFilter}
-            onSelect={select(listed)}
-            onRemove={() => void removeSelected()}
-            onAdd={() => setAdding(true)}
+            outputs={outputs}
+            onStage={(stage) => void change({ type: 'setStage', stage })}
+            onAddUniverse={(universe) => change({ type: 'addUniverse', universe })}
+            onPutUniverse={(universe) => void change({ type: 'putUniverse', universe })}
+            onRemoveUniverse={(number) => void removeUniverse(number)}
           />
-          <StagePlan
-            patch={patch}
-            selectedIds={selectedIds}
-            onSelect={select(sortFixtures(patch, patch.fixtures, filter.grouping))}
-            onKeyDown={onDelete}
-            onMove={(id, position) => change({ type: 'moveFixture', id, position })}
-            showLabels={showLabels}
-          >
-            {focusCheck !== undefined && <FocusCheckBeams patch={patch} />}
-          </StagePlan>
-          <SidePanel label="Inspector" open={sideOpen} onClose={() => setSideOpen(false)}>
-            {selected.length > 0 ? (
-              <FixtureInspector
-                key={selectedIds.join()}
-                patch={patch}
-                show={show}
-                fixtures={selected}
-                onPut={(fixtures) => void change({ type: 'putFixtures', fixtures })}
-                onRemove={() => void removeSelected()}
-              />
-            ) : (
-              <p className={styles.empty}>
-                Select a Fixture to edit it. Shift or Ctrl click to select several.
-              </p>
-            )}
-          </SidePanel>
-          <AddFixtureDialog
-            open={adding}
-            onOpenChange={setAdding}
-            patch={patch}
-            profiles={entries.map((e) => e.profile)}
-            onAdd={async (fixture) => {
-              const added = await change({ type: 'putFixture', fixture });
-              if (added) setSelection(selectFixture({ ids: [] }, fixture.id, [], {}));
-              return added;
-            }}
-          />
-        </div>
-      ) : (
-        <RigSetup
-          patch={patch}
-          outputs={outputs}
-          onStage={(stage) => void change({ type: 'setStage', stage })}
-          onAddUniverse={(universe) => change({ type: 'addUniverse', universe })}
-          onPutUniverse={(universe) => void change({ type: 'putUniverse', universe })}
-          onRemoveUniverse={(number) => void removeUniverse(number)}
-        />
-      )}
+        )}
+        {monitoring && active && <ChannelMonitor patch={patch} outputs={outputs} />}
+      </div>
     </Tabs>
   );
 }
