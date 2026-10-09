@@ -1,4 +1,4 @@
-import type { EngineCommand, EngineEvent, ShowEdit } from '../shared/protocol';
+import type { DocumentSnapshot, EngineCommand, EngineEvent, ShowEdit } from '../shared/protocol';
 import {
   emptyShow,
   findTrigger,
@@ -157,6 +157,17 @@ export function createShowSession({
     show: () => history.current(),
     // Opens a file. An empty list of errors means it opened.
     open,
+    snapshot: (): DocumentSnapshot<Show> => ({
+      document: history.current(),
+      ...(path === undefined ? {} : { path }),
+      unsaved: history.state().unsaved,
+    }),
+    // Brings back the Show of an engine that stopped, without its history.
+    restore(snapshot: DocumentSnapshot<Show>): void {
+      history.restore(snapshot.document, snapshot.unsaved);
+      path = snapshot.path;
+      emitShow();
+    },
     handle(command: ShowCommand): void {
       switch (command.type) {
         case 'getShow':

@@ -117,6 +117,8 @@ export function createMidiInput({ ports, storage, emit, onNote, onClock }: MidiI
       scan();
     },
     emitStatus: () => emitStatus({ always: true }),
+    // The selected port's name, if any.
+    selected: () => selected,
   };
 }
 

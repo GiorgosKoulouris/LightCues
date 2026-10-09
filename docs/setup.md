@@ -97,6 +97,12 @@ Main and the engine write one log file per day to `%APPDATA%\LightCues\logs\`, n
 
 `npm run dev` also prints every line to the terminal.
 
+### The engine restarted
+
+If the engine process exits, main restarts it at once and restores the open Show, Venue Patch and live look (ADR 0011). A toast says "Engine restarted. Output resumed.", "Engine restarted in Base Look." when the live look could not be restored, or "Engine restarted without the open Show and Venue Patch." when nothing could. The log shows the exit code, `Restarting the engine` and the restore result. After 3 restarts in a minute, main stops trying: use Save Show as… and Save Venue Patch as… in the error banner, then restart LightCues.
+
+To try it, kill the `LightCues Engine` process in Task Manager.
+
 ### `npm run dev` fails with `Error: Electron uninstall`
 
 The Electron binary was not downloaded. The `electron` package's install script downloads it and writes `node_modules\electron\path.txt`; electron-vite reports "Electron uninstall" when that file is missing.

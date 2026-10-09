@@ -3,11 +3,14 @@ import {
   DOCUMENTS,
   type EngineCommand,
   type EngineEvent,
+  type EngineSnapshot,
   type FixtureImportResult,
   type LibraryImportPreview,
   type LibraryImportResult,
+  type RestoreResult,
 } from '../shared/protocol';
-import { findTrigger } from '../shared/show';
+import { findTrigger, validateShow } from '../shared/show';
+import { validatePatch } from '../shared/venue-patch';
 import { profileName } from '../shared/profile-edit';
 import { withoutContents } from './log-safe';
 import {
@@ -18,7 +21,7 @@ import {
 } from './midi-input';
 import { createOutputs, type SerialPorts } from './outputs';
 import { createPathGrants, NOT_CHOSEN } from './path-grants';
-import { createPlayback } from './playback';
+import { createPlayback, type LiveLook } from './playback';
 import { createPreview } from './preview';
 import {
   createProfileLibrary,
@@ -34,6 +37,7 @@ import {
   type RecentKind,
 } from './recent-files';
 import { createShowSession, type ShowFiles } from './show-session';
+import { createSnapshotReporter } from './snapshot-reporter';
 import { createTempo } from './tempo';
 import { createVenueSession, type VenueFiles } from './venue-session';
 
@@ -61,6 +65,9 @@ export interface LibraryBackups {
 
 export interface EngineOptions {
   emit: (event: EngineEvent) => void;
+  // Gets the snapshot's parts as they change, once `snapshot` was called.
+  // Without it, nothing is reported.
+  report?: (part: Partial<EngineSnapshot>) => void;
   now?: () => number;
   storage?: LibraryStorage;
   // Without them, the library cannot be exported or imported.
@@ -82,10 +89,33 @@ export interface Engine {
   handle(command: EngineCommand): void;
   // Lets commands read and write `path`, which the user picked in a dialog.
   grantPath(path: string): void;
+  // The whole snapshot. Parts that change later go to `report`.
+  snapshot(): EngineSnapshot;
+  // Brings back the snapshot of an engine that stopped.
+  restore(snapshot: EngineSnapshot): RestoreResult;
 }
 
+// A live look with no Scenes active and every setting at its launch value.
+const EMPTY_LOOK: LiveLook = {
+  active: [],
+  mode: 'monitor',
+  grandMaster: 1,
+  blackout: false,
+  freeze: false,
+};
+
+// The snapshot part each event shows a change of.
+const SNAPSHOT_PARTS: Partial<Record<EngineEvent['type'], keyof EngineSnapshot>> = {
+  show: 'show',
+  venue: 'venue',
+  playback: 'playback',
+  tempo: 'playback',
+  midiInput: 'midiInput',
+};
+
 export function createEngine({
-  emit,
+  emit: send,
+  report,
   now = performance.now.bind(performance),
   storage,
   libraryFiles,
@@ -98,6 +128,14 @@ export function createEngine({
   recentFilesStorage,
 }: EngineOptions): Engine {
   const startedAt = now();
+  const reporter = report && createSnapshotReporter(snapshot, report);
+  // Every event goes to the UI; the ones that show a change also go to the
+  // snapshot.
+  function emit(event: EngineEvent): void {
+    send(event);
+    const part = SNAPSHOT_PARTS[event.type];
+    if (part) reporter?.changed(part);
+  }
   let library = openLibrary(storage);
   // A previewed library file, waiting for the user to confirm it.
   let pendingImport: { path: string; contents: LibraryContents } | undefined;
@@ -254,6 +292,65 @@ export function createEngine({
     }
   }
 
+  function snapshot(): EngineSnapshot {
+    const selected = midiInput?.selected();
+    return {
+      show: show.snapshot(),
+      venue: venue.snapshot(),
+      playback: { ...playback.snapshot(), bpm: tempo.bpm(), tempoSource: tempo.source() },
+      midiInput: selected === undefined ? {} : { selected },
+    };
+  }
+
+  // Brings back the snapshot of an engine that stopped (ADR 0011). The look
+  // is resolved once at the end, so a snapshot that breaks resolution throws
+  // here, not later in the frame loop. Failing that, the documents come back
+  // with the Base Look, Blackout and Grand Master as they were; failing that
+  // too, the engine starts empty.
+  function restore(from: EngineSnapshot): RestoreResult {
+    try {
+      restoreDocuments(from);
+      playback.restore(from.playback);
+      tempo.restore(from.playback.bpm, from.playback.tempoSource);
+      midiInput?.select(from.midiInput.selected);
+      resolveOnce();
+      return 'restored';
+    } catch (error) {
+      console.error('Could not restore the live look; going to the Base Look.', error);
+    }
+    try {
+      const { grandMaster, blackout } = from.playback;
+      restoreDocuments(from);
+      playback.restore({ ...EMPTY_LOOK, grandMaster, blackout });
+      playback.handle({ type: 'goBaseLook' });
+      resolveOnce();
+      return 'baseLook';
+    } catch (error) {
+      console.error('Could not restore the documents; starting empty.', error);
+    }
+    venue.handle({ type: 'newVenue' });
+    show.handle({ type: 'newShow' });
+    playback.restore(EMPTY_LOOK);
+    return 'empty';
+  }
+
+  // The Venue Patch first, so the Show's Scenes resolve against it. Their
+  // files are granted, as the last engine held them: main re-grants only
+  // the paths it granted, not the recent files the engine reopened itself. The errors name no
+  // contents, since they are logged.
+  function restoreDocuments({ show: shown, venue: patched }: EngineSnapshot): void {
+    if (validatePatch(patched.document).length > 0) throw new Error('Invalid Venue Patch');
+    if (validateShow(shown.document).length > 0) throw new Error('Invalid Show');
+    for (const { path } of [patched, shown]) if (path !== undefined) grants.grant(path);
+    venue.restore(patched);
+    show.restore(shown);
+  }
+
+  function resolveOnce(): void {
+    playback.frames();
+    playback.lights();
+  }
+
   // Reopens the last Venue Patch and Show. Failures wait for the UI to ask,
   // once, since no UI is connected yet.
   let reopenErrors = [
@@ -263,6 +360,8 @@ export function createEngine({
 
   return {
     grantPath: grants.grant,
+    snapshot: () => reporter?.full() ?? snapshot(),
+    restore,
     handle(command) {
       switch (command.type) {
         case 'ping':

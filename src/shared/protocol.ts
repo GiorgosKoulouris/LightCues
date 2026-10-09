@@ -289,6 +289,54 @@ export type EngineGrantPath = { type: 'grantPath'; path: string };
 // so a command could otherwise beat its grant.
 export type EnginePathGranted = { type: 'pathGranted'; path: string };
 
+// What a restarted engine needs to carry on where the last one stopped
+// (ADR 0011). Main keeps the latest one in memory; it never goes to disk.
+// Undo history is not in it.
+export interface EngineSnapshot {
+  show: DocumentSnapshot<Show>;
+  venue: DocumentSnapshot<VenuePatch>;
+  playback: PlaybackSnapshot;
+  // The selected MIDI Input's name, absent when none is selected.
+  midiInput: { selected?: string };
+}
+
+// A Show or Venue Patch, the file it was opened from or last saved to, and
+// whether it has changes not written there.
+export interface DocumentSnapshot<T> {
+  document: T;
+  path?: string;
+  unsaved: boolean;
+}
+
+// The live look. `active` lists the active Scene per Layer, the one activated
+// first first, so the Layers stack as they did. A Tempo from MIDI Clock is
+// sent as `clock`; a new engine holds it until the clock ticks again.
+export interface PlaybackSnapshot {
+  active: { layer: string; scene: string }[];
+  mode: PlaybackMode;
+  grandMaster: number;
+  blackout: boolean;
+  freeze: boolean;
+  bpm: number;
+  tempoSource: TempoSource;
+}
+
+// Sent by the engine to main on the parent port: the whole snapshot once on
+// start, then each part when it changes. Playback parts come at most every
+// 100 ms, the latest last.
+export type EngineSnapshotMessage = { type: 'snapshot' } & Partial<EngineSnapshot>;
+
+// Sent by main to a restarted engine, after re-granting the paths the last
+// one had and before connecting the window.
+export type EngineRestore = { type: 'restore'; snapshot: EngineSnapshot };
+
+// How a restore went: all of it, the documents with the Base Look in place of
+// the live look, or nothing.
+export type RestoreResult = 'restored' | 'baseLook' | 'empty';
+
+// The engine's reply to a restore, on the parent port.
+export type EngineRestored = { type: 'restored'; result: RestoreResult };
+
 // IPC channel on which the main process hands the renderer its engine port.
 export const ENGINE_PORT_CHANNEL = 'engine:port';
 
@@ -360,6 +408,38 @@ export interface UpdatesBridge {
   openReleasePage(url: string): void;
 }
 
+// IPC channels for engine recovery (ADR 0011). Main tells the renderer how a
+// restarted engine's restore went, and when the engine is down for good.
+// While it is down, the renderer can ask whether it is, and have main save a
+// document from the snapshot through a Save dialog.
+export const ENGINE_RESTARTED_CHANNEL = 'engine:restarted';
+export const ENGINE_DOWN_CHANNEL = 'engine:down';
+export const ENGINE_IS_DOWN_CHANNEL = 'engine:isDown';
+export const SAVE_FROM_SNAPSHOT_CHANNEL = 'engine:saveFromSnapshot';
+
+// What the preload script exposes to the renderer as `window.engineRecovery`.
+// Each `on…` returns an unsubscribe function.
+export interface EngineRecoveryBridge {
+  onRestarted(listener: (result: RestoreResult) => void): () => void;
+  onDown(listener: () => void): () => void;
+  isDown(): Promise<boolean>;
+  // Resolves to the path written, or undefined when the user cancels.
+  // Rejects when the file could not be written.
+  saveFromSnapshot(document: EngineDocument): Promise<string | undefined>;
+}
+
+// Engine commands that only ask for state. The preload sends the last of
+// each again to a restarted engine, so every view gets its state back.
+export const STATE_REQUESTS: readonly EngineCommand['type'][] = [
+  'listProfiles',
+  'getVenue',
+  'getShow',
+  'getPlayback',
+  'listOutputs',
+  'listMidiInputs',
+  'getTempo',
+];
+
 // IPC channels guarding the window against closing with unsaved changes.
 // The renderer reports each document's unsaved state; on close, main may ask
 // it to save them one by one, waiting for each reply on the saved channel.
@@ -370,6 +450,13 @@ export const SAVED_BEFORE_CLOSE_CHANNEL = 'window:savedBeforeClose';
 // The documents that can have unsaved changes, in the order they are saved.
 export const DOCUMENTS = { show: 'Show', venue: 'Venue Patch', profile: 'Profile' } as const;
 export type DocumentKind = keyof typeof DOCUMENTS;
+
+// The documents the engine holds, and so its snapshot.
+export type EngineDocument = Exclude<DocumentKind, 'profile'>;
+
+export function isEngineDocument(value: unknown): value is EngineDocument {
+  return isDocumentKind(value) && value !== 'profile';
+}
 
 // Whether a value from the renderer names a document. Inherited keys such as
 // `toString` do not count.

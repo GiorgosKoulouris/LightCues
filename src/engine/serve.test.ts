@@ -1,11 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { EngineConnect, EngineGrantPath } from '../shared/protocol';
+import type {
+  EngineConnect,
+  EngineGrantPath,
+  EngineRestore,
+  EngineSnapshot,
+} from '../shared/protocol';
 import type { ParentPortLike, PortLike } from './serve';
 import { serve } from './serve';
 
 type Listener = (e: { data: unknown; ports?: PortLike[] }) => void;
 
 const connect: EngineConnect = { type: 'connect' };
+
+// What the engine sent the parent, apart from its snapshots.
+const acks = (sent: unknown[]) => sent.filter((m) => (m as { type?: unknown }).type !== 'snapshot');
 
 function fakePort() {
   const listeners: Listener[] = [];
@@ -91,7 +99,7 @@ describe('serve', () => {
     parent.deliver(grant);
     ui.deliver({ type: 'saveVenue', requestId: 2, path: 'C:/gigs/club.lcvenue' });
 
-    expect(parent.sent).toEqual([{ type: 'pathGranted', path: 'C:/gigs/club.lcvenue' }]);
+    expect(acks(parent.sent)).toEqual([{ type: 'pathGranted', path: 'C:/gigs/club.lcvenue' }]);
     expect(ui.sent).toContainEqual({
       type: 'venueDone',
       requestId: 1,
@@ -107,7 +115,7 @@ describe('serve', () => {
 
     parent.deliver({ type: 'grantPath', path: 7 });
 
-    expect(parent.sent).toEqual([]);
+    expect(acks(parent.sent)).toEqual([]);
   });
 
   it('drops UI messages that are not a command and answers the next one', () => {
@@ -144,5 +152,62 @@ describe('serve', () => {
 
     expect(error).toHaveBeenCalledWith('Engine command ping failed.', expect.any(Error));
     expect(ui.sent).toEqual([{ type: 'pong', id: 5, uptimeMs: 0 }]);
+  });
+
+  it('sends the whole snapshot on start, then each part that changes', () => {
+    const parent = fakePort();
+    const ui = fakePort();
+    serve(parent.port as ParentPortLike, { now: () => 0 });
+    parent.deliver(connect, [ui.port]);
+
+    ui.deliver({
+      type: 'editShow',
+      requestId: 1,
+      edit: { type: 'putLayer', layer: { id: 'layer-2', name: 'Accents' } },
+    });
+
+    expect(parent.sent[0]).toMatchObject({
+      type: 'snapshot',
+      show: { unsaved: false },
+      venue: { unsaved: false },
+      playback: { grandMaster: 1 },
+      midiInput: {},
+    });
+    expect(parent.sent.slice(1)).toEqual([
+      { type: 'snapshot', show: expect.objectContaining({ unsaved: true }) },
+    ]);
+  });
+
+  it('restores a snapshot from the parent and replies with the result', () => {
+    const before = fakePort();
+    serve(before.port as ParentPortLike, { now: () => 0 });
+    const { show, venue, playback, midiInput } = before.sent[0] as EngineSnapshot;
+    const restore: EngineRestore = {
+      type: 'restore',
+      snapshot: { show, venue, midiInput, playback: { ...playback, grandMaster: 0.3 } },
+    };
+    const after = fakePort();
+    serve(after.port as ParentPortLike, { now: () => 0 });
+
+    after.deliver(restore);
+
+    // The reply, then the whole restored snapshot.
+    expect(after.sent.slice(-2)).toEqual([
+      { type: 'restored', result: 'restored' },
+      expect.objectContaining({
+        type: 'snapshot',
+        show,
+        playback: expect.objectContaining({ grandMaster: 0.3 }),
+      }),
+    ]);
+  });
+
+  it('ignores a restore without a snapshot', () => {
+    const parent = fakePort();
+    serve(parent.port as ParentPortLike, { now: () => 0 });
+
+    parent.deliver({ type: 'restore' });
+
+    expect(acks(parent.sent)).toEqual([]);
   });
 });

@@ -5,6 +5,7 @@ import { useTempo } from './panel/useTempo';
 import { PerformView } from './perform/PerformView';
 import { ProfileLibraryView } from './profiles/ProfileLibraryView';
 import styles from './App.module.css';
+import { EngineRecovery } from './shell/EngineRecovery';
 import { Sidebar } from './shell/Sidebar';
 import { TopBar } from './shell/TopBar';
 import { useReopenErrors } from './shell/useReopenErrors';
@@ -67,6 +68,7 @@ export function App() {
           <FallbackPanel show={show?.show} playback={playback} tempo={tempo} />
         )}
       </div>
+      <EngineRecovery />
     </div>
   );
 }

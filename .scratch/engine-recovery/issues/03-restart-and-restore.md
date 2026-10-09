@@ -1,6 +1,6 @@
 # Restart the engine and restore its state
 
-Status: ready-for-agent
+Status: ready-for-human
 
 Blocked by: 02
 
@@ -32,3 +32,25 @@ After an unexpected engine exit, output stays dark and the UI is cut off until t
 - Manual check on Windows with a DMX interface: kill the engine process in Task Manager during a Scene. Output comes back with the same look within about a second. Note the gap measured.
 - The log shows the exit, the restart and the restore result.
 - `npm run check` passes.
+
+Choices beyond the issue:
+
+- The restart logic is in `src/main/engine-supervisor.ts`, Electron-free and tested with a fake engine. `index.ts` only wires it to Electron. Grants are recorded once the engine acks them.
+- Main ignores a restarted engine's snapshots until it replies `restored`. Its start snapshot holds the reopened files on disk, so taking it would lose unsaved edits if the engine crashed during the restore. After replying, the engine sends its whole snapshot again.
+- If there is no full snapshot yet, the engine restarts without a restore and the result is `empty`.
+- Restore validates both documents, then resolves the look once (`frames` and `lights`), so a snapshot that breaks resolution throws during the restore and not later in the frame loop. `serve.ts` catches a throw from the last fallback and replies `empty`.
+- The engine grants the snapshot's document paths to itself. Main re-grants only the paths it granted, not the recent files the engine reopened on launch.
+- Playback comes back at once, without fades, in the same Layer order. A held Flash comes back as its Scene (a Go). The Focus Check is off. Freeze is on but holds the new engine's beat. A MIDI Clock Tempo comes back as `held`.
+- The renderer is reconnected, not reloaded, so state the renderer holds, such as a Profile being edited, survives. The preload re-sends the last of each state request (`STATE_REQUESTS`) and the last preview start or stop to the new port (`src/preload/state-requests.ts`).
+- Toasts: the two from the spec, plus "Engine restarted without the open Show and Venue Patch." for `empty`.
+- Engine down: a persistent banner with "Save Show as…" and "Save Venue Patch as…". Main shows the Save dialog and writes `snapshotFile(...)`. While the engine is down, the close guard only warns ("Close Anyway" / "Cancel"), because the renderer's save flow cannot run.
+- ADR 0011 written. ADR 0010 now points to it. `docs/setup.md` Troubleshooting covers restarts.
+
+Left for a human:
+
+1. Manual check on Windows with a DMX interface. Run `npm run package`, install and launch. Start a Scene, then end `LightCues Engine` in Task Manager. Output comes back with the same look, and the toast shows. Note the gap measured. Check the log for `Engine exited with code N`, `Restarting the engine` and `Engine restore result: restored`. End it 3 more times within a minute: the banner shows, and Save Show as… writes a file that opens.
+2. Decide whether these differences from "restores playback state exactly" are acceptable: no fade in progress, Flash comes back as Go, Focus Check off, Freeze at the new beat.
+3. Decide on the `empty` fallback. The empty engine then reports empty documents, so main's snapshot, and a later Save as from it, hold empty documents.
+4. A crash in the frame loop after a successful restore repeats until the engine is down. Restore only falls back on a synchronous throw. Main could send the Base Look restore on the next attempt instead.
+
+Then mark this issue resolved.

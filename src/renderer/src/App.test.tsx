@@ -1,10 +1,12 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   EngineCommand,
   EngineEvent,
+  EngineRecoveryBridge,
   MidiInputStatus,
+  RestoreResult,
   UpdateAvailable,
   UpdatesBridge,
 } from '../../shared/protocol';
@@ -85,6 +87,31 @@ const RELEASE: UpdateAvailable = {
 };
 let updates: { [K in keyof UpdatesBridge]: ReturnType<typeof vi.fn<UpdatesBridge[K]>> };
 
+// A fake `window.engineRecovery`: a test tells it the engine restarted or is
+// down, as main does.
+function fakeRecovery() {
+  const restarted = new Set<(result: RestoreResult) => void>();
+  const down = new Set<() => void>();
+  const bridge = {
+    onRestarted: (listener: (result: RestoreResult) => void) => {
+      restarted.add(listener);
+      return () => void restarted.delete(listener);
+    },
+    onDown: (listener: () => void) => {
+      down.add(listener);
+      return () => void down.delete(listener);
+    },
+    isDown: vi.fn(async () => false),
+    saveFromSnapshot: vi.fn<EngineRecoveryBridge['saveFromSnapshot']>(async () => undefined),
+  };
+  return {
+    bridge,
+    restart: (result: RestoreResult) => act(() => restarted.forEach((l) => l(result))),
+    down: () => act(() => down.forEach((l) => l())),
+  };
+}
+let recovery: ReturnType<typeof fakeRecovery>;
+
 async function renderApp() {
   render(
     <UiProvider>
@@ -115,6 +142,8 @@ beforeEach(() => {
     openReleasePage: vi.fn(),
   };
   vi.stubGlobal('updates', updates);
+  recovery = fakeRecovery();
+  vi.stubGlobal('engineRecovery', recovery.bridge);
 });
 afterEach(() => {
   // Unmounts while the fake engine is still there.
@@ -339,5 +368,48 @@ describe('App update notice', () => {
     await renderApp();
     await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
     expect(await screen.findByText('Could not check for updates')).toBeInTheDocument();
+  });
+});
+
+describe('App engine recovery', () => {
+  it.each<[RestoreResult, string]>([
+    ['restored', 'Engine restarted. Output resumed.'],
+    ['baseLook', 'Engine restarted in Base Look.'],
+    ['empty', 'Engine restarted without the open Show and Venue Patch.'],
+  ])('says how a restart went: %s', async (result, message) => {
+    await renderApp();
+    recovery.restart(result);
+    expect(await screen.findByText(message)).toBeInTheDocument();
+  });
+
+  it('shows the engine down for good, and saves the documents from the snapshot', async () => {
+    recovery.bridge.saveFromSnapshot.mockResolvedValue('C:/gigs/rescued.lcshow');
+    await renderApp();
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    recovery.down();
+    const banner = await screen.findByRole('alert');
+    expect(banner).toHaveTextContent(
+      'The engine keeps crashing. Save your work and restart LightCues.',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Save Show as…' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save Venue Patch as…' }));
+
+    expect(recovery.bridge.saveFromSnapshot.mock.calls).toEqual([['show'], ['venue']]);
+    expect(await screen.findAllByText('Saved C:/gigs/rescued.lcshow')).not.toHaveLength(0);
+  });
+
+  it('shows the engine down after a reload', async () => {
+    recovery.bridge.isDown.mockResolvedValue(true);
+    await renderApp();
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  it('says when a save from the snapshot fails', async () => {
+    recovery.bridge.isDown.mockResolvedValue(true);
+    recovery.bridge.saveFromSnapshot.mockRejectedValue(new Error('EACCES'));
+    await renderApp();
+    await userEvent.click(await screen.findByRole('button', { name: 'Save Show as…' }));
+    expect(await screen.findByText('Could not save the Show: EACCES')).toBeInTheDocument();
   });
 });

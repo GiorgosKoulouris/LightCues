@@ -1,5 +1,5 @@
 import type { FixtureProfile } from '../shared/fixture-profile';
-import type { EngineCommand, EngineEvent, VenueEdit } from '../shared/protocol';
+import type { DocumentSnapshot, EngineCommand, EngineEvent, VenueEdit } from '../shared/protocol';
 import {
   addUniverse,
   emptyPatch,
@@ -158,6 +158,18 @@ export function createVenueSession({
     patch: () => history.current(),
     // Opens a file. An empty list of errors means it opened.
     open,
+    snapshot: (): DocumentSnapshot<VenuePatch> => ({
+      document: history.current(),
+      ...(path === undefined ? {} : { path }),
+      unsaved: history.state().unsaved,
+    }),
+    // Brings back the Venue Patch of an engine that stopped, without its history.
+    restore(snapshot: DocumentSnapshot<VenuePatch>): void {
+      history.restore(snapshot.document, snapshot.unsaved);
+      path = snapshot.path;
+      emitVenue();
+      changed?.();
+    },
     handle(command: VenueCommand): void {
       switch (command.type) {
         case 'getVenue':
