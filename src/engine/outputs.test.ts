@@ -15,6 +15,8 @@ import type { SerialPortInfo, SerialPorts } from './outputs';
 
 const FTDI = { vendorId: '0403', productId: '6001', manufacturer: 'FTDI' };
 const blackout = encodeSendDmx(new Uint8Array(512));
+// The Virtual Output is always listed, last.
+const unusedVirtual = { id: 'virtual', name: 'Virtual Output', state: 'unused' };
 
 interface FakePort {
   writes: Uint8Array[];
@@ -102,6 +104,7 @@ function outputsEngine() {
       return event?.type === 'outputs' ? event.outputs : undefined;
     },
     listOutputs: () => engine.handle({ type: 'listOutputs' }),
+    lastFrame: (universe: number) => engine.lastFrame(universe),
   };
 }
 
@@ -120,6 +123,7 @@ describe('engine Outputs', () => {
     const expected = [
       { id: 'COM4', name: 'COM4', state: 'unused' },
       { id: 'EN123456', name: 'EN123456 on COM3', state: 'unused' },
+      unusedVirtual,
     ];
     expect(outputs()).toEqual(expected);
     listOutputs();
@@ -143,6 +147,7 @@ describe('engine Outputs', () => {
     expect(outputs()).toEqual([
       { id: 'EN1', name: 'EN1 on COM3', state: 'sending' },
       { id: 'EN2', name: 'EN2 on COM4', state: 'unused' },
+      unusedVirtual,
     ]);
   });
 
@@ -166,7 +171,7 @@ describe('engine Outputs', () => {
 
     await vi.advanceTimersByTimeAsync(1000);
 
-    expect(outputs()).toEqual([{ id: 'EN9', name: 'EN9', state: 'missing' }]);
+    expect(outputs()).toEqual([{ id: 'EN9', name: 'EN9', state: 'missing' }, unusedVirtual]);
   });
 
   it('recovers when the device is unplugged and plugged back in', async () => {
@@ -180,14 +185,17 @@ describe('engine Outputs', () => {
     await vi.advanceTimersByTimeAsync(2000);
 
     expect(serial.port('COM3')?.writes.length).toBe(before);
-    expect(outputs()).toEqual([{ id: 'EN1', name: 'EN1', state: 'missing' }]);
+    expect(outputs()).toEqual([{ id: 'EN1', name: 'EN1', state: 'missing' }, unusedVirtual]);
 
     // Windows may give it a new COM port.
     serial.plug('COM7', 'EN1');
     await vi.advanceTimersByTimeAsync(2000);
 
     expect(serial.port('COM7')?.writes.length).toBeGreaterThan(30);
-    expect(outputs()).toEqual([{ id: 'EN1', name: 'EN1 on COM7', state: 'sending' }]);
+    expect(outputs()).toEqual([
+      { id: 'EN1', name: 'EN1 on COM7', state: 'sending' },
+      unusedVirtual,
+    ]);
   });
 
   it('retries an Output that failed to open on the next scan', async () => {
@@ -199,12 +207,16 @@ describe('engine Outputs', () => {
 
     expect(outputs()).toEqual([
       { id: 'EN1', name: 'EN1 on COM3', state: 'failed', error: 'Access denied' },
+      unusedVirtual,
     ]);
 
     serial.failOpening('COM3', false);
     await vi.advanceTimersByTimeAsync(1000);
 
-    expect(outputs()).toEqual([{ id: 'EN1', name: 'EN1 on COM3', state: 'sending' }]);
+    expect(outputs()).toEqual([
+      { id: 'EN1', name: 'EN1 on COM3', state: 'sending' },
+      unusedVirtual,
+    ]);
   });
 
   it('reopens an Output after a write fails', async () => {
@@ -220,6 +232,7 @@ describe('engine Outputs', () => {
     expect(failed?.closed).toBe(true);
     expect(outputs()).toEqual([
       { id: 'EN1', name: 'EN1 on COM3', state: 'failed', error: 'Write timeout' },
+      unusedVirtual,
     ]);
 
     serial.failWrites(undefined);
@@ -244,7 +257,7 @@ describe('engine Outputs', () => {
 
     expect(serial.port('COM3')?.closed).toBe(true);
     expect(serial.port('COM4')?.closed).toBe(true);
-    expect(outputs()?.map((o) => o.state)).toEqual(['unused', 'unused']);
+    expect(outputs()?.map((o) => o.state)).toEqual(['unused', 'unused', 'unused']);
   });
 
   it('skips frames while the previous write has not completed', async () => {
@@ -273,6 +286,7 @@ describe('engine Outputs', () => {
     expect(stuck?.closed).toBe(true);
     expect(outputs()).toEqual([
       { id: 'EN1', name: 'EN1 on COM3', state: 'failed', error: 'Write did not complete' },
+      unusedVirtual,
     ]);
 
     serial.holdWrites(false);
@@ -280,6 +294,59 @@ describe('engine Outputs', () => {
 
     expect(serial.port('COM3')).not.toBe(stuck);
     expect(outputs()?.[0]?.state).toBe('sending');
+  });
+});
+
+describe('engine Virtual Output', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('is always listed, with no ports', async () => {
+    const { serial, outputs } = outputsEngine();
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(outputs()).toEqual([unusedVirtual]);
+    expect(serial.opened).toEqual([]);
+  });
+
+  it('sends every Universe mapped to it, opening no port', async () => {
+    const { serial, mapUniverse, outputs, lastFrame } = outputsEngine();
+    serial.plug('COM3', 'EN1');
+    mapUniverse({ number: 1, output: 'virtual' });
+    mapUniverse({ number: 2, output: 'virtual' });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(outputs()).toContainEqual({ id: 'virtual', name: 'Virtual Output', state: 'sending' });
+    expect(serial.opened).toEqual([]);
+    expect(lastFrame(1)).toEqual(new Uint8Array(512));
+    expect(lastFrame(2)).toEqual(new Uint8Array(512));
+  });
+
+  it('keeps the latest frame of each Universe', async () => {
+    const { send, lastFrame } = await playbackEngine('virtual');
+    expect(lastFrame(1)?.[0]).toBe(0);
+
+    send({ type: 'goScene', sceneId: 'wash' });
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(lastFrame(1)?.[0]).toBe(255);
+  });
+
+  it('is unused again once no Universe maps to it', async () => {
+    const { mapUniverse, removeUniverse, outputs, lastFrame } = outputsEngine();
+    mapUniverse({ number: 1, output: 'virtual' });
+    mapUniverse({ number: 2, output: 'virtual' });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    mapUniverse({ number: 1 });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(outputs()).toEqual([{ id: 'virtual', name: 'Virtual Output', state: 'sending' }]);
+    expect(lastFrame(1)).toBeUndefined();
+
+    removeUniverse(2);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(outputs()).toEqual([unusedVirtual]);
+    expect(lastFrame(2)).toBeUndefined();
   });
 });
 
@@ -313,8 +380,8 @@ const wash: Scene = {
 };
 
 // An engine sending Universe 1, which holds one dimmer at address 1, to an
-// Output on COM3. The Show holds `wash`.
-async function playbackEngine() {
+// Output on COM3, or to `output`. The Show holds `wash`.
+async function playbackEngine(output = 'EN1') {
   const serial = fakeSerial();
   const events: EngineEvent[] = [];
   const engine = createEngine({
@@ -329,7 +396,7 @@ async function playbackEngine() {
     ...{ universe: 1, address: 1, x: 0, y: 1, height: 0 },
   };
   for (const edit of [
-    { type: 'putUniverse', universe: { number: 1, output: 'EN1' } },
+    { type: 'putUniverse', universe: { number: 1, output } },
     { type: 'putFixture', fixture },
   ] as const) {
     engine.handle({ type: 'editVenue', requestId: requestId++, edit });
@@ -345,6 +412,7 @@ async function playbackEngine() {
     editShow,
     send: (command: EngineCommand) => engine.handle(command),
     writes: () => serial.port('COM3')?.writes ?? [],
+    lastFrame: (universe: number) => engine.lastFrame(universe),
     // The dimmer's level in the latest frame sent.
     level: () => serial.port('COM3')?.writes.at(-1)?.[5],
     // The dimmer's light in the latest preview the engine sent.

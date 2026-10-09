@@ -653,6 +653,20 @@ describe('Rig setup', () => {
     );
     expect(edits()).toEqual([{ type: 'putUniverse', universe: { number: 1, output: 'usb-1' } }]);
   });
+
+  it('maps a Universe to the Virtual Output, saying it needs no hardware', async () => {
+    await openRig();
+    engine.emit({
+      type: 'outputs',
+      outputs: [{ id: 'virtual', name: 'Virtual Output', state: 'unused' }],
+    });
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: 'Output of Universe 1' }),
+      'Virtual Output',
+    );
+    expect(edits()).toEqual([{ type: 'putUniverse', universe: { number: 1, output: 'virtual' } }]);
+    expect(await screen.findByText('No hardware. See the channel monitor.')).toBeInTheDocument();
+  });
 });
 
 describe('Fixture labels', () => {

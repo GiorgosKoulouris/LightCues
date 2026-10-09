@@ -26,7 +26,8 @@ _Avoid_: Fixture library, catalogue
 One independent set of 512 DMX channels.
 
 **Output**:
-A physical or network DMX interface port to which a Universe is mapped.
+A physical, network or virtual DMX interface port to which a Universe is mapped.
+Virtual Output: an Output with no hardware, for trying a Show and for tests.
 _Avoid_: Interface, node, dongle
 
 **Venue Patch**:

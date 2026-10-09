@@ -7,6 +7,7 @@ import {
   type StageBounds,
   type Universe,
   type VenuePatch,
+  VIRTUAL_OUTPUT,
 } from '../../../shared/venue-patch';
 import { Badge, type BadgeTone } from '../ui/Badge';
 import { Button, IconButton } from '../ui/Button';
@@ -85,6 +86,9 @@ export function RigSetup({
                 </td>
                 <td>
                   <OutputState output={outputs.find((o) => o.id === universe.output)} />
+                  {universe.output === VIRTUAL_OUTPUT && (
+                    <span className={styles.hint}>No hardware. See the channel monitor.</span>
+                  )}
                 </td>
                 <td className={styles.mono}>{fixturesInUniverse(patch, universe.number).length}</td>
                 <td className={styles.actions}>

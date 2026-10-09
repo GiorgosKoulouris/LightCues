@@ -1,5 +1,5 @@
 import type { EngineEvent, OutputStatus } from '../shared/protocol';
-import { DMX_CHANNELS, type Universe } from '../shared/venue-patch';
+import { DMX_CHANNELS, VIRTUAL_OUTPUT, type Universe } from '../shared/venue-patch';
 import { encodeSendDmx } from './enttec';
 
 // ~40 Hz, under the 44 Hz a full 512-channel DMX universe allows.
@@ -63,27 +63,46 @@ type Link =
 
 // Finds Outputs, keeps a port open to each one a Universe is mapped to, and
 // sends every mapped Universe's frame to its Output at ~40 Hz. An Output that
-// is unplugged, or fails, is reopened when a scan finds it again.
+// is unplugged, or fails, is reopened when a scan finds it again. The Virtual
+// Output has no port: it keeps the last frame of each Universe mapped to it.
 export function createOutputs({ ports, emit, universes, frames }: OutputsOptions) {
   let discovered = new Map<string, DiscoveredOutput>();
   const links = new Map<string, Link>();
+  const virtualFrames = new Map<number, Uint8Array>();
   let scanning = false;
   let lastEmitted = '';
 
-  function mapped(): Set<string> {
-    return new Set(universes().flatMap((u) => (u.output === undefined ? [] : [u.output])));
+  // The real Outputs a Universe is mapped to.
+  function mappedPorts(): Set<string> {
+    return new Set(
+      universes().flatMap((u) =>
+        u.output === undefined || u.output === VIRTUAL_OUTPUT ? [] : [u.output],
+      ),
+    );
+  }
+
+  function virtualUniverses(): Set<number> {
+    return new Set(universes().flatMap((u) => (u.output === VIRTUAL_OUTPUT ? [u.number] : [])));
   }
 
   function statuses(): OutputStatus[] {
-    const ids = new Set([...discovered.keys(), ...mapped()]);
-    return [...ids].sort().map((id): OutputStatus => {
-      const name = discovered.get(id)?.name ?? id;
-      const link = links.get(id);
-      if (!discovered.has(id)) return { id, name, state: 'missing' };
-      if (!link) return { id, name, state: 'unused' };
-      if (link.state === 'failed') return { id, name, state: 'failed', error: link.error };
-      return { id, name, state: link.state };
-    });
+    const ids = new Set([...discovered.keys(), ...mappedPorts()]);
+    const virtual: OutputStatus = {
+      id: VIRTUAL_OUTPUT,
+      name: 'Virtual Output',
+      state: virtualUniverses().size > 0 ? 'sending' : 'unused',
+    };
+    return [
+      ...[...ids].sort().map((id): OutputStatus => {
+        const name = discovered.get(id)?.name ?? id;
+        const link = links.get(id);
+        if (!discovered.has(id)) return { id, name, state: 'missing' };
+        if (!link) return { id, name, state: 'unused' };
+        if (link.state === 'failed') return { id, name, state: 'failed', error: link.error };
+        return { id, name, state: link.state };
+      }),
+      virtual,
+    ];
   }
 
   function emitChanges(): void {
@@ -108,9 +127,14 @@ export function createOutputs({ ports, emit, universes, frames }: OutputsOptions
   }
 
   // Closes Outputs that are gone or no longer mapped, and opens mapped ones.
-  // Failed Outputs are retried only when `retry` is set.
+  // Failed Outputs are retried only when `retry` is set. Drops the Virtual
+  // Output's frames of Universes no longer mapped to it.
   function reconcile({ retry }: { retry: boolean }): void {
-    const wanted = mapped();
+    const virtual = virtualUniverses();
+    for (const number of [...virtualFrames.keys()]) {
+      if (!virtual.has(number)) virtualFrames.delete(number);
+    }
+    const wanted = mappedPorts();
     for (const id of [...links.keys()]) {
       if (!discovered.has(id) || !wanted.has(id)) disconnect(id);
     }
@@ -164,6 +188,10 @@ export function createOutputs({ ports, emit, universes, frames }: OutputsOptions
     const tick = frames();
     for (const { number, output } of universes()) {
       if (output === undefined) continue;
+      if (output === VIRTUAL_OUTPUT) {
+        virtualFrames.set(number, (tick.get(number) ?? BLACKOUT).slice());
+        continue;
+      }
       const link = links.get(output);
       if (link?.state !== 'sending') continue;
       if (link.writing) {
@@ -191,6 +219,9 @@ export function createOutputs({ ports, emit, universes, frames }: OutputsOptions
       lastEmitted = JSON.stringify(outputs);
       emit({ type: 'outputs', outputs });
     },
+    // The last frame the Virtual Output got for the Universe, if it is
+    // mapped there.
+    lastFrame: (universe: number): Uint8Array | undefined => virtualFrames.get(universe),
   };
 }
 

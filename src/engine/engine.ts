@@ -93,6 +93,9 @@ export interface Engine {
   snapshot(): EngineSnapshot;
   // Brings back the snapshot of an engine that stopped.
   restore(snapshot: EngineSnapshot): RestoreResult;
+  // The last frame the Virtual Output got for the Universe, if it is mapped
+  // there.
+  lastFrame(universe: number): Uint8Array | undefined;
 }
 
 // A live look with no Scenes active and every setting at its launch value.
@@ -362,6 +365,7 @@ export function createEngine({
     grantPath: grants.grant,
     snapshot: () => reporter?.full() ?? snapshot(),
     restore,
+    lastFrame: (universe) => outputs?.lastFrame(universe),
     handle(command) {
       switch (command.type) {
         case 'ping':
