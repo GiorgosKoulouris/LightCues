@@ -73,6 +73,17 @@ GitHub Actions on `windows-latest` ([.github/workflows/](../.github/workflows/))
 
 `stage` is the squashed batch on its way to `main`. See [agents/staging.md](agents/staging.md). Releases: [agents/releasing.md](agents/releasing.md).
 
+Actions are pinned by commit SHA, with the version in a trailing comment.
+
+### Dependabot
+
+[.github/dependabot.yml](../.github/dependabot.yml) opens monthly PRs against `dev`. npm gets two grouped PRs: dev dependencies and runtime. GitHub Actions get one PR each.
+
+- No CI runs on `dev`. Run `npm run check` on the PR branch before merging, then pull `dev`.
+- Merge or close open Dependabot PRs before a staging round ([agents/staging.md](agents/staging.md) step 1).
+- Security updates are a repo setting, ungrouped. GitHub always opens them against `main`, whatever `target-branch` says. Don't merge them there: it breaks the fast-forward from `stage`. Apply the bump on `dev` and close the PR. The alert closes when the batch reaches `main`.
+- `global-agent` is pinned by an override in `package.json` (under `@electron/get`). Dependabot doesn't need an ignore rule for it. Check the pin by hand when `@electron/get` moves.
+
 ## Security scan
 
 An ad hoc scan, not part of CI. It builds the app from one commit in a temporary worktree and checks what ships in the installer:

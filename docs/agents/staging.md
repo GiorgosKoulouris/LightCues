@@ -18,7 +18,7 @@ These apply to every run, whatever the request:
 
 ## Flow
 
-1. **Check `dev` is clean.** `git status` on `dev` shows nothing. Commit or ask first.
+1. **Check `dev` is clean and has no open Dependabot PRs.** `git status` on `dev` shows nothing. Commit or ask first. Then list Dependabot PRs against `dev` (`gh pr list --base dev --author app/dependabot`). Ask the user to merge or close them first, and pull `dev` after a merge. A PR left open past a rewrite of `dev` (step 4, 6 or 10) needs a rebase. See [development.md § Dependabot](../development.md#dependabot).
 2. **Find the base.** If `stage` exists, is ahead of `main` and is an ancestor of `dev` (`git merge-base --is-ancestor stage dev`), it holds an unmerged batch: the new groups go on top of it, and its commits stay as they are. Otherwise the base is `main`, and stale `stage` is replaced.
 3. **Pick the groups.** List the commits with `git log --oneline --reverse <base>..dev`. Split them into consecutive ranges by theme (for example: by spec, or by a block of issues). Note the last commit of each range. Mark the held-back commits.
 4. **Move held-back commits to the top.** Skip if they are already the newest commits on `dev`. Otherwise, check that nothing staged touches their files (`git log <held>..dev -- <their paths>` is empty). Then dry-run the new order in a worktree, and only then rebuild `dev` from the last commit before the first moved one:

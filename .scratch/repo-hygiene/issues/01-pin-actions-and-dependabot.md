@@ -1,6 +1,6 @@
 # Pin actions by SHA and add Dependabot
 
-Status: ready-for-agent
+Status: ready-for-human
 
 See spec, "Decisions".
 
@@ -19,3 +19,7 @@ See spec, "Decisions".
 - No `uses:` line without a 40-character SHA.
 - `dependabot.yml` validates (GitHub shows no config error after push).
 - `npm run check` passes.
+
+## Comments
+
+2026-10-10: agent part done. Actions pinned to the latest releases: checkout v7.0.1, setup-node v7.1.0, upload-artifact v7.0.2 (from v5). The v6/v7 breaking changes (`pull_request_target` checkout block, setup-node auto-cache, Node 24 runtime, ESM) don't touch these workflows. `.github/dependabot.yml` as specified. README has no CI section, so the Dependabot notes went to `docs/development.md` § Dependabot. `staging.md` step 1 checks for open Dependabot PRs. Security-update PRs always target `main`, not `dev`; recorded in the spec's Decisions. No changelog line: not user-facing. `npm run check` passes. Left for the maintainer: push, check GitHub shows no Dependabot config error (Insights > Dependency graph > Dependabot), and turn on Dependabot alerts and security updates in Settings > Code security. The first `stage`/`main` CI run checks the v7 actions on Windows.

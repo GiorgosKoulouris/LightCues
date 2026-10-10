@@ -17,6 +17,7 @@ Out of scope: CodeQL (semgrep with the custom Electron rules covers it), scannin
 
 - Actions: `actions/checkout`, `actions/setup-node`, `actions/upload-artifact`, pinned to full commit SHAs with the version in a trailing comment.
 - Dependabot: `npm` and `github-actions`, monthly. npm updates grouped into one PR for dev dependencies and one for runtime dependencies. Security updates stay on, ungrouped. PRs target `dev`. There's no CI on `dev`, so merging is manual after `npm run check`. `dev` is force-pushed after staging (`docs/agents/staging.md` step 10), so pull `dev` after merging a Dependabot PR, and merge open Dependabot PRs before a staging round. Add that note to `staging.md`. Not `main`: a merge there would break the fast-forward from `stage`.
+- Security updates (2026-10-10, found in issue 01): GitHub opens them against the default branch whatever `target-branch` says. Don't merge them on `main`. Apply the bump on `dev`, close the PR. Written in `docs/development.md` § Dependabot.
 - `SECURITY.md`: supported versions are only the latest release. Report through GitHub private vulnerability reporting. No email.
 - Rulesets: `main` gets no force push, no deletion, and status checks required for PRs. `v*` tags: only the owner can create them, and no updating or deleting them.
 - Notices: generated at package time from what ships in the app (the same inventory the security scan uses), not hand-written.
