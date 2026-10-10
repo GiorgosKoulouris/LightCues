@@ -110,7 +110,7 @@ LightCues writes one log file per day to `%APPDATA%\LightCues\logs\`, named `lig
 ## Links
 
 - Glossary of the terms in capitals: [CONTEXT.md](CONTEXT.md)
-<!-- Security policy: link SECURITY.md once it exists (repo-hygiene issue 02). -->
+- Reporting a vulnerability: [SECURITY.md](SECURITY.md)
 
 ## Contributing
 

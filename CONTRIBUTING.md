@@ -2,7 +2,7 @@
 
 ## Issues
 
-Bug reports and Fixture requests are welcome as [GitHub Issues](https://github.com/GiorgosKoulouris/LightCues/issues/new/choose). Pick the template that fits. For a security vulnerability, use the [Security tab](https://github.com/GiorgosKoulouris/LightCues/security), not an issue.
+Bug reports and Fixture requests are welcome as [GitHub Issues](https://github.com/GiorgosKoulouris/LightCues/issues/new/choose). Pick the template that fits. For a security vulnerability, don't open an issue: see [SECURITY.md](SECURITY.md).
 
 ## Pull requests
 
