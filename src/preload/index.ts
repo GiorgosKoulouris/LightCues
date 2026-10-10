@@ -13,6 +13,7 @@ import {
   ENGINE_PORT_CHANNEL,
   ENGINE_RESTARTED_CHANNEL,
   OPEN_EXAMPLE_CHANNEL,
+  OPEN_LICENSE_CHANNEL,
   OPEN_RELEASE_PAGE_CHANNEL,
   SAVE_BEFORE_CLOSE_CHANNEL,
   SAVE_FROM_SNAPSHOT_CHANNEL,
@@ -30,6 +31,7 @@ import {
   type EngineRecoveryBridge,
   type EngineCommand,
   type EngineEvent,
+  type LicensesBridge,
   type RestoreResult,
   type UpdatesBridge,
 } from '../shared/protocol';
@@ -132,3 +134,9 @@ const diagnostics: DiagnosticsBridge = {
 };
 
 contextBridge.exposeInMainWorld('diagnostics', diagnostics);
+
+const licenses: LicensesBridge = {
+  open: (file) => ipcRenderer.invoke(OPEN_LICENSE_CHANNEL, file),
+};
+
+contextBridge.exposeInMainWorld('licenses', licenses);

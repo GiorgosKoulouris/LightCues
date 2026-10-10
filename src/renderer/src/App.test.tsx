@@ -6,6 +6,7 @@ import type {
   EngineCommand,
   EngineEvent,
   EngineRecoveryBridge,
+  LicensesBridge,
   MidiInputStatus,
   RestoreResult,
   UpdateAvailable,
@@ -102,6 +103,7 @@ const APP_INFO: AppInfo = {
   logFolder: 'C:\\Users\\sam\\AppData\\Roaming\\LightCues\\logs',
 };
 
+let licenses: { open: ReturnType<typeof vi.fn<LicensesBridge['open']>> };
 let updates: { [K in keyof UpdatesBridge]: ReturnType<typeof vi.fn<UpdatesBridge[K]>> };
 
 // A fake `window.engineRecovery`: a test tells it the engine restarted or is
@@ -160,6 +162,8 @@ beforeEach(() => {
   };
   vi.stubGlobal('updates', updates);
   vi.stubGlobal('diagnostics', { appInfo: vi.fn(async () => APP_INFO) });
+  licenses = { open: vi.fn(async () => true) };
+  vi.stubGlobal('licenses', licenses);
   recovery = fakeRecovery();
   vi.stubGlobal('engineRecovery', recovery.bridge);
 });
@@ -489,5 +493,35 @@ describe('App diagnostics', () => {
     await renderApp();
     await userEvent.keyboard('{Control>}4{/Control}');
     expect(screen.queryByRole('button', { name: 'Copy diagnostics' })).toBeNull();
+  });
+});
+
+describe('App licenses', () => {
+  it('opens each license file from the Licenses menu', async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await user.click(screen.getByRole('button', { name: 'Licenses' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'LightCues license' }));
+    expect(licenses.open).toHaveBeenLastCalledWith('license');
+
+    await user.click(screen.getByRole('button', { name: 'Licenses' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Third-party notices' }));
+    expect(licenses.open).toHaveBeenLastCalledWith('thirdPartyNotices');
+    expect(screen.queryByText(/Could not open/)).toBeNull();
+  });
+
+  it('says so when a file could not be opened', async () => {
+    const user = userEvent.setup();
+    licenses.open.mockResolvedValue(false);
+    await renderApp();
+    await user.click(screen.getByRole('button', { name: 'Licenses' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Third-party notices' }));
+    expect(await screen.findByText('Could not open the third-party notices.')).toBeInTheDocument();
+  });
+
+  it('is not in Perform', async () => {
+    await renderApp();
+    await userEvent.keyboard('{Control>}4{/Control}');
+    expect(screen.queryByRole('button', { name: 'Licenses' })).toBeNull();
   });
 });

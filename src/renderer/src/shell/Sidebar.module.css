@@ -45,12 +45,22 @@
   color: var(--accent);
 }
 
+/* Lined up with the view items: same padding, icon size and gap. */
 .footer {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
   margin-top: auto;
+}
+
+.action {
+  justify-content: flex-start;
   padding: 0 var(--space-2);
+}
+
+.action svg {
+  width: var(--icon-md);
+  height: var(--icon-md);
 }
 
 .update {
@@ -68,19 +78,14 @@
 }
 
 .setting {
+  padding: 0 var(--space-2);
   color: var(--text-muted);
   font-size: var(--text-sm);
 }
 
 .checkNow {
   margin: 0;
+  padding: 0 var(--space-2);
   color: var(--text-muted);
   font-size: var(--text-sm);
-}
-
-.updateSettings {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-1);
 }

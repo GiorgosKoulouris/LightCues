@@ -7,14 +7,17 @@ import {
   Library,
   MonitorPlay,
   RefreshCw,
+  Scale,
   type LucideIcon,
 } from 'lucide-react';
-import { Button, IconButton } from '../ui/Button';
+import { Button } from '../ui/Button';
 import { Checkbox } from '../ui/Checkbox';
 import { cx } from '../ui/cx';
+import { Menu } from '../ui/Menu';
 import { Tooltip } from '../ui/Tooltip';
 import { viewShortcut } from './shortcuts';
 import styles from './Sidebar.module.css';
+import { useOpenLicense } from './useOpenLicense';
 import { useUpdates, type CheckNowState } from './useUpdates';
 import { VIEWS, type View } from './views';
 
@@ -32,9 +35,9 @@ const CHECK_NOW_MESSAGES: Record<CheckNowState, string> = {
 };
 
 // Switches between the views. Each shows its Ctrl shortcut as a tooltip.
-// Below them, outside Perform: Open example, Copy diagnostics, a newer
-// release and how a check asked for ended. Then the startup setting and a
-// button to check now.
+// Below them, outside Perform: Open example, Copy diagnostics, Licenses, a
+// newer release and how a check asked for ended. Then a button to check now
+// and the startup setting.
 export function Sidebar({
   view,
   onView,
@@ -47,6 +50,7 @@ export function Sidebar({
   onCopyDiagnostics: () => void;
 }) {
   const updates = useUpdates();
+  const openLicense = useOpenLicense();
   return (
     <nav aria-label="Views" className={styles.sidebar}>
       <p className={styles.app}>LightCues</p>
@@ -68,14 +72,39 @@ export function Sidebar({
       })}
       <div className={styles.footer}>
         {view !== 'perform' && (
-          <Button variant="ghost" icon={<BookOpen aria-hidden />} onClick={onOpenExample}>
-            Open example
-          </Button>
-        )}
-        {view !== 'perform' && (
-          <Button variant="ghost" icon={<ClipboardCopy aria-hidden />} onClick={onCopyDiagnostics}>
-            Copy diagnostics
-          </Button>
+          <>
+            <Button
+              variant="ghost"
+              icon={<BookOpen aria-hidden />}
+              className={styles.action}
+              onClick={onOpenExample}
+            >
+              Open example
+            </Button>
+            <Button
+              variant="ghost"
+              icon={<ClipboardCopy aria-hidden />}
+              className={styles.action}
+              onClick={onCopyDiagnostics}
+            >
+              Copy diagnostics
+            </Button>
+            <Menu
+              align="start"
+              trigger={
+                <Button variant="ghost" icon={<Scale aria-hidden />} className={styles.action}>
+                  Licenses
+                </Button>
+              }
+              items={[
+                { label: 'LightCues license', onSelect: () => void openLicense('license') },
+                {
+                  label: 'Third-party notices',
+                  onSelect: () => void openLicense('thirdPartyNotices'),
+                },
+              ]}
+            />
+          </>
         )}
         {updates.available && view !== 'perform' && (
           <div role="status" aria-label="Update available" className={styles.update}>
@@ -91,20 +120,23 @@ export function Sidebar({
           </p>
         )}
         {updates.enabled !== undefined && (
-          <div className={styles.updateSettings}>
+          <>
+            <Button
+              variant="ghost"
+              icon={<RefreshCw aria-hidden />}
+              className={styles.action}
+              disabled={updates.checkNowState === 'checking'}
+              onClick={updates.checkNow}
+            >
+              Check for updates
+            </Button>
             <Checkbox
               label="Check on startup"
               className={styles.setting}
               checked={updates.enabled}
               onChange={updates.setEnabled}
             />
-            <IconButton
-              icon={<RefreshCw aria-hidden />}
-              label="Check for updates"
-              disabled={updates.checkNowState === 'checking'}
-              onClick={updates.checkNow}
-            />
-          </div>
+          </>
         )}
       </div>
     </nav>

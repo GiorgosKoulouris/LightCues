@@ -86,7 +86,7 @@ Actions are pinned by commit SHA, with the version in a trailing comment.
 
 ## Third-party notices
 
-The installer ships `resources/THIRD_PARTY_NOTICES.txt`: the name, version, license and license files of every npm package in the app, and the Open Fixture Library credit from [examples/README.md](../examples/README.md). Electron ships its own `LICENSE.electron.txt` and `LICENSES.chromium.html`.
+The installer ships `resources/THIRD_PARTY_NOTICES.txt`: the name, version, license and license files of every npm package in the app, and the Open Fixture Library credit from [examples/README.md](../examples/README.md). Electron ships its own `LICENSE.electron.txt` and `LICENSES.chromium.html`. **Licenses** in the sidebar opens it and `resources/LICENSE.txt`. Main opens fixed paths only; the renderer names the file, never a path.
 
 [scripts/third-party-notices.mjs](../scripts/third-party-notices.mjs) writes it as electron-builder's `afterPack` hook, so `npm run package` makes it. The security scan's build skips it (`LIGHTCUES_SKIP_NOTICES=1`) and reports licenses instead. "What ships" is the scan's inventory of the packed app: its `node_modules`, Electron, and the packages Vite bundled into `out/` ([scripts/bundled-packages.mjs](../scripts/bundled-packages.mjs) lists them in `out/*/bundled-packages.json`).
 

@@ -34,6 +34,7 @@ import {
   LIBRARY_BACKUPS_FOLDER,
   MIDI_INPUT_ARG,
   OPEN_EXAMPLE_CHANNEL,
+  OPEN_LICENSE_CHANNEL,
   OPEN_RELEASE_PAGE_CHANNEL,
   RECENT_FILES_ARG,
   PROFILE_LIBRARY_ARG,
@@ -59,6 +60,7 @@ import {
 import { diskShowFiles, diskVenueFiles, fileStorage } from '../engine/file-storage';
 import { snapshotFile } from './engine-snapshot';
 import { superviseEngine } from './engine-supervisor';
+import { licensePath } from './licenses';
 import { createLog, lineSplitter } from './log';
 import { isAppPage } from './navigation';
 import { createUpdateCheck, isReleasePageUrl } from './update-check';
@@ -312,6 +314,19 @@ function handleShowLibraryBackup(): void {
   });
 }
 
+// Opens a license file from the install's resources folder in the default
+// app. The renderer names the file; main picks the fixed path. Resolves to
+// false when it could not, e.g. in development, where the files do not exist.
+function handleOpenLicense(): void {
+  ipcMain.handle(OPEN_LICENSE_CHANNEL, async (_event, file: unknown) => {
+    const path = licensePath(file, process.resourcesPath);
+    if (path === undefined) return false;
+    const error = await shell.openPath(path);
+    if (error) log(`Could not open ${path}: ${error}`);
+    return !error;
+  });
+}
+
 // Main's part of the diagnostics for a bug report. Takes no arguments, so
 // there is no renderer payload to check.
 function handleAppInfo(): void {
@@ -498,6 +513,7 @@ void app.whenReady().then(() => {
   handleShowLibraryBackup();
   handleOpenExample(engine);
   handleAppInfo();
+  handleOpenLicense();
   const pageUrl = rendererUrl();
   restrictNavigation(pageUrl);
   window = createWindow(engine, pageUrl);
