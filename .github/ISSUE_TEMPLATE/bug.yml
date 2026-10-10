@@ -67,7 +67,7 @@ body:
     id: diagnostics
     attributes:
       label: Diagnostics
-      description: If your version has "Copy diagnostics", click it and paste the text here.
+      description: If your version has "Copy diagnostics" in the sidebar, click it and paste the text here.
       render: text
     validations:
       required: false

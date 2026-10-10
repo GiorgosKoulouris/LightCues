@@ -2,6 +2,7 @@ import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
+  AppInfo,
   EngineCommand,
   EngineEvent,
   EngineRecoveryBridge,
@@ -94,6 +95,13 @@ const RELEASE: UpdateAvailable = {
   version: '0.2.0',
   url: 'https://github.com/GiorgosKoulouris/LightCues/releases/tag/v0.2.0',
 };
+const APP_INFO: AppInfo = {
+  appVersion: '0.2.0',
+  electronVersion: '44.7.0',
+  windowsVersion: '10.0.22631',
+  logFolder: 'C:\\Users\\sam\\AppData\\Roaming\\LightCues\\logs',
+};
+
 let updates: { [K in keyof UpdatesBridge]: ReturnType<typeof vi.fn<UpdatesBridge[K]>> };
 
 // A fake `window.engineRecovery`: a test tells it the engine restarted or is
@@ -151,6 +159,7 @@ beforeEach(() => {
     openReleasePage: vi.fn(),
   };
   vi.stubGlobal('updates', updates);
+  vi.stubGlobal('diagnostics', { appInfo: vi.fn(async () => APP_INFO) });
   recovery = fakeRecovery();
   vi.stubGlobal('engineRecovery', recovery.bridge);
 });
@@ -453,5 +462,32 @@ describe('App example', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Discard' }));
     expect(dialogs.openExample).toHaveBeenCalledTimes(1);
     expect(opens()).toHaveLength(2);
+  });
+});
+
+describe('App diagnostics', () => {
+  it('copies the diagnostics, without the open file paths, and says so', async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    engine.emit({
+      type: 'outputs',
+      outputs: [{ id: 'EN123456', name: 'DMX USB PRO', state: 'sending' }],
+    });
+    await user.click(screen.getByRole('button', { name: 'Copy diagnostics' }));
+
+    expect(await screen.findByText('Diagnostics copied')).toBeInTheDocument();
+    const text = await navigator.clipboard.readText();
+    expect(text).toContain('App version: 0.2.0\n');
+    expect(text).toContain(`Log folder: ${APP_INFO.logFolder}\n`);
+    expect(text).toContain('  DMX USB PRO (EN123456): sending\n');
+    expect(text).toContain('MIDI Input: none\n');
+    expect(text).toContain('Tempo: 120 BPM, default\n');
+    expect(text).not.toContain('Tour.lcshow');
+  });
+
+  it('is not in Perform', async () => {
+    await renderApp();
+    await userEvent.keyboard('{Control>}4{/Control}');
+    expect(screen.queryByRole('button', { name: 'Copy diagnostics' })).toBeNull();
   });
 });

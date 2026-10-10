@@ -2,6 +2,7 @@ import {
   BookOpen,
   CircleArrowUp,
   Clapperboard,
+  ClipboardCopy,
   LayoutGrid,
   Library,
   MonitorPlay,
@@ -31,16 +32,19 @@ const CHECK_NOW_MESSAGES: Record<CheckNowState, string> = {
 };
 
 // Switches between the views. Each shows its Ctrl shortcut as a tooltip.
-// Below them, outside Perform: Open example, a newer release and how a check
-// asked for ended. Then the startup setting and a button to check now.
+// Below them, outside Perform: Open example, Copy diagnostics, a newer
+// release and how a check asked for ended. Then the startup setting and a
+// button to check now.
 export function Sidebar({
   view,
   onView,
   onOpenExample,
+  onCopyDiagnostics,
 }: {
   view: View;
   onView: (view: View) => void;
   onOpenExample: () => void;
+  onCopyDiagnostics: () => void;
 }) {
   const updates = useUpdates();
   return (
@@ -66,6 +70,11 @@ export function Sidebar({
         {view !== 'perform' && (
           <Button variant="ghost" icon={<BookOpen aria-hidden />} onClick={onOpenExample}>
             Open example
+          </Button>
+        )}
+        {view !== 'perform' && (
+          <Button variant="ghost" icon={<ClipboardCopy aria-hidden />} onClick={onCopyDiagnostics}>
+            Copy diagnostics
           </Button>
         )}
         {updates.available && view !== 'perform' && (

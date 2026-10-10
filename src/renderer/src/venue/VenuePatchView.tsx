@@ -1,6 +1,6 @@
 import { Grid3x3, Tag } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import type { VenueEdit } from '../../../shared/protocol';
+import type { OutputStatus, VenueEdit } from '../../../shared/protocol';
 import { DIRECTIONS, type Direction } from '../../../shared/show';
 import {
   fixturesInUniverse,
@@ -61,12 +61,15 @@ const FOCUS_CHECK_OPTIONS = [
 // The Focus Check, on either tab, ends when the view is left. While it is on,
 // the plan shows the beams out to the audience plane. The channel monitor, on
 // either tab, shows below while toggled on and the view is active.
+// Until the engine answers. One array, so it keeps its identity.
+const NO_OUTPUTS: OutputStatus[] = [];
+
 export function VenuePatchView({ active }: { active: boolean }) {
   const { venue, edit, newVenue, undo, redo, open, save } = useVenuePatch();
   const focusCheck = usePlayback()?.focusCheck;
   const { entries } = useProfileLibrary();
   const show = useShow().show?.show;
-  const outputs = useOutputs();
+  const outputs = useOutputs() ?? NO_OUTPUTS;
   const toast = useToast();
   const [tab, setTab] = useState<SubTab>('fixtures');
   const [selection, setSelection] = useState<Selection>({ ids: [] });

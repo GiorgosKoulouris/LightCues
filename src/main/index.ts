@@ -13,10 +13,12 @@ import {
   type WebContents,
 } from 'electron';
 import { existsSync } from 'node:fs';
+import { release } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { format } from 'node:util';
 import {
+  APP_INFO_CHANNEL,
   CHECK_FOR_UPDATES_CHANNEL,
   CHOOSE_LIBRARY_TO_OPEN_CHANNEL,
   CHOOSE_LIBRARY_TO_SAVE_CHANNEL,
@@ -46,6 +48,7 @@ import {
   isDocumentKind,
   isEngineDocument,
   unsavedMessage,
+  type AppInfo,
   type DocumentKind,
   type EngineConnect,
   type ExamplePaths,
@@ -74,7 +77,8 @@ function libraryPath(): string {
 // The log file, in `userData/logs`. A packaged app has no console, so this is
 // the only trace of a crash at a gig. Paths may be logged; document and file
 // contents may not.
-const logFile = createLog(join(app.getPath('userData'), 'logs'), () => new Date());
+const logFolder = join(app.getPath('userData'), 'logs');
+const logFile = createLog(logFolder, () => new Date());
 
 // Main's own lines go to the log file and the console, which `npm run dev`
 // shows.
@@ -308,6 +312,17 @@ function handleShowLibraryBackup(): void {
   });
 }
 
+// Main's part of the diagnostics for a bug report. Takes no arguments, so
+// there is no renderer payload to check.
+function handleAppInfo(): void {
+  ipcMain.handle(APP_INFO_CHANNEL, (): AppInfo => ({
+    appVersion: app.getVersion(),
+    electronVersion: process.versions.electron,
+    windowsVersion: release(),
+    logFolder,
+  }));
+}
+
 // How long after the window's first load the update check runs, so it never
 // slows the launch.
 const UPDATE_CHECK_DELAY_MS = 10_000;
@@ -482,6 +497,7 @@ void app.whenReady().then(() => {
   );
   handleShowLibraryBackup();
   handleOpenExample(engine);
+  handleAppInfo();
   const pageUrl = rendererUrl();
   restrictNavigation(pageUrl);
   window = createWindow(engine, pageUrl);

@@ -2,6 +2,7 @@
 
 import type {
   CloseGuardBridge,
+  DiagnosticsBridge,
   DialogBridge,
   EngineBridge,
   EngineRecoveryBridge,
@@ -15,5 +16,6 @@ declare global {
     dialogs: DialogBridge;
     closeGuard: CloseGuardBridge;
     updates: UpdatesBridge;
+    diagnostics: DiagnosticsBridge;
   }
 }

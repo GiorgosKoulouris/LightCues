@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import {
+  APP_INFO_CHANNEL,
   CHECK_FOR_UPDATES_CHANNEL,
   CHOOSE_LIBRARY_TO_OPEN_CHANNEL,
   CHOOSE_LIBRARY_TO_SAVE_CHANNEL,
@@ -22,6 +23,7 @@ import {
   UPDATE_AVAILABLE_CHANNEL,
   UPDATE_ENABLED_CHANNEL,
   type CloseGuardBridge,
+  type DiagnosticsBridge,
   type DialogBridge,
   type DocumentKind,
   type EngineBridge,
@@ -124,3 +126,9 @@ const updates: UpdatesBridge = {
 };
 
 contextBridge.exposeInMainWorld('updates', updates);
+
+const diagnostics: DiagnosticsBridge = {
+  appInfo: () => ipcRenderer.invoke(APP_INFO_CHANNEL),
+};
+
+contextBridge.exposeInMainWorld('diagnostics', diagnostics);
