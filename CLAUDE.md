@@ -32,6 +32,10 @@ Squash `dev` into 4-5 commits on a `stage` branch before merging to `main`, opti
 
 A release is a `vX.Y.Z` tag on `main` that equals `v` + the `package.json` version. Bump the version in the staged batch, merge, then tag by hand. See `docs/agents/releasing.md`.
 
+### Changelog
+
+Every user-facing change adds a `CHANGELOG.md` line under `## [Unreleased]`, in the same commit. When writing a line, or staging a release batch, follow `docs/agents/releasing.md` § Changelog.
+
 ### Security scan
 
 When asked to "run the security scan", run `npm run security:scan`, triage its outputs, review the code and write a report to `reports/security/`. Report-only: change and commit nothing. Follow `docs/agents/security-scan.md`.

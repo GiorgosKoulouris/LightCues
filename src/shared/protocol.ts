@@ -430,6 +430,38 @@ export interface UpdatesBridge {
   openReleasePage(url: string): void;
 }
 
+// IPC channel on which the renderer asks main for the app's side of the
+// diagnostics. The renderer adds the engine's state it already has.
+export const APP_INFO_CHANNEL = 'diagnostics:appInfo';
+
+// Main's part of the diagnostics. The log folder is the only path.
+export interface AppInfo {
+  appVersion: string;
+  electronVersion: string;
+  // `os.release()`, e.g. 10.0.22631.
+  windowsVersion: string;
+  logFolder: string;
+}
+
+// What the preload script exposes to the renderer as `window.diagnostics`.
+export interface DiagnosticsBridge {
+  appInfo(): Promise<AppInfo>;
+}
+
+// IPC channel on which the renderer asks main to open a license file that
+// ships in the install's resources folder. It names the file, never a path.
+export const OPEN_LICENSE_CHANNEL = 'shell:openLicense';
+
+// LightCues' own license, and the notices for the software it includes.
+export type LicenseFile = 'license' | 'thirdPartyNotices';
+
+// What the preload script exposes to the renderer as `window.licenses`.
+export interface LicensesBridge {
+  // Opens the file in the default app. Resolves to false when it
+  // could not, e.g. in development, where the files do not exist.
+  open(file: LicenseFile): Promise<boolean>;
+}
+
 // IPC channels for engine recovery (ADR 0011). Main tells the renderer how a
 // restarted engine's restore went, and when the engine is down for good.
 // While it is down, the renderer can ask whether it is, and have main save a

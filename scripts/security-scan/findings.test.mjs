@@ -154,13 +154,26 @@ describe('shippedLicenses', () => {
     });
 
     expect(licenses).toEqual([
-      { name: 'debug', version: '4.4.0', path: 'node_modules/debug', licenses: ['MIT'] },
-      { name: 'electron', version: '44.6.0', path: 'node_modules/electron', licenses: ['MIT'] },
+      {
+        name: 'debug',
+        version: '4.4.0',
+        path: 'node_modules/debug',
+        licenses: ['MIT'],
+        allowed: true,
+      },
+      {
+        name: 'electron',
+        version: '44.6.0',
+        path: 'node_modules/electron',
+        licenses: ['MIT'],
+        allowed: true,
+      },
       {
         name: 'fast-xml-parser',
         version: '5.11.2',
         path: 'node_modules/fast-xml-parser',
         licenses: ['MIT'],
+        allowed: true,
       },
     ]);
   });
@@ -172,7 +185,25 @@ describe('shippedLicenses', () => {
     );
 
     expect(licenses).toEqual([
-      { name: 'left-pad', version: '1.0.0', path: 'node_modules/left-pad', licenses: null },
+      {
+        name: 'left-pad',
+        version: '1.0.0',
+        path: 'node_modules/left-pad',
+        licenses: null,
+        allowed: false,
+      },
     ]);
+  });
+
+  it('marks a shipped package with a license off the allow list', () => {
+    const left = { name: 'left-pad', version: '1.0.0' };
+    const licenses = shippedLicenses(
+      { ships: [{ ...left, path: 'node_modules/left-pad' }] },
+      {
+        osvApp: { results: [{ packages: [{ package: left, licenses: ['MIT', 'GPL-2.0-only'] }] }] },
+      },
+    );
+
+    expect(licenses[0].allowed).toBe(false);
   });
 });

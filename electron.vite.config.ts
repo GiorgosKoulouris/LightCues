@@ -1,9 +1,11 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'electron-vite';
 import { resolve } from 'node:path';
+import { bundledPackages } from './scripts/bundled-packages.mjs';
 
 export default defineConfig({
   main: {
+    plugins: [bundledPackages()],
     build: {
       rollupOptions: {
         input: {
@@ -13,8 +15,8 @@ export default defineConfig({
       },
     },
   },
-  preload: {},
+  preload: { plugins: [bundledPackages()] },
   renderer: {
-    plugins: [react()],
+    plugins: [react(), bundledPackages()],
   },
 });

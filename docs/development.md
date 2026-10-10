@@ -65,13 +65,35 @@ GitHub Actions on `windows-latest` ([.github/workflows/](../.github/workflows/))
 
 | Event | What runs |
 | --- | --- |
-| Push to `stage` | Semver check on the `package.json` version, `npm run check`, `npm run e2e`, `npm run package`. The installer is uploaded as a workflow artifact, kept 7 days. |
+| Push to `stage` | Semver check on the `package.json` version, a warning when it has no [CHANGELOG.md](../CHANGELOG.md) section, `npm run check`, `npm run e2e`, `npm run package`. The installer is uploaded as a workflow artifact, kept 7 days. |
 | Push to `main` | Same as `stage`. Also warns when code changed since the last `v*` tag and HEAD is untagged. |
-| Push of tag `vX.Y.Z` | Fails unless the tag equals `v` + the `package.json` version and is on `main`. Then `npm run check`, `npm run package`, and a GitHub Release with the installer, its blockmap and `latest.yml` ([release.yml](../.github/workflows/release.yml)). |
+| Push of tag `vX.Y.Z` | Fails unless the tag equals `v` + the `package.json` version and is on `main`. Also fails when the version has no [CHANGELOG.md](../CHANGELOG.md) section. Then `npm run check`, `npm run package`, and a GitHub Release with the installer, its blockmap and `latest.yml`, and the changelog section as its body ([release.yml](../.github/workflows/release.yml)). |
 | Pull request to `main` | `npm run check` |
 | Push to `dev` | Nothing |
 
 `stage` is the squashed batch on its way to `main`. See [agents/staging.md](agents/staging.md). Releases: [agents/releasing.md](agents/releasing.md).
+
+Actions are pinned by commit SHA, with the version in a trailing comment.
+
+### Dependabot
+
+[.github/dependabot.yml](../.github/dependabot.yml) opens monthly PRs against `dev`. npm gets two grouped PRs: dev dependencies and runtime. GitHub Actions get one PR each.
+
+- No CI runs on `dev`. Run `npm run check` on the PR branch before merging, then pull `dev`.
+- Merge or close open Dependabot PRs before a staging round ([agents/staging.md](agents/staging.md) step 1).
+- Security updates are a repo setting, ungrouped. GitHub always opens them against `main`, whatever `target-branch` says. Don't merge them there: it breaks the fast-forward from `stage`. Apply the bump on `dev` and close the PR. The alert closes when the batch reaches `main`.
+- `global-agent` is pinned by an override in `package.json` (under `@electron/get`). Dependabot doesn't need an ignore rule for it. Check the pin by hand when `@electron/get` moves.
+
+## Third-party notices
+
+The installer ships `resources/THIRD_PARTY_NOTICES.txt`: the name, version, license and license files of every npm package in the app, and the Open Fixture Library credit from [examples/README.md](../examples/README.md). Electron ships its own `LICENSE.electron.txt` and `LICENSES.chromium.html`. **Licenses** in the sidebar opens it and `resources/LICENSE.txt`. Main opens fixed paths only; the renderer names the file, never a path.
+
+[scripts/third-party-notices.mjs](../scripts/third-party-notices.mjs) writes it as electron-builder's `afterPack` hook, so `npm run package` makes it. The security scan's build skips it (`LIGHTCUES_SKIP_NOTICES=1`) and reports licenses instead. "What ships" is the scan's inventory of the packed app: its `node_modules`, Electron, and the packages Vite bundled into `out/` ([scripts/bundled-packages.mjs](../scripts/bundled-packages.mjs) lists them in `out/*/bundled-packages.json`).
+
+Packaging fails when a package:
+
+- has a license off the allow list in [scripts/security-scan/licenses.mjs](../scripts/security-scan/licenses.mjs) (GPL-3.0-only compatible). Replace the package, or add the license to the list if it is compatible.
+- ships no LICENSE, COPYING or NOTICE file. Copy the upstream license file to `build/licenses/<name>@<version>.txt`. The version is in the name, so an update is checked again.
 
 ## Security scan
 
@@ -101,6 +123,7 @@ Electron app with three processes ([ADR 0002](adr/0002-electron-with-separate-en
 Pull requests by arrangement: open an issue first.
 
 - Work on the `dev` branch: `git switch dev`. `dev` reaches `main` squashed, through `stage`. See [agents/staging.md](agents/staging.md).
+- A user-facing change adds a line under `## [Unreleased]` in [CHANGELOG.md](../CHANGELOG.md).
 - Run `npm run check` before merging. CI runs it again on `stage` and on pull requests to `main`.
 - Issues and specs are markdown files under `.scratch/<feature>/`. See [agents/issue-tracker.md](agents/issue-tracker.md).
 - Use the domain terms from [CONTEXT.md](../CONTEXT.md) in code, UI and docs.

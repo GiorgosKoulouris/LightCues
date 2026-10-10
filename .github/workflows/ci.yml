@@ -1,10 +1,10 @@
 # CI for `stage`, `main` and PRs. See docs/agents/staging.md and
 # docs/agents/releasing.md.
 # - Push to `stage`: check, e2e, package, upload the installer for an install
-#   test.
+#   test, warn when the version has no CHANGELOG.md section.
 # - PR to `main`: check only.
 # - Push to `main`: check, e2e, package, upload the installer, warn on
-#   untagged code.
+#   untagged code and a missing CHANGELOG.md section.
 # - Push to `dev`: nothing.
 # Tags are released by release.yml.
 name: CI
@@ -32,12 +32,12 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The drift check on `main` needs history and tags.
           fetch-depth: ${{ github.ref == 'refs/heads/main' && '0' || '1' }}
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -53,6 +53,17 @@ jobs:
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # A warning, not a failure: `stage` can hold a batch that is not a
+      # release. release.yml fails on a missing section.
+      - name: Check changelog section
+        if: github.event_name == 'push'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if ! node scripts/changelog-section.mjs "$VERSION" > /dev/null; then
+            echo "::warning file=CHANGELOG.md::No changelog section for $VERSION yet. Add one before tagging v$VERSION."
+          fi
 
       # Code on `main` that no `v*` tag covers yet. A warning, not a failure:
       # the tag is pushed by hand a few minutes after the merge.
@@ -85,7 +96,7 @@ jobs:
       - run: npm run package
         if: github.event_name == 'push'
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: github.event_name == 'push'
         with:
           name: LightCues-Setup-${{ steps.version.outputs.version }}

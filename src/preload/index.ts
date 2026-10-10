@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import {
+  APP_INFO_CHANNEL,
   CHECK_FOR_UPDATES_CHANNEL,
   CHOOSE_LIBRARY_TO_OPEN_CHANNEL,
   CHOOSE_LIBRARY_TO_SAVE_CHANNEL,
@@ -12,6 +13,7 @@ import {
   ENGINE_PORT_CHANNEL,
   ENGINE_RESTARTED_CHANNEL,
   OPEN_EXAMPLE_CHANNEL,
+  OPEN_LICENSE_CHANNEL,
   OPEN_RELEASE_PAGE_CHANNEL,
   SAVE_BEFORE_CLOSE_CHANNEL,
   SAVE_FROM_SNAPSHOT_CHANNEL,
@@ -22,12 +24,14 @@ import {
   UPDATE_AVAILABLE_CHANNEL,
   UPDATE_ENABLED_CHANNEL,
   type CloseGuardBridge,
+  type DiagnosticsBridge,
   type DialogBridge,
   type DocumentKind,
   type EngineBridge,
   type EngineRecoveryBridge,
   type EngineCommand,
   type EngineEvent,
+  type LicensesBridge,
   type RestoreResult,
   type UpdatesBridge,
 } from '../shared/protocol';
@@ -124,3 +128,15 @@ const updates: UpdatesBridge = {
 };
 
 contextBridge.exposeInMainWorld('updates', updates);
+
+const diagnostics: DiagnosticsBridge = {
+  appInfo: () => ipcRenderer.invoke(APP_INFO_CHANNEL),
+};
+
+contextBridge.exposeInMainWorld('diagnostics', diagnostics);
+
+const licenses: LicensesBridge = {
+  open: (file) => ipcRenderer.invoke(OPEN_LICENSE_CHANNEL, file),
+};
+
+contextBridge.exposeInMainWorld('licenses', licenses);

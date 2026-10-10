@@ -2,9 +2,11 @@
 
 import type {
   CloseGuardBridge,
+  DiagnosticsBridge,
   DialogBridge,
   EngineBridge,
   EngineRecoveryBridge,
+  LicensesBridge,
   UpdatesBridge,
 } from '../../shared/protocol';
 
@@ -15,5 +17,7 @@ declare global {
     dialogs: DialogBridge;
     closeGuard: CloseGuardBridge;
     updates: UpdatesBridge;
+    diagnostics: DiagnosticsBridge;
+    licenses: LicensesBridge;
   }
 }

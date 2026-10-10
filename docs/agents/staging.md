@@ -4,7 +4,7 @@
 
 A request can **hold back** commits: they stay on `dev`, unstaged, on top of `stage` (for example: "stage everything except the security scan commit"). After staging, `dev` is always `stage` plus the held-back commits, with nothing lost.
 
-If the batch is a release, bump the version on `dev` first and tag after the merge. See [releasing.md](releasing.md).
+If the batch is a release, run the [Changelog review](releasing.md#changelog-review) and bump the version on `dev` first. Move the `## [Unreleased]` lines of CHANGELOG.md under the new version heading in the same commit. Tag after the merge. See [releasing.md](releasing.md).
 
 ## Safety nets
 
@@ -15,10 +15,11 @@ These apply to every run, whatever the request:
 - **Dry run.** A reorder runs first in a throwaway worktree in the scratchpad. `dev` moves only once the dry run applies cleanly and its tree equals `dev`.
 - **Same tree.** After every rewrite, `git diff <backup tag> dev` is empty.
 - **Local only.** Push and merge only when the user asks.
+- **Rulesets.** `dev` and `stage` block force pushes and deletion for everyone but the repository admin. The force pushes and the `stage` delete below need the user's admin credentials. If GitHub rejects one, stop and tell the user. Don't work around it.
 
 ## Flow
 
-1. **Check `dev` is clean.** `git status` on `dev` shows nothing. Commit or ask first.
+1. **Check `dev` is clean and has no open Dependabot PRs.** `git status` on `dev` shows nothing. Commit or ask first. Then list Dependabot PRs against `dev` (`gh pr list --base dev --author app/dependabot`). Ask the user to merge or close them first, and pull `dev` after a merge. A PR left open past a rewrite of `dev` (step 4, 6 or 10) needs a rebase. See [development.md § Dependabot](../development.md#dependabot).
 2. **Find the base.** If `stage` exists, is ahead of `main` and is an ancestor of `dev` (`git merge-base --is-ancestor stage dev`), it holds an unmerged batch: the new groups go on top of it, and its commits stay as they are. Otherwise the base is `main`, and stale `stage` is replaced.
 3. **Pick the groups.** List the commits with `git log --oneline --reverse <base>..dev`. Split them into consecutive ranges by theme (for example: by spec, or by a block of issues). Note the last commit of each range. Mark the held-back commits.
 4. **Move held-back commits to the top.** Skip if they are already the newest commits on `dev`. Otherwise, check that nothing staged touches their files (`git log <held>..dev -- <their paths>` is empty). Then dry-run the new order in a worktree, and only then rebuild `dev` from the last commit before the first moved one:

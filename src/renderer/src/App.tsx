@@ -9,6 +9,7 @@ import { EngineRecovery } from './shell/EngineRecovery';
 import { ExampleHint } from './shell/ExampleHint';
 import { Sidebar } from './shell/Sidebar';
 import { TopBar } from './shell/TopBar';
+import { useCopyDiagnostics } from './shell/useCopyDiagnostics';
 import { nothingOpen, useOpenExample } from './shell/useOpenExample';
 import { useReopenErrors } from './shell/useReopenErrors';
 import { useViewShortcuts } from './shell/useShortcuts';
@@ -18,6 +19,7 @@ import { useMidiInput } from './show/useMidiInput';
 import { usePlayback } from './show/usePlayback';
 import { useShow } from './show/useShow';
 import { cx } from './ui/cx';
+import { useOutputs } from './venue/useOutputs';
 import { useVenuePatch } from './venue/useVenuePatch';
 import { VenuePatchView } from './venue/VenuePatchView';
 
@@ -33,6 +35,8 @@ export function App() {
   const playback = usePlayback();
   const midiInput = useMidiInput();
   const tempo = useTempo();
+  const outputs = useOutputs();
+  const copyDiagnostics = useCopyDiagnostics(outputs, midiInput, tempo);
   useViewShortcuts(setView);
   useReopenErrors();
   usePanelKeys(show?.show, playback);
@@ -49,7 +53,12 @@ export function App() {
         playback?.mode === 'blind' && styles.blind,
       )}
     >
-      <Sidebar view={view} onView={setView} onOpenExample={() => void openExample()} />
+      <Sidebar
+        view={view}
+        onView={setView}
+        onOpenExample={() => void openExample()}
+        onCopyDiagnostics={() => void copyDiagnostics()}
+      />
       <div className={styles.main}>
         <div>
           <TopBar show={show} venue={venue} playback={playback} midiInput={midiInput} />

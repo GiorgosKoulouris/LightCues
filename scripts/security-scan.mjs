@@ -5,7 +5,6 @@
 // id and package or file only. Does no triage.
 // Usage: npm run security:scan -- [--ref <ref> | --release vX.Y.Z | --working-tree]
 //        [--electronegativity] [--keep-worktree]
-import asar from '@electron/asar';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
@@ -25,7 +24,7 @@ import { parseArgs } from 'node:util';
 import { ACCEPTED_FILE, matchAccepted, parseAccepted } from './security-scan/accepted.mjs';
 import { checkElectron, RELEASES_URL, releaseNotesUrl } from './security-scan/electron.mjs';
 import { normalizeFindings, shippedLicenses } from './security-scan/findings.mjs';
-import { buildInventory } from './security-scan/inventory.mjs';
+import { buildInventory, extractApp } from './security-scan/inventory.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SEMGREP_PACKS = ['p/javascript', 'p/typescript', 'p/react', 'p/secrets'];
@@ -211,19 +210,14 @@ function copyWorkingTree(buildDir) {
 // contents are the installer's.
 function build(buildDir) {
   // The Linux Electron binary is never run. electron-builder fetches the Windows one.
-  const env = { ...process.env, ELECTRON_SKIP_BINARY_DOWNLOAD: '1' };
+  // The notices hook would fail the build on a license the scan should report.
+  const env = { ...process.env, ELECTRON_SKIP_BINARY_DOWNLOAD: '1', LIGHTCUES_SKIP_NOTICES: '1' };
   run('npm', ['ci', '--no-audit', '--no-fund'], { cwd: buildDir, env });
   run('npx', ['--no-install', 'electron-vite', 'build'], { cwd: buildDir, env });
   run('npx', ['--no-install', 'electron-builder', '--win', '--dir', '--publish', 'never'], {
     cwd: buildDir,
     env,
   });
-}
-
-function extractApp(resourcesDir, appDir) {
-  asar.extractAll(join(resourcesDir, 'app.asar'), appDir);
-  const unpacked = join(resourcesDir, 'app.asar.unpacked');
-  if (existsSync(unpacked)) cpSync(unpacked, appDir, { recursive: true, force: true });
 }
 
 // Runs the scanners and writes their raw outputs to rawDir, plus the

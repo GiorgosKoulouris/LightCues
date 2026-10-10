@@ -2,7 +2,7 @@
 # and docs/adr/0006-tag-driven-releases.md.
 # The tag must equal `v` + the package.json version and point to a commit on
 # `main`. The installer is built from the tagged commit, never reused from a
-# `main` run.
+# `main` run. The release body is the version's CHANGELOG.md section.
 name: Release
 
 on:
@@ -24,12 +24,12 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The `main` check needs the full history of origin/main.
           fetch-depth: 0
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -53,6 +53,17 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      # The release body is the version's CHANGELOG.md section. Missing or
+      # empty fails before anything is built.
+      - name: Check release notes
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          if ! node scripts/changelog-section.mjs "$VERSION" > "$RUNNER_TEMP/notes.md"; then
+            echo "::error file=CHANGELOG.md::No release notes for $VERSION. Add a '## [$VERSION]' section."
+            exit 1
+          fi
+
       - run: npm ci
 
       - run: npm run check
@@ -72,7 +83,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             --verify-tag \
             --title "LightCues $VERSION" \
-            --generate-notes \
+            --notes-file "$RUNNER_TEMP/notes.md" \
             "${prerelease[@]}" \
             "dist/LightCues-Setup-$VERSION.exe" \
             "dist/LightCues-Setup-$VERSION.exe.blockmap" \
