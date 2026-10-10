@@ -1,6 +1,6 @@
 # Rulesets for main and v* tags
 
-Status: ready-for-human
+Status: resolved
 
 See spec, "Decisions". GitHub settings only.
 
@@ -18,3 +18,7 @@ Check `stage` is not covered: it is force-pushed each round.
 - A test force-push to `main` from a scratch clone is rejected.
 - A test `git push origin v0.0.0-test` from a non-bypass token is rejected. Delete the test tag if it got through.
 - Your normal release (`docs/agents/releasing.md`) still works. Note it in the comments after the next release.
+
+## Comments
+
+2026-10-10: marked resolved by the maintainer. Rulesets set in GitHub settings.
