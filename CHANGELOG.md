@@ -7,6 +7,7 @@ What changed in each LightCues release. The format follows [Keep a Changelog](ht
 ### Added
 
 - **Copy diagnostics** in the sidebar copies the LightCues, Electron and Windows versions, the Outputs, the MIDI ports and MIDI Input, the Tempo and the log folder, to paste into a bug report. It holds no Show or Venue Patch contents.
+- `THIRD_PARTY_NOTICES.txt` in the install folder's `resources` lists the open-source software and fixture data LightCues includes, with their licenses.
 
 ## [0.1.1] - 2026-10-09
 

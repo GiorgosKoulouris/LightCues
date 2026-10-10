@@ -21,6 +21,9 @@ extraResources:
   # fixture data. Main opens them from resources/examples.
   - from: examples
     to: examples
+# Writes resources/THIRD_PARTY_NOTICES.txt from what the packed app contains,
+# before the installer is built. Fails on a missing or disallowed license.
+afterPack: ./scripts/third-party-notices.mjs
 # Use the N-API prebuilds as shipped. A rebuild would need Windows build tools.
 npmRebuild: false
 win:

@@ -84,6 +84,17 @@ Actions are pinned by commit SHA, with the version in a trailing comment.
 - Security updates are a repo setting, ungrouped. GitHub always opens them against `main`, whatever `target-branch` says. Don't merge them there: it breaks the fast-forward from `stage`. Apply the bump on `dev` and close the PR. The alert closes when the batch reaches `main`.
 - `global-agent` is pinned by an override in `package.json` (under `@electron/get`). Dependabot doesn't need an ignore rule for it. Check the pin by hand when `@electron/get` moves.
 
+## Third-party notices
+
+The installer ships `resources/THIRD_PARTY_NOTICES.txt`: the name, version, license and license files of every npm package in the app, and the Open Fixture Library credit from [examples/README.md](../examples/README.md). Electron ships its own `LICENSE.electron.txt` and `LICENSES.chromium.html`.
+
+[scripts/third-party-notices.mjs](../scripts/third-party-notices.mjs) writes it as electron-builder's `afterPack` hook, so `npm run package` makes it. The security scan's build skips it (`LIGHTCUES_SKIP_NOTICES=1`) and reports licenses instead. "What ships" is the scan's inventory of the packed app: its `node_modules`, Electron, and the packages Vite bundled into `out/` ([scripts/bundled-packages.mjs](../scripts/bundled-packages.mjs) lists them in `out/*/bundled-packages.json`).
+
+Packaging fails when a package:
+
+- has a license off the allow list in [scripts/security-scan/licenses.mjs](../scripts/security-scan/licenses.mjs) (GPL-3.0-only compatible). Replace the package, or add the license to the list if it is compatible.
+- ships no LICENSE, COPYING or NOTICE file. Copy the upstream license file to `build/licenses/<name>@<version>.txt`. The version is in the name, so an update is checked again.
+
 ## Security scan
 
 An ad hoc scan, not part of CI. It builds the app from one commit in a temporary worktree and checks what ships in the installer:

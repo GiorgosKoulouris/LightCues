@@ -53,7 +53,7 @@ Pass only one of `--ref`, `--release` and `--working-tree`. `--electronegativity
 1. Checks the tool versions against the Dockerfile pins.
 2. Creates a temporary `git worktree` of the commit (or copies the working tree) under the system temp dir.
 3. Runs `npm ci`, `electron-vite build` and `electron-builder --win --dir`, the same steps as the release build without the NSIS installer.
-4. Extracts `app.asar`. The packages found in it, plus `electron`, are **ships**. Everything else in the lockfile is **dev-only**, with one exception: packages bundled into the renderer (React and others) are not in `app.asar`'s `node_modules`. Claude counts them as shipped during triage.
+4. Extracts `app.asar`. The packages found in it, plus `electron` and the packages Vite bundled into `out/` (React and others, listed in `out/*/bundled-packages.json`), are **ships**. Everything else in the lockfile is **dev-only**.
 5. Runs osv-scanner, semgrep and the Electron runtime check, and matches the findings against [security/accepted.yml](../security/accepted.yml).
 6. Removes the worktree, unless `--keep-worktree`.
 

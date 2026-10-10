@@ -37,9 +37,9 @@ All paths are inside the output dir.
 | File                     | Content                                                                                                                                                       |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `meta.json`              | `ref`, `sha`, `workingTree`, `dirty`, `lockfileSha256`, `versions` (node, npm, osvScanner, semgrep, electronegativity if run), `date`.                         |
-| `inventory.json`         | `ships[]` and `devOnly[]`, each `{ name, version, path }`. `ships[].path` is in the built app (`electron`: lockfile path), `devOnly[].path` in the lockfile.                               |
+| `inventory.json`         | `ships[]` and `devOnly[]`, each `{ name, version, path }`. `ships[].path` is in the built app, `devOnly[].path` in the lockfile. `electron` and the packages Vite bundled into `out/` (React and others, `bundled: true`) ship with their lockfile path. |
 | `raw/findings.json`      | Normalized findings: `{ id, aliases, tool, package, path, line, severity, cvss, title, scope }`. `package` is `name@version` or null, `path` a repo file or null. |
-| `raw/licenses.json`      | Shipped packages: `{ name, version, path, licenses }`. `licenses` is an array, or null if none found.                                                                                                      |
+| `raw/licenses.json`      | Shipped packages: `{ name, version, path, licenses, allowed }`. `licenses` is an array, or null if none found. `allowed`: every license is on the allow list in `scripts/security-scan/licenses.mjs`. |
 | `raw/electron.json`      | Electron runtime check (see [Electron runtime](#electron-runtime)).                                                                                           |
 | `raw/accepted.json`      | `{ matched, expired, unused }`. Each item is an accepted entry plus its matching `findings`.                                                                 |
 | `raw/osv-*.json`         | Raw osv-scanner output, lockfile and built app. Read for advisory details and fixed versions.                                                                 |
@@ -48,7 +48,6 @@ All paths are inside the output dir.
 
 Known gaps in the inputs:
 
-- **Renderer-bundled packages** (React and others) are compiled into `out/renderer`. They are not in the app's `node_modules`, so `inventory.json` lists them as dev-only and `licenses.json` has no row for them. Treat a package imported by `src/renderer/` as shipped. Cover its license from `node_modules/<name>/package.json`.
 - **`scope` on code findings** is a file-name heuristic (`*.test.*` = dev-only). A hint only.
 
 ## Review checklist
@@ -90,7 +89,7 @@ For each finding in `raw/findings.json` not in `accepted.matched`, plus the find
   - **ships**: in the app, no known path from untrusted input.
   - **dev-only**: not in the app (build tools, tests, scripts).
   
-  A package ships if it is in `inventory.ships` (including `electron`) or is bundled into the renderer. Otherwise dev-only.
+  A package ships if it is in `inventory.ships` (including `electron` and the bundled packages). Otherwise dev-only.
 - **Why it matters here**: one line. Name the path, or why there is none (`only used by vitest`, `parses GDTF description.xml from user-picked files`).
 - **Suggested fix**: target version (the lowest fixed version from the advisory, in the same major if one exists) or a code change.
 
@@ -117,7 +116,7 @@ From `raw/electron.json`:
 
 ## Licenses
 
-Shipped packages only (`raw/licenses.json` plus renderer-bundled packages). The app is GPL-3.0-only. Compatible: MIT, ISC, BSD-2/3-Clause, Apache-2.0, 0BSD, Zlib, MPL-2.0, LGPL, GPL-3.0(-or-later), CC0, Unlicense, Python-2.0, BlueOak-1.0.0. Flag anything else, any `UNKNOWN` or missing license, and GPL-2.0-only. Show a table of the flagged ones and a count per license for the rest.
+Shipped packages only (`raw/licenses.json`). The app is GPL-3.0-only. The compatible licenses are the allow list in `scripts/security-scan/licenses.mjs`, which packaging also enforces (`docs/development.md` § Third-party notices). Flag every row with `allowed: false`: a license off the list, `UNKNOWN`, or none found. Show a table of the flagged ones and a count per license for the rest.
 
 ## Accepted risks
 

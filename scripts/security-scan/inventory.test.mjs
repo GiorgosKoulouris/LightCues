@@ -107,6 +107,33 @@ describe('buildInventory', () => {
     expect(devOnly).toEqual([{ name: 'debug', version: '4.4.3', path: 'node_modules/debug' }]);
   });
 
+  it('counts the packages bundled into out/ as shipped, by lockfile path', () => {
+    writeApp(appDir, { 'node_modules/tslib': { name: 'tslib', version: '2.8.1' } });
+    mkdirSync(join(appDir, 'out/renderer'), { recursive: true });
+    writeFileSync(
+      join(appDir, 'out/renderer/bundled-packages.json'),
+      JSON.stringify([
+        { name: 'react', version: '19.3.0', path: 'node_modules/react' },
+        // Also in the app's node_modules: listed once, from there.
+        { name: 'tslib', version: '2.8.1', path: 'node_modules/tslib' },
+      ]),
+    );
+    const lockfile = {
+      packages: {
+        'node_modules/react': { version: '19.3.0', dev: true },
+        'node_modules/tslib': { version: '2.8.1', dev: true },
+      },
+    };
+
+    const { ships, devOnly } = buildInventory(appDir, lockfile);
+
+    expect(ships).toEqual([
+      { name: 'react', version: '19.3.0', path: 'node_modules/react', bundled: true },
+      { name: 'tslib', version: '2.8.1', path: 'node_modules/tslib' },
+    ]);
+    expect(devOnly).toEqual([]);
+  });
+
   it('counts the Electron runtime as shipped', () => {
     writeApp(appDir, { 'node_modules/fflate': { name: 'fflate', version: '0.8.3' } });
     const lockfile = {

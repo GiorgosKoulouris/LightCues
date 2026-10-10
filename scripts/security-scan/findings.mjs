@@ -1,4 +1,5 @@
 import { nameAtVersion } from './inventory.mjs';
+import { isAllowedLicense } from './licenses.mjs';
 
 // One list of findings from the raw tool outputs (ADR 0009). It is the input
 // for triage and for the "new since last report" diff. Tool severity is kept
@@ -34,7 +35,8 @@ export function normalizeFindings(
 }
 
 // The licenses osv-scanner found for each shipped package. The app scan wins.
-// The lockfile scan adds Electron, which is not in the app's node_modules.
+// The lockfile scan adds Electron and the bundled packages, which are not in
+// the app's node_modules. `allowed`: every license is on the allow list.
 export function shippedLicenses(inventory, { osvApp, osvLockfile }) {
   const licenses = new Map();
   for (const output of [osvApp, osvLockfile]) {
@@ -43,7 +45,10 @@ export function shippedLicenses(inventory, { osvApp, osvLockfile }) {
       if (found && !licenses.has(key)) licenses.set(key, found);
     }
   }
-  return inventory.ships.map((p) => ({ ...p, licenses: licenses.get(nameAtVersion(p)) ?? null }));
+  return inventory.ships.map((p) => {
+    const found = licenses.get(nameAtVersion(p)) ?? null;
+    return { ...p, licenses: found, allowed: found !== null && found.every(isAllowedLicense) };
+  });
 }
 
 // osv-scanner groups an advisory with its aliases (GHSA, CVE) per package.
