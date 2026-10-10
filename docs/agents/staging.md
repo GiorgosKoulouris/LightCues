@@ -15,6 +15,7 @@ These apply to every run, whatever the request:
 - **Dry run.** A reorder runs first in a throwaway worktree in the scratchpad. `dev` moves only once the dry run applies cleanly and its tree equals `dev`.
 - **Same tree.** After every rewrite, `git diff <backup tag> dev` is empty.
 - **Local only.** Push and merge only when the user asks.
+- **Rulesets.** `dev` and `stage` block force pushes and deletion for everyone but the repository admin. The force pushes and the `stage` delete below need the user's admin credentials. If GitHub rejects one, stop and tell the user. Don't work around it.
 
 ## Flow
 

@@ -10,6 +10,8 @@ The repo is public and ships an installer. CI actions are pinned by tag only. De
 2. `SECURITY.md` and private vulnerability reporting (issue 02).
 3. Rulesets for `main` and `v*` tags (issue 03).
 4. A third-party notices file in the installer (issue 04).
+5. A Licenses entry in the app (issue 05, from 04).
+6. Rulesets for `dev` and `stage` (issue 06, from 03).
 
 Out of scope: CodeQL (semgrep with the custom Electron rules covers it), scanning in CI. The security scan stays ad hoc (ADR 0009).
 
@@ -20,6 +22,7 @@ Out of scope: CodeQL (semgrep with the custom Electron rules covers it), scannin
 - Security updates (2026-10-10, found in issue 01): GitHub opens them against the default branch whatever `target-branch` says. Don't merge them on `main`. Apply the bump on `dev`, close the PR. Written in `docs/development.md` § Dependabot.
 - `SECURITY.md`: supported versions are only the latest release. Report through GitHub private vulnerability reporting. No email.
 - Rulesets: `main` gets no force push, no deletion, and status checks required for PRs. `v*` tags: only the owner can create them, and no updating or deleting them.
+- Rulesets for `dev` and `stage` (2026-10-10): no force push, no deletion, with Repository admin on the bypass list. The staging flow force-pushes both and deletes `stage`.
 - Notices: generated at package time from what ships in the app (the same inventory the security scan uses), not hand-written.
 
 ## Order

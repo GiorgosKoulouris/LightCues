@@ -1,6 +1,6 @@
 # "About / Licenses" entry in the app
 
-Status: ready-for-human
+Status: resolved
 
 From issue 04 (optional part, not done there).
 
@@ -29,3 +29,5 @@ How it works:
 - If `shell.openPath` fails, main logs it and the renderer shows a toast. In `npm run dev` both fail: the files exist only in a packaged app.
 
 Also in this change, from a user request: the sidebar footer lines up with the view items. "Check for updates" is a labelled button and "Check on startup" has its own row, so it no longer wraps.
+
+2026-10-10: maintainer confirmed the remaining checks are done. Resolved.

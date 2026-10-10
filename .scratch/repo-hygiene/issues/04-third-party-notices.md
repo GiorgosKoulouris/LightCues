@@ -1,6 +1,6 @@
 # Ship third-party notices in the installer
 
-Status: ready-for-human
+Status: resolved
 
 See spec, "Decisions".
 
@@ -38,3 +38,4 @@ Departures from the Fix list:
 - Tests use temp-dir fixtures like `inventory.test.mjs`, not `testdata/` files.
 - About / Licenses entry: not done, filed as issue 05.
 
+2026-10-10: maintainer confirmed the remaining checks are done. Resolved.

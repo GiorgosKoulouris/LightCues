@@ -22,3 +22,5 @@ Check `stage` is not covered: it is force-pushed each round.
 ## Comments
 
 2026-10-10: marked resolved by the maintainer. Rulesets set in GitHub settings.
+
+2026-10-10: maintainer confirmed the release flow still works with the rulesets. Resolved.

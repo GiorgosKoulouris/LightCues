@@ -1,6 +1,6 @@
 # SECURITY.md and private vulnerability reporting
 
-Status: ready-for-human
+Status: resolved
 
 See spec, "Decisions". The file is agent work. The GitHub setting is yours.
 
@@ -20,3 +20,5 @@ See spec, "Decisions". The file is agent work. The GitHub setting is yours.
 2026-10-09 (from `public-face/02`): the README's Links section has an HTML comment for `SECURITY.md`. Replace it with the link.
 
 2026-10-10: agent part done. `SECURITY.md` at the root: latest release only, report through the Security tab's **Report a vulnerability**, no email, acknowledgement within 7 days, best effort, one maintainer, fixes listed under Security in CHANGELOG.md. The README Links comment is replaced with the link. CONTRIBUTING.md links `SECURITY.md` instead of repeating the steps. No promise on advisory publishing or credit: not decided in the spec. No changelog line: docs only. `npm run format:check` passes. Left for the maintainer: enable **Private vulnerability reporting** (Settings > Code security), then check the Security tab shows the policy and the button.
+
+2026-10-10: maintainer confirmed the remaining checks are done. Resolved.
