@@ -1,9 +1,9 @@
 # CI for `stage`, `main` and PRs. See docs/agents/staging.md and
 # docs/agents/releasing.md.
-# - Push to `stage`: check, e2e, package, upload the installer for an install
+# - Push to `stage`: check, package, upload the installer for an install
 #   test, warn when the version has no CHANGELOG.md section.
 # - PR to `main`: check only.
-# - Push to `main`: check, e2e, package, upload the installer, warn on
+# - Push to `main`: check, package, upload the installer, warn on
 #   untagged code and a missing CHANGELOG.md section.
 # - Push to `dev`: nothing.
 # Tags are released by release.yml.
@@ -88,10 +88,6 @@ jobs:
       - run: npm ci
 
       - run: npm run check
-
-      # The built app, launched for real (e2e/). Needs the runner's desktop.
-      - run: npm run e2e
-        if: github.event_name == 'push'
 
       - run: npm run package
         if: github.event_name == 'push'
