@@ -1,4 +1,10 @@
-import type { Capability, Channel, FixtureMode, FixtureProfile } from '../shared/fixture-profile';
+import type {
+  Capability,
+  Channel,
+  FixtureMode,
+  FixtureProfile,
+  Span,
+} from '../shared/fixture-profile';
 
 // Checks a hand-made or edited Profile before it enters the Profile Library.
 // Returns readable errors; an empty list means the Profile is valid.
@@ -71,7 +77,18 @@ function validateCapability(capability: Capability): string[] {
   if (capability.type === 'wheelSlot' && !/^#[0-9a-f]{6}$/i.test(capability.slot.colour)) {
     return [`wheel slot "${capability.slot.name}" colour must be #rrggbb`];
   }
+  // A span that is given but not two finite numbers makes the DMX value NaN.
+  for (const field of ['degrees', 'level', 'hz'] as const) {
+    const span = (capability as Partial<Record<typeof field, unknown>>)[field];
+    if (span != null && !isSpan(span)) {
+      return [`${capability.type} ${field} must be two finite numbers`];
+    }
+  }
   return [];
+}
+
+function isSpan(value: unknown): value is Span {
+  return Array.isArray(value) && value.length === 2 && value.every(Number.isFinite);
 }
 
 function isDmxValue(value: number): boolean {

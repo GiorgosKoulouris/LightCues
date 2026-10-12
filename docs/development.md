@@ -50,6 +50,7 @@ npm test
 | `npm run icon` | Regenerate `build/icon.ico` from `build/icon.svg`. |
 | `npm test` | Run the test suite (Vitest). |
 | `npm run test:watch` | Run Vitest in watch mode. |
+| `npm run coverage` | Run the tests with coverage. Prints a summary and writes an HTML report to `coverage/`. Not part of `check`. |
 | `npm run e2e` | Build, then launch the app and run the end-to-end tests in [e2e/](../e2e/) (Playwright). Opens the example, fires a Scene and checks the Virtual Output's frame in the channel monitor. Not part of `check`. Windows host only. |
 | `npm run typecheck` | Typecheck engine, Electron side and renderer separately. |
 | `npm run lint` | ESLint. Also blocks Electron/UI imports in `src/engine` and `src/shared`. |

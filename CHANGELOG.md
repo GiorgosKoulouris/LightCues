@@ -4,17 +4,7 @@ What changed in each LightCues release. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
-### Added
-
-- **Copy diagnostics** in the sidebar copies the LightCues, Electron and Windows versions, the Outputs, the MIDI ports and MIDI Input, the Tempo and the log folder, to paste into a bug report. It holds no Show or Venue Patch contents.
-- `THIRD_PARTY_NOTICES.txt` in the install folder's `resources` lists the open-source software and fixture data LightCues includes, with their licenses.
-- **Licenses** in the sidebar opens the LightCues license and the third-party notices.
-
-### Changed
-
-- The sidebar's lower buttons line up with the views, and **Check for updates** shows its name.
-
-## [0.1.1] - 2026-10-09
+## [0.1.1] - 2026-10-12
 
 ### Added
 
@@ -28,6 +18,9 @@ What changed in each LightCues release. The format follows [Keep a Changelog](ht
 - Import multi-cell Open Fixture Library Profiles (matrix channels).
 - A toggle hides Fixture labels in the stage views.
 - App icon.
+- **Copy diagnostics** in the sidebar copies the LightCues, Electron and Windows versions, the Outputs, the MIDI ports and MIDI Input, the Tempo and the log folder, to paste into a bug report. It holds no Show or Venue Patch contents.
+- `THIRD_PARTY_NOTICES.txt` in the install folder's `resources` lists the open-source software and fixture data LightCues includes, with their licenses.
+- **Licenses** in the sidebar opens the LightCues license and the third-party notices.
 
 ### Changed
 
@@ -37,6 +30,11 @@ What changed in each LightCues release. The format follows [Keep a Changelog](ht
 - Stage views use the space they have. Spacing in the inspector and the Zone picker.
 - Only the view columns scroll, never the whole window.
 - The system UI font replaces Inter.
+- The sidebar's lower buttons line up with the views, and **Check for updates** shows its name.
+
+### Fixed
+
+- Importing a Profile Library skips a Profile whose pan, tilt, intensity or strobe span is not two finite numbers. Before, its Fixtures could snap to the end of their pan or tilt, or go dark.
 
 ### Security
 

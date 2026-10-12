@@ -13,6 +13,7 @@ export default defineConfig(
       // Semgrep rule fixtures: deliberately insecure, never compiled.
       'security/semgrep/**',
       'test-results/**',
+      'coverage/**',
     ],
   },
   js.configs.recommended,
