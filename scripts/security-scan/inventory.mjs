@@ -1,4 +1,4 @@
-import asar from '@electron/asar';
+import { extractAll } from '@electron/asar';
 import { cpSync, existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BUNDLED_PACKAGES_FILE } from '../bundled-packages.mjs';
@@ -47,7 +47,7 @@ function nameFromPath(path) {
 // The app as it ships: `resourcesDir/app.asar` merged with app.asar.unpacked,
 // extracted to appDir.
 export function extractApp(resourcesDir, appDir) {
-  asar.extractAll(join(resourcesDir, 'app.asar'), appDir);
+  extractAll(join(resourcesDir, 'app.asar'), appDir);
   const unpacked = join(resourcesDir, 'app.asar.unpacked');
   if (existsSync(unpacked)) cpSync(unpacked, appDir, { recursive: true, force: true });
 }
