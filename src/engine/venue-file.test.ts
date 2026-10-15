@@ -4,9 +4,15 @@ import {
   DEFAULT_MOUNTING,
   emptyPatch,
   fixtureRole,
+  patchHouse,
   patchProfile,
   putFixture,
+  putHouseGroup,
+  putHouseLight,
+  setStartupLook,
+  type HouseLight,
   type PatchedFixture,
+  type PatchResult,
   type VenuePatch,
 } from '../shared/venue-patch';
 import { createProfileLibrary } from './profile-library';
@@ -94,7 +100,7 @@ describe('.lcvenue file', () => {
     const standing = fixture({ id: 'standing', profileId: 'acme/led-bar', address: 2, mounting });
     const saved = saveVenueFile(patch([hung, handMade], [standing, handMade]));
 
-    expect(JSON.parse(saved).version).toBe(2);
+    expect(JSON.parse(saved).version).toBe(3);
     expect(loadVenueFile(saved).fixtures).toEqual([hung, standing]);
   });
 
@@ -119,6 +125,51 @@ describe('.lcvenue file', () => {
     };
 
     expect(loadVenueFile(JSON.stringify(v1)).fixtures).toEqual([bar]);
+  });
+
+  it('keeps the House Groups, House Lights and Startup look', () => {
+    const light: HouseLight = {
+      ...{ id: 'h1', name: 'Bar 1', group: 'bar', profileId: 'acme/led-bar', mode: '1ch' },
+      ...{ universe: 1, address: 10 },
+    };
+    const lit = ok(
+      setStartupLook(
+        ok(putHouseLight(ok(putHouseGroup(patch(), { id: 'bar', name: 'Bar' })), light, handMade)),
+        { bar: { intensity: 0.4, colour: { swatch: 'Warm White' } } },
+      ),
+    );
+
+    const opened = loadVenueFile(saveVenueFile(lit));
+
+    expect(patchHouse(opened)).toEqual(patchHouse(lit));
+    expect(opened.profiles).toEqual([handMade]);
+  });
+
+  it('opens a version 2 file, which has no House', () => {
+    const bar = fixture({ profileId: 'acme/led-bar' });
+    const v2 = {
+      version: 2,
+      stage: { width: 10, depth: 6 },
+      universes: [{ number: 1 }],
+      fixtures: [bar],
+      profiles: [handMade],
+    };
+
+    const opened = loadVenueFile(JSON.stringify(v2));
+
+    expect(opened.fixtures).toEqual([bar]);
+    expect(patchHouse(opened)).toEqual({ groups: [], lights: [] });
+  });
+
+  it.each([
+    { house: { groups: [] } },
+    { house: { groups: [], lights: [], startupLook: { bar: { intensity: 1 } } } },
+  ])('rejects a House without its parts: $house', ({ house }) => {
+    const saved = { ...JSON.parse(saveVenueFile(patch())), house };
+
+    expect(() => loadVenueFile(JSON.stringify(saved))).toThrow(
+      'Invalid Venue Patch: a House needs groups, lights and a colour per Startup look setting',
+    );
   });
 
   it('rejects a Mounting rotation outside 0 to under 360', () => {
@@ -195,3 +246,8 @@ describe('.lcvenue file', () => {
     );
   });
 });
+
+function ok(result: PatchResult): VenuePatch {
+  if ('errors' in result) throw new Error(result.errors.join('\n'));
+  return result.patch;
+}

@@ -4,6 +4,9 @@ import type { AimAngles } from './aim';
 import type { FixtureProfile, UnsupportedFeature } from './fixture-profile';
 import type { Colour, Direction, Layer, MidiNote, Scene, Show, Trigger } from './show';
 import type {
+  HouseGroup,
+  HouseLight,
+  HouseLook,
   PatchedFixture,
   StageBounds,
   StagePosition,
@@ -99,7 +102,11 @@ export type EngineCommand =
   // While a Universe is monitored, the engine sends its `dmxFrame`s. A new
   // monitorUniverse replaces the Universe monitored before.
   | { type: 'monitorUniverse'; universe: number }
-  | { type: 'stopMonitor' };
+  | { type: 'stopMonitor' }
+  // While a house look is previewed, the House Lights show it over the house
+  // state. Without a look, they go back to the house state, which the
+  // preview never changes.
+  | { type: 'previewHouseLook'; look?: HouseLook };
 
 // Monitor sends the active Scenes to the Outputs. Blind holds the Outputs at
 // the frames sent last.
@@ -151,7 +158,17 @@ export type VenueEdit =
   | { type: 'putFixture'; fixture: PatchedFixture }
   | { type: 'putFixtures'; fixtures: PatchedFixture[] }
   | { type: 'moveFixture'; id: string; position: StagePosition }
-  | { type: 'removeFixtures'; ids: string[] };
+  | { type: 'removeFixtures'; ids: string[] }
+  // Adds a House Group, or renames it.
+  | { type: 'putHouseGroup'; group: HouseGroup }
+  // Removes its House Lights and its Startup look setting too.
+  | { type: 'removeHouseGroup'; id: string }
+  // Embeds the House Light's Profile from the Profile Library, as for a
+  // Fixture.
+  | { type: 'putHouseLight'; light: HouseLight }
+  | { type: 'removeHouseLights'; ids: string[] }
+  // Without a look, the House Lights start at full white.
+  | { type: 'setStartupLook'; look?: HouseLook };
 
 // A DMX interface port that Universes are sent to. `id` is what a Universe's
 // `output` names: the device's USB serial number, or its port when it has

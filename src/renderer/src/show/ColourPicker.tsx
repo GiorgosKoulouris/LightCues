@@ -5,6 +5,7 @@ import styles from './ColourPicker.module.css';
 type Kind = 'none' | 'swatch' | 'hue';
 
 // Picks a swatch or a hue and saturation, or no colour, shown as `unset`.
+// With `unset` null, a colour must be picked.
 export function ColourPicker({
   label = 'Colour',
   unset = 'Not set',
@@ -12,7 +13,7 @@ export function ColourPicker({
   onChange,
 }: {
   label?: string;
-  unset?: string;
+  unset?: string | null;
   colour?: Colour;
   onChange(colour: Colour | undefined): void;
 }) {
@@ -23,7 +24,7 @@ export function ColourPicker({
         label={label}
         value={kind}
         options={[
-          { value: 'none', label: unset },
+          ...(unset === null ? [] : [{ value: 'none' as const, label: unset }]),
           { value: 'swatch', label: 'Swatch' },
           { value: 'hue', label: 'Hue and saturation' },
         ]}

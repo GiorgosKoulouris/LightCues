@@ -93,6 +93,18 @@ describe('ChannelMonitor', () => {
     expect(readout()).toHaveTextContent('Channel 13 · No Fixture');
   });
 
+  it('names a House Light like a Fixture', () => {
+    const light = { id: 'h1', name: 'Bar 1', group: 'bar', profileId: 'acme/par', mode: '3ch' };
+    const house = {
+      groups: [{ id: 'bar', name: 'Bar' }],
+      lights: [{ ...light, universe: 1, address: 20 }],
+    };
+    render(<ChannelMonitor patch={{ ...PATCH, house }} outputs={SENDING} />);
+
+    fireEvent.mouseEnter(cells()[19]!);
+    expect(readout()).toHaveTextContent('Channel 20 · Bar 1 · Dimmer');
+  });
+
   it('switches Universe and says when nothing is sent for it', async () => {
     render(<ChannelMonitor patch={PATCH} outputs={SENDING} />);
     expect(screen.queryByText(/nothing is sent/)).toBeNull();

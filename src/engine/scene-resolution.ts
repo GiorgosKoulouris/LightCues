@@ -206,6 +206,13 @@ function levelOutput(channels: Channel[], intensity: number, colour: ColourLevel
   };
 }
 
+// The DMX values of a Fixture's channels set to `intensity` (0–1) and
+// `colour`, with no Show: the other channels stay at their defaults. For
+// House Lights, which Scenes never reach.
+export function levelChannels(channels: Channel[], intensity: number, colour: Colour): number[] {
+  return encodeChannels(channels, levelOutput(channels, intensity, colourLevels(colour)));
+}
+
 // The Focus Check over `frames`: every moving Fixture in the patch aimed at
 // `direction`, open in white at `intensity` (0–1). Other Fixtures keep what
 // `frames` has. Returns new frames; `frames` is not changed.

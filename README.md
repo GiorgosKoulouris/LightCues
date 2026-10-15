@@ -54,7 +54,8 @@ In **Venue Patch**:
 1. In the **Rig setup** tab, set the stage width and depth. Click **Add Universe** and pick its Output, the DMX interface. Its status shows **Sending** once it works.
 2. In the **Fixtures** tab, click **Add Fixture** and pick the Profile, Mode, Universe and DMX address.
 3. Drag each Fixture to its place on the stage plan. In the inspector, check its Role and Zone. For moving heads, set how they are mounted.
-4. **Save** the Venue Patch. Make one per venue.
+4. If the venue's own lights, such as the bar, are on a Universe you drive, add them in the **House** tab: a House Group per area, then its House Lights. Set the **Startup look** they get from launch, or they stay at full white. Scenes, Blackout, the Grand Master, Freeze and Blind never reach them.
+5. **Save** the Venue Patch. Make one per venue.
 
 ### 3. Build a Scene
 

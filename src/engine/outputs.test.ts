@@ -8,7 +8,13 @@ import type {
   VenueEdit,
 } from '../shared/protocol';
 import type { Scene } from '../shared/show';
-import { DEFAULT_MOUNTING, type PatchedFixture, type Universe } from '../shared/venue-patch';
+import {
+  DEFAULT_MOUNTING,
+  type HouseLight,
+  type HouseLook,
+  type PatchedFixture,
+  type Universe,
+} from '../shared/venue-patch';
 import { createEngine } from './engine';
 import { encodeSendDmx } from './enttec';
 import type { SerialPortInfo, SerialPorts } from './outputs';
@@ -384,10 +390,16 @@ const wash: Scene = {
 async function playbackEngine(output = 'EN1') {
   const serial = fakeSerial();
   const events: EngineEvent[] = [];
+  // Stands in for the disk, by path.
+  const files = new Map<string, string>();
   const engine = createEngine({
     emit: (e) => events.push(e),
     now: () => Date.now(),
     serialPorts: serial.ports,
+    venueFiles: {
+      read: (path) => files.get(path) ?? '',
+      write: (path, json) => void files.set(path, json),
+    },
   });
   let requestId = 1;
   engine.handle({ type: 'saveProfile', requestId: requestId++, profile: dimmer });
@@ -413,8 +425,16 @@ async function playbackEngine(output = 'EN1') {
     writes: () => serial.port('COM3')?.writes ?? [],
     unplug: (path: string) => serial.unplug(path),
     lastFrame: (universe: number) => engine.lastFrame(universe),
+    // Saves the Venue Patch to `path` and opens it again.
+    reopenVenue(path: string) {
+      engine.grantPath(path);
+      engine.handle({ type: 'saveVenue', requestId: requestId++, path });
+      engine.handle({ type: 'openVenue', requestId: requestId++, path });
+    },
     // The dimmer's level in the latest frame sent.
     level: () => serial.port('COM3')?.writes.at(-1)?.[5],
+    // A DMX channel's value in the latest frame sent.
+    channel: (channel: number) => serial.port('COM3')?.writes.at(-1)?.[4 + channel],
     // The dimmer's light in the latest preview the engine sent.
     light() {
       const event = events.findLast((e) => e.type === 'preview');
@@ -600,6 +620,87 @@ describe('engine Fallback Panel', () => {
 
     expect(playback()?.active).toEqual({ 'layer-1': 'base' });
     expect(level()).toBe(51);
+  });
+});
+
+describe('engine House Lights', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const dim: HouseLook = { bar: { intensity: 0.2, colour: { swatch: 'White' } } };
+
+  // `playbackEngine` with a dimmer House Light at address 10, in the Bar
+  // House Group, and `wash` active.
+  async function houseEngine() {
+    const engine = await playbackEngine();
+    engine.editVenue({ type: 'putHouseGroup', group: { id: 'bar', name: 'Bar' } });
+    const light: HouseLight = {
+      ...{ id: 'h1', name: 'Bar 1', group: 'bar', profileId: 'acme/dimmer', mode: '1ch' },
+      ...{ universe: 1, address: 10 },
+    };
+    engine.editVenue({ type: 'putHouseLight', light });
+    engine.send({ type: 'goScene', sceneId: 'wash' });
+    await vi.advanceTimersByTimeAsync(2000);
+    return { ...engine, house: () => engine.channel(10) };
+  }
+
+  it('sends House Lights at full white with no Startup look', async () => {
+    const { house, level } = await houseEngine();
+
+    expect(house()).toBe(255);
+    expect(level()).toBe(255);
+  });
+
+  it('goes to the Startup look when the Venue Patch is opened, not when it is edited', async () => {
+    const { editVenue, reopenVenue, house } = await houseEngine();
+
+    editVenue({ type: 'setStartupLook', look: dim });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(house()).toBe(255);
+
+    reopenVenue('venue.lcvenue');
+    await vi.advanceTimersByTimeAsync(100);
+    expect(house()).toBe(51);
+  });
+
+  it('ignores Blackout, the Grand Master, Freeze and Blind', async () => {
+    const { send, house, level } = await houseEngine();
+
+    send({ type: 'setBlackout', on: true });
+    send({ type: 'setGrandMaster', level: 0 });
+    send({ type: 'setFreeze', on: true });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(level()).toBe(0);
+    expect(house()).toBe(255);
+
+    send({ type: 'setBlackout', on: false });
+    send({ type: 'setMode', mode: 'blind' });
+    send({ type: 'previewHouseLook', look: dim });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(level()).toBe(0);
+    expect(house()).toBe(51);
+  });
+
+  it('shows a previewed look, then goes back to the house state', async () => {
+    const { send, house } = await houseEngine();
+
+    send({ type: 'previewHouseLook', look: dim });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(house()).toBe(51);
+
+    send({ type: 'previewHouseLook' });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(house()).toBe(255);
+  });
+
+  it('shows in the channel monitor', async () => {
+    const { events, send } = await houseEngine();
+    send({ type: 'setBlackout', on: true });
+    send({ type: 'monitorUniverse', universe: 1 });
+    await vi.advanceTimersByTimeAsync(200);
+
+    const last = events.findLast((e) => e.type === 'dmxFrame');
+    expect(last?.type === 'dmxFrame' && [last.values[0], last.values[9]]).toEqual([0, 255]);
   });
 });
 

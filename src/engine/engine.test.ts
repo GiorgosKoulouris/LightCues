@@ -350,6 +350,76 @@ describe('engine Venue Patch undo', () => {
   });
 });
 
+describe('engine House', () => {
+  const light = {
+    ...{ id: 'h1', name: 'Bar 1', group: 'bar', profileId: 'acme/dimmer', mode: '1ch' },
+    ...{ universe: 1, address: 100 },
+  };
+
+  it('adds a House Group and a House Light with a copy of its Profile from the library', () => {
+    const { edit, patch } = venueEngine();
+
+    expect(edit({ type: 'putHouseGroup', group: { id: 'bar', name: 'Bar' } })).toEqual([]);
+    expect(edit({ type: 'putHouseLight', light })).toEqual([]);
+
+    expect(patch()).toMatchObject({
+      fixtures: [],
+      profiles: [dimmer],
+      house: { groups: [{ id: 'bar', name: 'Bar' }], lights: [light] },
+    });
+  });
+
+  it('rejects a House Light in an unknown Group or over a Fixture', () => {
+    const { edit } = venueEngine();
+    edit({ type: 'putFixture', fixture: fixture({ address: 100 }) });
+    edit({ type: 'putHouseGroup', group: { id: 'bar', name: 'Bar' } });
+
+    expect(edit({ type: 'putHouseLight', light: { ...light, group: 'ceiling' } })).toEqual([
+      '"Bar 1": House Group "ceiling" is not in the patch',
+    ]);
+    expect(edit({ type: 'putHouseLight', light: { ...light, id: 'h2' } })).toEqual([
+      '"Bar 1" (1.100–1.100) overlaps "Dimmer 1" (1.100–1.100)',
+    ]);
+  });
+
+  it('removes a House Group with its House Lights, and undoes it as one step', () => {
+    const { edit, patch, undo } = venueEngine();
+    edit({ type: 'putHouseGroup', group: { id: 'bar', name: 'Bar' } });
+    edit({ type: 'putHouseLight', light });
+
+    expect(edit({ type: 'removeHouseGroup', id: 'bar' })).toEqual([]);
+    expect(patch()).toMatchObject({ profiles: [], house: { groups: [], lights: [] } });
+
+    undo();
+    expect(patch().house).toEqual({ groups: [{ id: 'bar', name: 'Bar' }], lights: [light] });
+  });
+
+  it('rejects removing a House Group or House Light that is not in the patch', () => {
+    const { edit } = venueEngine();
+
+    expect(edit({ type: 'removeHouseGroup', id: 'bar' })).toEqual([
+      'House Group "bar" is not in the patch',
+    ]);
+    expect(edit({ type: 'removeHouseLights', ids: ['h1'] })).toEqual([
+      'House Light id "h1" is not in the patch',
+    ]);
+  });
+
+  it('undoes quick changes to the Startup look as one step', () => {
+    const clock = { now: 0 };
+    const { edit, patch, undo } = venueEngine(new Map(), clock);
+    edit({ type: 'putHouseGroup', group: { id: 'bar', name: 'Bar' } });
+    for (const intensity of [0.2, 0.4, 0.6]) {
+      clock.now += 100;
+      edit({ type: 'setStartupLook', look: { bar: { intensity, colour: { swatch: 'White' } } } });
+    }
+
+    undo();
+
+    expect(patch().house).toEqual({ groups: [{ id: 'bar', name: 'Bar' }], lights: [] });
+  });
+});
+
 const wash: Scene = {
   id: 'wash',
   name: 'Wash',

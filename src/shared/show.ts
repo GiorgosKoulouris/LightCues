@@ -3,6 +3,7 @@
 //
 // Scenes target Zones × Roles, never Fixtures, and hold no raw DMX values, so
 // the same Show runs against any Venue Patch (ADR 0001).
+import { colourProblems, inRange, type Colour } from './colour';
 import { ROLES, type Role } from './fixture-profile';
 import {
   fixtureRole,
@@ -14,26 +15,7 @@ import {
   type Zone,
 } from './venue-patch';
 
-// Named colours for a Rule, translated per Fixture by the engine.
-export const SWATCHES = [
-  'Red',
-  'Orange',
-  'Amber',
-  'Yellow',
-  'Green',
-  'Cyan',
-  'Blue',
-  'Lavender',
-  'Magenta',
-  'Pink',
-  'White',
-  'Warm White',
-  'UV',
-] as const;
-export type Swatch = (typeof SWATCHES)[number];
-
-// hue in degrees, 0 to under 360; saturation 0–1.
-export type Colour = { hue: number; saturation: number } | { swatch: Swatch };
+export { SWATCHES, type Colour, type Swatch } from './colour';
 
 // Named aims for moving Fixtures, computed per Fixture from its stage
 // position and Mounting (ADR 0007).
@@ -384,25 +366,8 @@ function directionProblems(direction: Direction): string[] {
   return DIRECTIONS.includes(direction) ? [] : [`"${direction}" is not a Direction`];
 }
 
-function colourProblems(colour: Colour): string[] {
-  if ('swatch' in colour) {
-    return SWATCHES.includes(colour.swatch) ? [] : [`"${colour.swatch}" is not a swatch`];
-  }
-  const problems: string[] = [];
-  if (!inRange(colour.hue, 0, 360) || colour.hue === 360) {
-    problems.push('hue must be from 0 to under 360');
-  }
-  if (!inRange(colour.saturation, 0, 1)) problems.push('saturation must be from 0 to 1');
-  return problems;
-}
-
 function isWhole(value: number, min: number, max: number): boolean {
   return Number.isInteger(value) && value >= min && value <= max;
-}
-
-// False for NaN and non-numbers.
-function inRange(value: number, min: number, max: number): boolean {
-  return typeof value === 'number' && value >= min && value <= max;
 }
 
 function duplicates<T>(values: T[]): T[] {

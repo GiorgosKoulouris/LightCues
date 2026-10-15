@@ -13,6 +13,7 @@ import { findTrigger, validateShow } from '../shared/show';
 import { validatePatch } from '../shared/venue-patch';
 import { profileName } from '../shared/profile-edit';
 import { createChannelMonitor } from './channel-monitor';
+import { createHouse } from './house';
 import { withoutContents } from './log-safe';
 import {
   createMidiInput,
@@ -149,7 +150,10 @@ export function createEngine({
     emit,
     now,
     changed: () => outputs?.patchChanged(),
-    replaced: () => playback.venueReplaced(),
+    replaced: () => {
+      playback.venueReplaced();
+      house.venueReplaced();
+    },
     files: venueFiles,
     recent: recentFiles.of('venue'),
     granted: grants.has,
@@ -172,13 +176,14 @@ export function createEngine({
     show: show.show,
     patch: venue.patch,
   });
+  const house = createHouse({ patch: venue.patch });
   const outputs =
     serialPorts &&
     createOutputs({
       ports: serialPorts,
       emit,
       universes: () => venue.patch().universes,
-      frames: () => playback.frames(),
+      frames: () => house.frames(playback.frames()),
     });
 
   const preview = createPreview({ emit, lights: () => playback.lights() });
@@ -339,16 +344,18 @@ export function createEngine({
     return 'empty';
   }
 
-  // The Venue Patch first, so the Show's Scenes resolve against it. Their
-  // files are granted, as the last engine held them: main re-grants only
-  // the paths it granted, not the recent files the engine reopened itself. The errors name no
-  // contents, since they are logged.
+  // The Venue Patch first, so the Show's Scenes resolve against it. The
+  // House Lights go to its Startup look, as the house state is not kept.
+  // Their files are granted, as the last engine held them: main re-grants
+  // only the paths it granted, not the recent files the engine reopened
+  // itself. The errors name no contents, since they are logged.
   function restoreDocuments({ show: shown, venue: patched }: EngineSnapshot): void {
     if (validatePatch(patched.document).length > 0) throw new Error('Invalid Venue Patch');
     if (validateShow(shown.document).length > 0) throw new Error('Invalid Show');
     for (const { path } of [patched, shown]) if (path !== undefined) grants.grant(path);
     venue.restore(patched);
     show.restore(shown);
+    house.venueReplaced();
   }
 
   function resolveOnce(): void {
@@ -481,6 +488,9 @@ export function createEngine({
           break;
         case 'stopMonitor':
           monitor.stop();
+          break;
+        case 'previewHouseLook':
+          house.preview(command.look);
           break;
       }
     },

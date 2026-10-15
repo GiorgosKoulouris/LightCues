@@ -2,15 +2,16 @@
 // multi-select.
 import type { FixtureProfile } from '../../../shared/fixture-profile';
 import {
+  addressedInUniverse,
   addressProblem,
   DMX_CHANNELS,
-  fixturesInUniverse,
   fixtureZone,
   lastChannel,
   patchProfile,
   ZONE_COLUMNS,
   ZONE_LEVELS,
   ZONE_ROWS,
+  type AddressedFixture,
   type PatchedFixture,
   type VenuePatch,
   type Zone,
@@ -30,7 +31,7 @@ export interface FixtureFilter {
 }
 
 // Universe.address, as DMX addresses are written: 1.17.
-export function addressLabel({ universe, address }: PatchedFixture): string {
+export function addressLabel({ universe, address }: AddressedFixture): string {
   return `${universe}.${address}`;
 }
 
@@ -68,10 +69,10 @@ export function fixtureGroup(patch: VenuePatch, fixture: PatchedFixture, by: Gro
   return by === 'universe' ? `Universe ${fixture.universe}` : zoneName(fixtureZone(patch, fixture));
 }
 
-// The address after the last Fixture in a Universe. A suggestion: the engine
-// still rejects it if the Fixture does not fit.
+// The address after the last Fixture or House Light in a Universe. A
+// suggestion: the engine still rejects it if the Fixture does not fit.
 export function nextAddress(patch: VenuePatch, universe: number): number {
-  const ends = fixturesInUniverse(patch, universe).map((f) => lastChannel(patch, f) + 1);
+  const ends = addressedInUniverse(patch, universe).map((f) => lastChannel(patch, f) + 1);
   return Math.max(1, ...ends);
 }
 
@@ -79,7 +80,7 @@ export function nextAddress(patch: VenuePatch, universe: number): number {
 // `patch` must embed the Fixture's Profile.
 export function parseAddress(
   patch: VenuePatch,
-  fixture: PatchedFixture,
+  fixture: AddressedFixture,
   text: string,
 ): ParseResult<number> {
   const number = parseNumber(text, { min: 1, max: DMX_CHANNELS });

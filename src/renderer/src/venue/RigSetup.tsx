@@ -2,7 +2,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { OutputStatus } from '../../../shared/protocol';
 import {
-  fixturesInUniverse,
+  addressedInUniverse,
   freeUniverseNumber,
   type StageBounds,
   type Universe,
@@ -90,7 +90,9 @@ export function RigSetup({
                     <span className={styles.hint}>No hardware. See the channel monitor.</span>
                   )}
                 </td>
-                <td className={styles.mono}>{fixturesInUniverse(patch, universe.number).length}</td>
+                <td className={styles.mono}>
+                  {addressedInUniverse(patch, universe.number).length}
+                </td>
                 <td className={styles.actions}>
                   <IconButton
                     icon={<Trash2 />}

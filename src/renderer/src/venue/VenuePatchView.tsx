@@ -3,7 +3,8 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { OutputStatus, VenueEdit } from '../../../shared/protocol';
 import { DIRECTIONS, type Direction } from '../../../shared/show';
 import {
-  fixturesInUniverse,
+  addressedInUniverse,
+  type AddressedFixture,
   type PatchedFixture,
   type VenuePatch,
 } from '../../../shared/venue-patch';
@@ -27,6 +28,7 @@ import { AddFixtureDialog } from './AddFixtureDialog';
 import { ChannelMonitor } from './ChannelMonitor';
 import { FixtureInspector } from './FixtureInspector';
 import { FixtureList } from './FixtureList';
+import { HouseSetup } from './HouseSetup';
 import {
   filterFixtures,
   selectFixture,
@@ -41,10 +43,11 @@ import { usePlanLabels } from './usePlanLabels';
 import { useVenuePatch } from './useVenuePatch';
 import styles from './VenuePatchView.module.css';
 
-type SubTab = 'fixtures' | 'rig';
+type SubTab = 'fixtures' | 'house' | 'rig';
 
 const TABS = [
   { value: 'fixtures', label: 'Fixtures' },
+  { value: 'house', label: 'House' },
   { value: 'rig', label: 'Rig setup' },
 ] as const;
 
@@ -55,6 +58,8 @@ const FOCUS_CHECK_OPTIONS = [
 
 // Edits the current Venue Patch. Fixtures: the Fixture list, the stage plan
 // and the inspector, with Shift/Ctrl multi-select in the list and on the plan.
+// House: the House Groups, their House Lights and the Startup look, shown
+// only while the view is active, so leaving it ends a house look preview.
 // Rig setup: stage size, Universes and Outputs. Removing is instant, and
 // undone with Undo. While `active`, Ctrl+N, O, S and Shift+S act on its file,
 // Ctrl+Z and Ctrl+Shift+Z undo and redo, and Ctrl+F searches the Fixtures.
@@ -135,7 +140,7 @@ export function VenuePatchView({ active }: { active: boolean }) {
   }
 
   async function removeUniverse(number: number) {
-    const fixtures = fixturesInUniverse(patch, number);
+    const fixtures = addressedInUniverse(patch, number);
     if (!(await change({ type: 'removeUniverse', number }))) return;
     const also = fixtures.length > 0 ? [`its ${namedCount('Fixture', names(fixtures))}`] : [];
     toast({ message: removedMessage(`Universe ${number}`, also) });
@@ -242,13 +247,18 @@ export function VenuePatchView({ active }: { active: boolean }) {
               onOpenChange={setAdding}
               patch={patch}
               profiles={entries.map((e) => e.profile)}
-              onAdd={async (fixture) => {
+              onAdd={async (addressed) => {
+                const fixture = { ...addressed, x: 0, y: patch.stage.depth / 6, height: 0 };
                 const added = await change({ type: 'putFixture', fixture });
                 if (added) setSelection(selectFixture({ ids: [] }, fixture.id, [], {}));
                 return added;
               }}
             />
           </div>
+        ) : tab === 'house' ? (
+          active && (
+            <HouseSetup patch={patch} profiles={entries.map((e) => e.profile)} change={change} />
+          )
         ) : (
           <RigSetup
             patch={patch}
@@ -274,6 +284,6 @@ function FocusCheckBeams({ patch }: { patch: VenuePatch }) {
   );
 }
 
-function names(fixtures: PatchedFixture[]): string[] {
+function names(fixtures: AddressedFixture[]): string[] {
   return fixtures.map((f) => f.name);
 }

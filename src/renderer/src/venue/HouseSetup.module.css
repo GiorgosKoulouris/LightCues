@@ -1,0 +1,128 @@
+/* Scrolls on its own, so the tab bar stays in place. */
+.house {
+  --house-width: 960px;
+  --address-field-width: 80px;
+  --look-setting-width: 280px;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: var(--house-width);
+  height: 100%;
+  padding-top: var(--space-4);
+  overflow-y: auto;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.heading {
+  font-size: var(--text-lg);
+}
+
+.hint {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.empty {
+  color: var(--text-faint);
+}
+
+.add {
+  align-self: flex-start;
+}
+
+/* One House Group: its name, its House Lights and Add House Light. */
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+
+.groupHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-align: left;
+}
+
+.table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.profile {
+  padding-top: var(--space-2);
+  color: var(--text-muted);
+}
+
+.address {
+  width: var(--address-field-width);
+}
+
+.actions {
+  width: 1%;
+  text-align: right;
+}
+
+/* The Startup look: one setting per House Group. */
+.look {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--look-setting-width), 1fr));
+  gap: var(--space-3);
+}
+
+.setting {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+
+.legend {
+  padding: 0 var(--space-1);
+  font-weight: var(--weight-medium);
+}
+
+.intensity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.slider {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
+.percent {
+  min-width: 4ch;
+  font-family: var(--font-mono);
+  text-align: right;
+}

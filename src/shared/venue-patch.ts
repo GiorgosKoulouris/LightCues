@@ -4,6 +4,7 @@
 // Stage coordinates are metres. x runs from the centre line, positive toward
 // Stage Left (the audience's right). y runs from the downstage edge, positive
 // upstage; y < 0 is in front of the stage. height is above the stage floor.
+import { colourProblems, inRange, type Colour } from './colour';
 import { ROLES, type FixtureMode, type FixtureProfile, type Role } from './fixture-profile';
 
 export const ZONE_ROWS = ['Front', 'Downstage', 'Midstage', 'Upstage'] as const;
@@ -96,8 +97,10 @@ export const DEFAULT_MOUNTING: Mounting = {
   tiltOffset: 0,
 };
 
-export interface PatchedFixture extends StagePosition {
-  // Unique in the patch.
+// What stage Fixtures and House Lights both have: a Profile mode at an
+// address.
+export interface AddressedFixture {
+  // Unique in the patch, across stage Fixtures and House Lights.
   id: string;
   name: string;
   // An embedded Profile and one of its modes.
@@ -106,6 +109,9 @@ export interface PatchedFixture extends StagePosition {
   universe: number;
   // 1-based start address.
   address: number;
+}
+
+export interface PatchedFixture extends AddressedFixture, StagePosition {
   // Overrides of the Profile's default Role and the suggested Zone.
   role?: Role;
   zone?: Zone;
@@ -113,13 +119,48 @@ export interface PatchedFixture extends StagePosition {
   mounting?: Mounting;
 }
 
+// A named set of House Lights, such as Bar or Ceiling.
+export interface HouseGroup {
+  // Unique among the House Groups.
+  id: string;
+  name: string;
+}
+
+// A Fixture belonging to the venue. It has no stage position, Zone, Role or
+// Mounting, and Scenes never target it.
+export interface HouseLight extends AddressedFixture {
+  // A House Group id.
+  group: string;
+}
+
+// What a house look sets one House Group to. Intensity is 0–1.
+export interface HouseSetting {
+  intensity: number;
+  colour: Colour;
+}
+
+// What a House Group shows until a house look sets it.
+export const FULL_WHITE: HouseSetting = { intensity: 1, colour: { swatch: 'White' } };
+
+// Settings by House Group id. A Group not listed stays where it is.
+export type HouseLook = Record<string, HouseSetting>;
+
+// The venue's own lights. Without a Startup look, they start at full white.
+export interface House {
+  groups: HouseGroup[];
+  lights: HouseLight[];
+  startupLook?: HouseLook;
+}
+
 export interface VenuePatch {
   stage: StageBounds;
   universes: Universe[];
   fixtures: PatchedFixture[];
-  // Copies of the Profiles the Fixtures use, so the patch does not depend on
-  // the Profile Library.
+  // Copies of the Profiles the Fixtures and House Lights use, so the patch
+  // does not depend on the Profile Library.
   profiles: FixtureProfile[];
+  // Absent means no House Groups or House Lights.
+  house?: House;
 }
 
 export type PatchResult = { patch: VenuePatch } | { errors: string[] };
@@ -231,17 +272,103 @@ export function fixturesInUniverse(patch: VenuePatch, number: number): PatchedFi
   return patch.fixtures.filter((f) => f.universe === number);
 }
 
-// Removes a Universe together with its Fixtures.
+// The stage Fixtures and House Lights in a Universe.
+export function addressedInUniverse(patch: VenuePatch, number: number): AddressedFixture[] {
+  return addressedFixtures(patch).filter((f) => f.universe === number);
+}
+
+// Removes a Universe together with its Fixtures and House Lights.
 export function removeUniverse(patch: VenuePatch, number: number): VenuePatch {
+  const house = patch.house && {
+    ...patch.house,
+    lights: patch.house.lights.filter((l) => l.universe !== number),
+  };
   return dropUnusedProfiles({
     ...patch,
     universes: patch.universes.filter((u) => u.number !== number),
     fixtures: patch.fixtures.filter((f) => f.universe !== number),
+    ...(house && { house }),
   });
 }
 
+// The patch's House Groups, House Lights and Startup look.
+export function patchHouse(patch: VenuePatch): House {
+  return patch.house ?? { groups: [], lights: [] };
+}
+
+// Adds a House Group, or renames the one with the same id.
+export function putHouseGroup(patch: VenuePatch, group: HouseGroup): PatchResult {
+  const house = patchHouse(patch);
+  const groups = house.groups.some((g) => g.id === group.id)
+    ? house.groups.map((g) => (g.id === group.id ? group : g))
+    : [...house.groups, group];
+  return validated({ ...patch, house: { ...house, groups } });
+}
+
+// Removes a House Group together with its House Lights and its setting in
+// the Startup look.
+export function removeHouseGroup(patch: VenuePatch, id: string): VenuePatch {
+  const { groups, lights, startupLook } = patchHouse(patch);
+  const house: House = {
+    groups: groups.filter((g) => g.id !== id),
+    lights: lights.filter((l) => l.group !== id),
+  };
+  const look = startupLook && withoutGroup(startupLook, id);
+  if (look) house.startupLook = look;
+  return dropUnusedProfiles({ ...patch, house });
+}
+
+// `look` without its setting for a House Group; undefined when nothing is left.
+export function withoutGroup(look: HouseLook, id: string): HouseLook | undefined {
+  const rest = Object.fromEntries(Object.entries(look).filter(([group]) => group !== id));
+  return Object.keys(rest).length > 0 ? rest : undefined;
+}
+
+// Adds a House Light, or replaces the one with the same id. Its Profile is
+// embedded as for a stage Fixture.
+export function putHouseLight(
+  patch: VenuePatch,
+  light: HouseLight,
+  profile?: FixtureProfile,
+): PatchResult {
+  if (profile && profile.id !== light.profileId) {
+    return {
+      errors: [`"${light.name}": Profile "${profile.id}" given for Profile "${light.profileId}"`],
+    };
+  }
+  const house = patchHouse(patch);
+  const lights = house.lights.some((l) => l.id === light.id)
+    ? house.lights.map((l) => (l.id === light.id ? light : l))
+    : [...house.lights, light];
+  const embeds = patch.profiles.some((p) => p.id === light.profileId);
+  const profiles = profile && !embeds ? [...patch.profiles, profile] : patch.profiles;
+  return validated(dropUnusedProfiles({ ...patch, profiles, house: { ...house, lights } }));
+}
+
+// Removes House Lights, and the Profile copies no one uses any more.
+export function removeHouseLights(patch: VenuePatch, ids: string[]): VenuePatch {
+  const house = patchHouse(patch);
+  return dropUnusedProfiles({
+    ...patch,
+    house: { ...house, lights: house.lights.filter((l) => !ids.includes(l.id)) },
+  });
+}
+
+// Sets the house look sent from launch; undefined leaves the House Lights at
+// full white.
+export function setStartupLook(patch: VenuePatch, look: HouseLook | undefined): PatchResult {
+  const house = { ...patchHouse(patch), startupLook: look };
+  if (look === undefined) delete house.startupLook;
+  return validated({ ...patch, house });
+}
+
+// The stage Fixtures and House Lights: everything with an address.
+export function addressedFixtures(patch: VenuePatch): AddressedFixture[] {
+  return [...patch.fixtures, ...patchHouse(patch).lights];
+}
+
 function dropUnusedProfiles(patch: VenuePatch): VenuePatch {
-  const used = new Set(patch.fixtures.map((f) => f.profileId));
+  const used = new Set(addressedFixtures(patch).map((f) => f.profileId));
   return { ...patch, profiles: patch.profiles.filter((p) => used.has(p.id)) };
 }
 
@@ -256,9 +383,12 @@ export function validatePatch(patch: VenuePatch): string[] {
   const { width, depth } = patch.stage;
   const errors = width > 0 && depth > 0 ? [] : ['Stage width and depth must be greater than 0'];
   errors.push(...validateUniverses(patch.universes));
-  const placed: { fixture: PatchedFixture; first: number; last: number }[] = [];
-  for (const fixture of patch.fixtures) {
-    const problem = fixtureProblem(patch, fixture);
+  const placed: { fixture: AddressedFixture; first: number; last: number }[] = [];
+  const problems = [
+    ...patch.fixtures.map((f) => ({ fixture: f, problem: fixtureProblem(patch, f) })),
+    ...patchHouse(patch).lights.map((l) => ({ fixture: l, problem: houseLightProblem(patch, l) })),
+  ];
+  for (const { fixture, problem } of problems) {
     if (problem) {
       errors.push(`"${fixture.name}": ${problem}`);
       continue;
@@ -284,13 +414,38 @@ export function validatePatch(patch: VenuePatch): string[] {
     }
     placed.push({ fixture, first, last });
   }
-  for (const id of duplicates(patch.fixtures.map((f) => f.id))) {
+  for (const id of duplicates(addressedFixtures(patch).map((f) => f.id))) {
     errors.push(`Fixture id "${id}" is used twice`);
   }
   for (const id of duplicates(patch.profiles.map((p) => p.id))) {
     errors.push(`Profile "${id}" is embedded twice`);
   }
+  errors.push(...validateHouse(patchHouse(patch)));
   return errors;
+}
+
+function validateHouse({ groups, startupLook }: House): string[] {
+  const errors = duplicates(groups.map((g) => g.id)).map(
+    (id) => `House Group id "${id}" is used twice`,
+  );
+  if (startupLook !== undefined) {
+    errors.push(...houseLookProblems(groups, startupLook).map((p) => `Startup look: ${p}`));
+  }
+  return errors;
+}
+
+function houseLookProblems(groups: HouseGroup[], look: HouseLook): string[] {
+  const problems: string[] = [];
+  for (const [id, { intensity, colour }] of Object.entries(look)) {
+    const group = groups.find((g) => g.id === id);
+    if (!group) {
+      problems.push(`House Group "${id}" is not in the patch`);
+      continue;
+    }
+    if (!inRange(intensity, 0, 1)) problems.push(`"${group.name}" intensity must be from 0 to 1`);
+    problems.push(...colourProblems(colour).map((p) => `"${group.name}" ${p}`));
+  }
+  return problems;
 }
 
 function validateUniverses(universes: Universe[]): string[] {
@@ -313,7 +468,7 @@ function validateUniverses(universes: Universe[]): string[] {
 
 // Why a Fixture cannot be placed in its Universe, if it cannot.
 function fixtureProblem(patch: VenuePatch, fixture: PatchedFixture): string | undefined {
-  const { universe, profileId, mode, address, x, y, height, role, zone, mounting } = fixture;
+  const { x, y, height, role, zone, mounting } = fixture;
   if (![x, y, height].every(Number.isFinite)) return 'x, y and height must be numbers';
   if (mounting !== undefined) {
     const problem = mountingProblem(mounting);
@@ -323,6 +478,19 @@ function fixtureProblem(patch: VenuePatch, fixture: PatchedFixture): string | un
   if (zone !== undefined && !isZone(zone)) {
     return `Zone ${zone.row}/${zone.column}/${zone.level} is not on the stage grid`;
   }
+  return addressedProblem(patch, fixture);
+}
+
+function houseLightProblem(patch: VenuePatch, light: HouseLight): string | undefined {
+  if (!patchHouse(patch).groups.some((g) => g.id === light.group)) {
+    return `House Group "${light.group}" is not in the patch`;
+  }
+  return addressedProblem(patch, light);
+}
+
+// Why a Fixture's Universe, Profile, mode or address is invalid, if one is.
+function addressedProblem(patch: VenuePatch, fixture: AddressedFixture): string | undefined {
+  const { universe, profileId, mode, address } = fixture;
   if (!patch.universes.some((u) => u.number === universe)) {
     return `Universe ${universe} is not in the patch`;
   }
@@ -355,18 +523,18 @@ function isAddress(address: number): boolean {
 }
 
 // The last channel a patched Fixture occupies in its Universe.
-export function lastChannel(patch: VenuePatch, fixture: PatchedFixture): number {
+export function lastChannel(patch: VenuePatch, fixture: AddressedFixture): number {
   return fixture.address + fixtureMode(patch, fixture).channels.length - 1;
 }
 
 // Why a Fixture's address does not fit in its Universe, if it does not: out
 // of range, running past the last channel, or overlapping another Fixture.
-export function addressProblem(patch: VenuePatch, fixture: PatchedFixture): string | undefined {
+export function addressProblem(patch: VenuePatch, fixture: AddressedFixture): string | undefined {
   const { universe, address } = fixture;
   if (!isAddress(address)) return `Must be 1–${DMX_CHANNELS}`;
   const last = lastChannel(patch, fixture);
   if (last > DMX_CHANNELS) return `Runs past channel ${DMX_CHANNELS}`;
-  for (const other of fixturesInUniverse(patch, universe)) {
+  for (const other of addressedInUniverse(patch, universe)) {
     if (other.id === fixture.id) continue;
     const otherLast = lastChannel(patch, other);
     if (other.address <= last && address <= otherLast) {
@@ -416,15 +584,15 @@ export function fixtureRole(patch: VenuePatch, fixture: PatchedFixture): Role {
   return fixture.role ?? patchProfile(patch, fixture).defaultRole;
 }
 
-// The embedded Profile of a patched Fixture.
-export function patchProfile(patch: VenuePatch, fixture: PatchedFixture): FixtureProfile {
+// The embedded Profile of a patched Fixture or House Light.
+export function patchProfile(patch: VenuePatch, fixture: AddressedFixture): FixtureProfile {
   const profile = patch.profiles.find((p) => p.id === fixture.profileId);
   if (!profile) throw new Error(`Profile "${fixture.profileId}" is not in the patch`);
   return profile;
 }
 
-// The Profile mode a patched Fixture is in.
-export function fixtureMode(patch: VenuePatch, fixture: PatchedFixture): FixtureMode {
+// The Profile mode a patched Fixture or House Light is in.
+export function fixtureMode(patch: VenuePatch, fixture: AddressedFixture): FixtureMode {
   const mode = patchProfile(patch, fixture).modes.find((m) => m.name === fixture.mode);
   if (!mode) throw new Error(`Mode "${fixture.mode}" is not in Profile "${fixture.profileId}"`);
   return mode;
