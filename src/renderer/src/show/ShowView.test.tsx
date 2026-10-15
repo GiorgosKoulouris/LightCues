@@ -2,7 +2,13 @@ import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EngineCommand, EngineEvent, ShowEdit } from '../../../shared/protocol';
-import type { Scene, Show } from '../../../shared/show';
+import {
+  moveHousePreset,
+  putHousePreset,
+  removeHousePreset,
+  type Scene,
+  type Show,
+} from '../../../shared/show';
 import { emptyPatch } from '../../../shared/venue-patch';
 import { installFakeEngine, type FakeEngine } from '../test-engine';
 import { stubListLayout } from '../test-layout';
@@ -120,6 +126,14 @@ function applied(current: Show, edit: ShowEdit): Show {
       return { ...current, baseLook: edit.sceneId };
     case 'setPanelScenes':
       return { ...current, panelScenes: edit.sceneIds };
+    case 'putHousePreset': {
+      const put = putHousePreset(current, edit.preset);
+      return 'show' in put ? put.show : current;
+    }
+    case 'moveHousePreset':
+      return moveHousePreset(current, edit.id, edit.to);
+    case 'removeHousePreset':
+      return removeHousePreset(current, edit.id);
     default:
       return current;
   }
@@ -444,5 +458,106 @@ describe('Triggers', () => {
     expect(table).toHaveTextContent('Warm');
     await userEvent.selectOptions(screen.getByLabelText('MIDI Input'), 'nanoKEY');
     expect(sentOf('selectMidiInput')).toEqual([{ type: 'selectMidiInput', name: 'nanoKEY' }]);
+  });
+});
+
+describe('New Trigger', () => {
+  it("warns when the note is a House Preset's", async () => {
+    show = {
+      ...SHOW,
+      housePresets: [{ id: 'dim', name: 'Dim', fade: 2, note: { channel: 1, note: 62 } }],
+    };
+    await renderView();
+    await userEvent.click(screen.getByRole('tab', { name: 'Triggers' }));
+    const form = within(screen.getByRole('region', { name: 'New Trigger' }));
+
+    const note = form.getByLabelText('Note');
+    await userEvent.clear(note);
+    await userEvent.type(note, '62{Enter}');
+    expect(form.getByText(/note of House Preset Dim/)).toBeInTheDocument();
+    expect(form.getByRole('button', { name: 'Map' })).toBeDisabled();
+  });
+});
+
+describe('House Presets', () => {
+  const housePresets = () => within(screen.getByRole('list', { name: 'House Presets' }));
+
+  async function openTriggers() {
+    await renderView();
+    await userEvent.click(screen.getByRole('tab', { name: 'Triggers' }));
+  }
+
+  it('adds, renames and removes a House Preset', async () => {
+    await openTriggers();
+    expect(screen.getByText(/No House Presets yet/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add House Preset' }));
+    expect(edits()).toEqual([
+      { type: 'putHousePreset', preset: { id: 'house-1', name: 'House Preset 1', fade: 2 } },
+    ]);
+
+    const name = await housePresets().findByLabelText('Name of House Preset 1');
+    await userEvent.clear(name);
+    await userEvent.type(name, 'Dim{Enter}');
+    expect(edits().at(-1)).toEqual({
+      type: 'putHousePreset',
+      preset: { id: 'house-1', name: 'Dim', fade: 2 },
+    });
+
+    await userEvent.click(housePresets().getByRole('button', { name: 'Remove House Preset Dim' }));
+    expect(edits().at(-1)).toEqual({ type: 'removeHousePreset', id: 'house-1' });
+    expect(await screen.findByText('Removed Dim')).toBeInTheDocument();
+    expect(screen.getByText(/No House Presets yet/)).toBeInTheDocument();
+  });
+
+  it('sets the fade, and a note typed in, learned or cleared', async () => {
+    show = { ...SHOW, housePresets: [{ id: 'dim', name: 'Dim', fade: 2 }] };
+    await openTriggers();
+
+    const fade = housePresets().getByLabelText('Fade of Dim (s)');
+    await userEvent.clear(fade);
+    await userEvent.type(fade, '4.5{Enter}');
+    expect(edits().at(-1)).toEqual({
+      type: 'putHousePreset',
+      preset: { id: 'dim', name: 'Dim', fade: 4.5 },
+    });
+
+    // Note 60 on channel 1 is the Trigger's, so it takes the next free one.
+    await userEvent.click(housePresets().getByRole('button', { name: 'Add a note to Dim' }));
+    expect(edits().at(-1)).toEqual({
+      type: 'putHousePreset',
+      preset: { id: 'dim', name: 'Dim', fade: 4.5, note: { channel: 1, note: 61 } },
+    });
+
+    const note = await housePresets().findByLabelText('Note of Dim');
+    await userEvent.clear(note);
+    await userEvent.type(note, '70{Enter}');
+    expect(edits().at(-1)).toMatchObject({ preset: { note: { channel: 1, note: 70 } } });
+
+    await userEvent.click(housePresets().getByRole('button', { name: 'Learn a note for Dim' }));
+    expect(sentOf('learnTrigger')).toHaveLength(1);
+    engine.emit({ type: 'triggerLearned', note: { channel: 3, note: 40 } });
+    expect(edits().at(-1)).toMatchObject({ preset: { note: { channel: 3, note: 40 } } });
+    expect(sentOf('cancelLearn')).toHaveLength(1);
+
+    await userEvent.click(housePresets().getByRole('button', { name: 'Clear the note of Dim' }));
+    expect(edits().at(-1)).toEqual({
+      type: 'putHousePreset',
+      preset: { id: 'dim', name: 'Dim', fade: 4.5 },
+    });
+  });
+
+  it('reorders House Presets with the keyboard, and adds no more than eight', async () => {
+    const eight = Array.from({ length: 8 }, (_, i) => ({ id: `p${i}`, name: `P${i}`, fade: 0 }));
+    show = { ...SHOW, housePresets: eight };
+    await openTriggers();
+
+    housePresets().getByRole('button', { name: 'Move P1' }).focus();
+    await userEvent.keyboard(' ');
+    await userEvent.keyboard('{ArrowUp}');
+    await userEvent.keyboard(' ');
+    await act(async () => {});
+    expect(edits()).toEqual([{ type: 'moveHousePreset', id: 'p1', to: 0 }]);
+    expect(screen.getByRole('button', { name: 'Add House Preset' })).toBeDisabled();
   });
 });

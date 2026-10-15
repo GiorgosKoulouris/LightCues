@@ -11,6 +11,7 @@ import { SidePanel, SidePanelToggle } from '../ui/SidePanel';
 import { Tabs } from '../ui/Tabs';
 import { useToast } from '../ui/Toast';
 import { useVenuePatch } from '../venue/useVenuePatch';
+import { HousePresetPanel } from './HousePresetPanel';
 import { LayerStack } from './LayerStack';
 import { ModeSwitch } from './ModeSwitch';
 import { Preview } from './Preview';
@@ -32,9 +33,9 @@ const TABS = [
 ] as const;
 
 // Edits the current Show. Scenes: the Scene list, the selected Scene's editor,
-// and the Preview with the Layer stack. Triggers: MIDI Triggers and the MIDI
-// Input. Scenes go live from here with Go; Clear empties a Layer. Removing
-// is instant, and undone with Undo. While `active`, Ctrl+N, O, S and Shift+S
+// and the Preview with the Layer stack. Triggers: MIDI Triggers, the MIDI
+// Input and the House Presets. Scenes go live from here with Go; Clear
+// empties a Layer. Removing is instant, and undone with Undo. While `active`, Ctrl+N, O, S and Shift+S
 // act on its file, Ctrl+Z and Ctrl+Shift+Z undo and redo, and Ctrl+F searches
 // the Scenes.
 export function ShowView({ active }: { active: boolean }) {
@@ -183,12 +184,20 @@ export function ShowView({ active }: { active: boolean }) {
           </SidePanel>
         </div>
       ) : (
-        <TriggerPanel
-          show={show}
-          status={midiInput}
-          onPut={(trigger) => void change({ type: 'putTrigger', trigger })}
-          onRemove={(note) => change({ type: 'removeTrigger', note })}
-        />
+        <div className={styles.triggers}>
+          <TriggerPanel
+            show={show}
+            status={midiInput}
+            onPut={(trigger) => void change({ type: 'putTrigger', trigger })}
+            onRemove={(note) => change({ type: 'removeTrigger', note })}
+          />
+          <HousePresetPanel
+            show={show}
+            onPut={(preset) => void change({ type: 'putHousePreset', preset })}
+            onMove={(id, to) => void change({ type: 'moveHousePreset', id, to })}
+            onRemove={(id) => change({ type: 'removeHousePreset', id })}
+          />
+        </div>
       )}
     </Tabs>
   );

@@ -51,7 +51,8 @@
   margin-top: calc(var(--text-sm) * var(--line-height) + var(--space-1));
 }
 
-.replaces {
+.replaces,
+.clash {
   grid-column: 1 / -1;
   color: var(--warning);
   font-size: var(--text-sm);

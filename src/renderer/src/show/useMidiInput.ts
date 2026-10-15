@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { MidiInputStatus } from '../../../shared/protocol';
+import type { MidiNote } from '../../../shared/show';
 
 // The engine's MIDI input status, kept in step through engine events.
 export function useMidiInput(): MidiInputStatus | undefined {
@@ -25,4 +26,26 @@ export function midiWarning(status: MidiInputStatus | undefined): string | undef
     return `MIDI input "${status.selected}" did not open: ${status.error}. Retrying.`;
   }
   return undefined;
+}
+
+// MIDI learn: while `learning`, the next note played calls `onLearned`
+// instead of firing what it is mapped to. `onLearned` may be a new function on each
+// render.
+export function useMidiLearn(learning: boolean, onLearned: (note: MidiNote) => void): void {
+  const latest = useRef(onLearned);
+  useEffect(() => {
+    latest.current = onLearned;
+  });
+
+  useEffect(() => {
+    if (!learning) return;
+    const unsubscribe = window.engine.onEvent((event) => {
+      if (event.type === 'triggerLearned') latest.current(event.note);
+    });
+    window.engine.send({ type: 'learnTrigger' });
+    return () => {
+      unsubscribe();
+      window.engine.send({ type: 'cancelLearn' });
+    };
+  }, [learning]);
 }

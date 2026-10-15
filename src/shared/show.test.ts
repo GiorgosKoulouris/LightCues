@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   emptyShow,
+  moveHousePreset,
+  putHousePreset,
   putLayer,
   putScene,
   putTrigger,
+  removeHousePreset,
   removeLayer,
   removeScene,
   removeTrigger,
@@ -12,6 +15,7 @@ import {
   setDefaultDirection,
   setPanelScenes,
   validateShow,
+  type HousePreset,
   type Rule,
   type Scene,
   type Show,
@@ -280,5 +284,102 @@ describe('editing a Show', () => {
     expect(setDefaultDirection(before, 'Sideways' as never)).toEqual({
       errors: ['Default Direction: "Sideways" is not a Direction'],
     });
+  });
+});
+
+describe('House Presets', () => {
+  const dim: HousePreset = { id: 'dim', name: 'Dim', fade: 3 };
+  const up: HousePreset = { id: 'up', name: 'Up', fade: 5, note: { channel: 2, note: 10 } };
+
+  function withPresets(...housePresets: HousePreset[]): Show {
+    return { ...emptyShow(), housePresets };
+  }
+
+  function shown(result: ReturnType<typeof putHousePreset>): Show {
+    if ('errors' in result) throw new Error(result.errors.join('\n'));
+    return result.show;
+  }
+
+  it('adds House Presets at the end, then renames and sets fade and note in place', () => {
+    const added = shown(putHousePreset(shown(putHousePreset(emptyShow(), dim)), up));
+    expect(added.housePresets).toEqual([dim, up]);
+
+    const edited = shown(
+      putHousePreset(added, { ...dim, name: 'Show dim', fade: 0.5, note: { channel: 1, note: 0 } }),
+    );
+    expect(edited.housePresets).toEqual([
+      { id: 'dim', name: 'Show dim', fade: 0.5, note: { channel: 1, note: 0 } },
+      up,
+    ]);
+    expect(shown(putHousePreset(edited, { ...up, note: undefined })).housePresets?.[1]).toEqual({
+      id: 'up',
+      name: 'Up',
+      fade: 5,
+    });
+  });
+
+  it('reorders House Presets', () => {
+    const last: HousePreset = { id: 'last', name: 'Last', fade: 0 };
+    const before = withPresets(dim, up, last);
+
+    expect(moveHousePreset(before, 'last', 0).housePresets).toEqual([last, dim, up]);
+    expect(moveHousePreset(before, 'dim', 2).housePresets).toEqual([up, last, dim]);
+  });
+
+  it('removes a House Preset, leaving the Show without the list when it was the last', () => {
+    expect(removeHousePreset(withPresets(dim, up), 'dim')).toEqual(withPresets(up));
+    expect(removeHousePreset(withPresets(dim), 'dim')).toEqual(emptyShow());
+  });
+
+  it('holds at most eight House Presets', () => {
+    const eight = Array.from({ length: 8 }, (_, i) => ({ id: `p${i}`, name: `P${i}`, fade: 0 }));
+
+    expect(validateShow(withPresets(...eight))).toEqual([]);
+    expect(putHousePreset(withPresets(...eight), dim)).toEqual({
+      errors: ['House Presets: at most 8'],
+    });
+  });
+
+  it('rejects bad fades, notes outside MIDI ranges and repeated ids', () => {
+    const presets = [
+      { ...dim, fade: -1 },
+      { ...up, fade: Number.NaN, note: { channel: 17, note: 1.5 } },
+      { ...dim, name: 'Again' },
+      { id: '', name: ' ', fade: 0 },
+    ];
+
+    expect(validateShow(withPresets(...presets))).toEqual([
+      'House Preset "Dim": fade must be 0 seconds or more',
+      'House Preset "Up": fade must be 0 seconds or more',
+      'House Preset "Up": channel must be a whole number from 1 to 16',
+      'House Preset "Up": note must be a whole number from 0 to 127',
+      'House Preset " ": id is missing',
+      'House Preset " ": name is empty',
+      'House Preset id "dim" is used twice',
+    ]);
+  });
+
+  it("rejects a note that is another House Preset's", () => {
+    const before = withPresets(up);
+
+    expect(putHousePreset(before, { ...dim, note: { channel: 2, note: 10 } })).toEqual({
+      errors: ['House Preset note 2/10 is used twice'],
+    });
+  });
+
+  it("rejects a House Preset on a Trigger's note, and a Trigger on a House Preset's", () => {
+    const withTrigger: Show = {
+      ...emptyShow(),
+      scenes: [scene({ id: 'verse', layer: 'layer-1' })],
+      triggers: [{ channel: 1, note: 60, scene: 'verse', mode: 'go' }],
+    };
+    const clash = { ...dim, note: { channel: 1, note: 60 } };
+
+    expect(putHousePreset(withTrigger, clash)).toEqual({
+      errors: ['House Preset "Dim": note 1/60 is also a Trigger'],
+    });
+    expect(
+      putTrigger({ ...withTrigger, triggers: [], housePresets: [clash] }, withTrigger.triggers[0]!),
+    ).toEqual({ errors: ['House Preset "Dim": note 1/60 is also a Trigger'] });
   });
 });

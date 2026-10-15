@@ -1,10 +1,14 @@
 import type { DocumentSnapshot, EngineCommand, EngineEvent, ShowEdit } from '../shared/protocol';
 import {
   emptyShow,
+  findHousePreset,
   findTrigger,
+  moveHousePreset,
+  putHousePreset,
   putLayer,
   putScene,
   putTrigger,
+  removeHousePreset,
   removeLayer,
   removeScene,
   removeTrigger,
@@ -12,6 +16,7 @@ import {
   setDefaultColour,
   setDefaultDirection,
   setPanelScenes,
+  showHousePresets,
   type Rule,
   type Show,
   type ShowResult,
@@ -144,6 +149,23 @@ export function createShowSession({
         }
         return { show: removeTrigger(show, change.note) };
       }
+      case 'putHousePreset':
+        return putHousePreset(show, change.preset);
+      case 'moveHousePreset': {
+        const presets = showHousePresets(show);
+        if (!findHousePreset(show, change.id)) {
+          return { errors: [`House Preset id "${change.id}" is not in the Show`] };
+        }
+        if (!Number.isInteger(change.to) || change.to < 0 || change.to >= presets.length) {
+          return { errors: [`House Preset position ${change.to} is not in the list`] };
+        }
+        return { show: moveHousePreset(show, change.id, change.to) };
+      }
+      case 'removeHousePreset':
+        if (!findHousePreset(show, change.id)) {
+          return { errors: [`House Preset id "${change.id}" is not in the Show`] };
+        }
+        return { show: removeHousePreset(show, change.id) };
     }
   }
 
@@ -214,8 +236,9 @@ export function createShowSession({
 }
 
 // What an edit changes, for merging quick edits into one undo step: an
-// existing Scene, Layer or Trigger, or the Default Colour. Adding and
-// removing never merge, nor do adding, removing or reordering Rules.
+// existing Scene, Layer, Trigger or House Preset, or the Default Colour.
+// Adding and removing never merge, nor do adding, removing or reordering
+// Rules.
 function mergeKey(show: Show, change: ShowEdit): string | undefined {
   switch (change.type) {
     case 'putScene': {
@@ -230,6 +253,10 @@ function mergeKey(show: Show, change: ShowEdit): string | undefined {
     case 'putTrigger': {
       const { channel, note } = change.trigger;
       return findTrigger(show, { channel, note }) ? `trigger ${channel} ${note}` : undefined;
+    }
+    case 'putHousePreset': {
+      const { id } = change.preset;
+      return findHousePreset(show, id) ? `housePreset ${id}` : undefined;
     }
     case 'setDefaultColour':
       return 'defaultColour';

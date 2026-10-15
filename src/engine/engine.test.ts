@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FixtureProfile } from '../shared/fixture-profile';
 import type { EngineCommand, EngineEvent, ShowEdit, VenueEdit } from '../shared/protocol';
-import type { Scene } from '../shared/show';
+import type { Scene, Show } from '../shared/show';
 import { fixtureZone, type PatchedFixture, type VenuePatch } from '../shared/venue-patch';
 import { createEngine } from './engine';
 import { readLibraryFile } from './profile-library';
@@ -657,6 +657,57 @@ describe('engine Show', () => {
       canUndo: false,
       canRedo: false,
     });
+  });
+});
+
+describe('engine House Presets', () => {
+  const dim = { id: 'dim', name: 'Dim', fade: 3 };
+  const up = { id: 'up', name: 'Up', fade: 5 };
+  const ids = (show: Show) => show.housePresets?.map((p) => p.id);
+
+  it('adds, edits, reorders and removes House Presets, each undoable', () => {
+    const { edit, undo, show } = showEngine();
+    edit({ type: 'putHousePreset', preset: dim });
+    edit({ type: 'putHousePreset', preset: up });
+    edit({ type: 'putHousePreset', preset: { ...dim, name: 'Show dim' } });
+    edit({ type: 'moveHousePreset', id: 'up', to: 0 });
+    edit({ type: 'removeHousePreset', id: 'dim' });
+    expect(show().show.housePresets).toEqual([up]);
+
+    undo();
+    expect(show().show.housePresets).toEqual([up, { ...dim, name: 'Show dim' }]);
+    undo();
+    expect(ids(show().show)).toEqual(['dim', 'up']);
+    undo();
+    expect(show().show.housePresets).toEqual([dim, up]);
+  });
+
+  it('rejects moving or removing a House Preset the Show does not have, or moving out of the list', () => {
+    const { edit } = showEngine();
+    edit({ type: 'putHousePreset', preset: dim });
+
+    expect(edit({ type: 'removeHousePreset', id: 'up' })).toEqual([
+      'House Preset id "up" is not in the Show',
+    ]);
+    expect(edit({ type: 'moveHousePreset', id: 'up', to: 0 })).toEqual([
+      'House Preset id "up" is not in the Show',
+    ]);
+    expect(edit({ type: 'moveHousePreset', id: 'dim', to: 1 })).toEqual([
+      'House Preset position 1 is not in the list',
+    ]);
+  });
+
+  it('undoes quick edits to the same House Preset as one step', () => {
+    const clock = { now: 0 };
+    const { edit, undo, show } = showEngine(undefined, clock);
+    edit({ type: 'putHousePreset', preset: dim });
+    for (const fade of [1, 1.5, 2]) {
+      clock.now += 400;
+      edit({ type: 'putHousePreset', preset: { ...dim, fade } });
+    }
+
+    undo();
+    expect(show().show.housePresets).toEqual([dim]);
   });
 });
 

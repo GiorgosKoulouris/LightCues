@@ -2,7 +2,7 @@
 // The UI sends EngineCommands; the engine sends EngineEvents.
 import type { AimAngles } from './aim';
 import type { FixtureProfile, UnsupportedFeature } from './fixture-profile';
-import type { Colour, Direction, Layer, MidiNote, Scene, Show, Trigger } from './show';
+import type { Colour, Direction, HousePreset, Layer, MidiNote, Scene, Show, Trigger } from './show';
 import type {
   HouseGroup,
   HouseLight,
@@ -142,7 +142,12 @@ export type ShowEdit =
   | { type: 'setPanelScenes'; sceneIds: string[] }
   // Replaces the Trigger on the same channel and note.
   | { type: 'putTrigger'; trigger: Trigger }
-  | { type: 'removeTrigger'; note: MidiNote };
+  | { type: 'removeTrigger'; note: MidiNote }
+  // Adds at the end, or replaces the House Preset with the same id in place.
+  | { type: 'putHousePreset'; preset: HousePreset }
+  // Moves the House Preset to index `to`.
+  | { type: 'moveHousePreset'; id: string; to: number }
+  | { type: 'removeHousePreset'; id: string };
 
 // A change to the current Venue Patch. `putFixture` and `putFixtures` embed a
 // Fixture's Profile from the Profile Library when the patch does not have it

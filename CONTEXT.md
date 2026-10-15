@@ -38,6 +38,26 @@ _Avoid_: DMX view, channel view
 The per-venue description of the rig: which Fixtures exist, their Profile, Universe, address and position on stage.
 _Avoid_: Rig file, setup
 
+### House
+
+**House Light**:
+A Fixture belonging to the venue (bar, ceiling) rather than the show rig, on a Universe the app drives. Patched in the Venue Patch with a Profile, Universe and address, but no stage position, Zone, Role or Mounting. Only intensity and colour are driven. Scenes never target it, and Blackout, Grand Master, Freeze and Blind do not apply to it.
+_Avoid_: Venue light, room light
+
+**House Group**:
+A named set of House Lights in the Venue Patch, such as Bar or Ceiling. Each House Light is in exactly one.
+_Avoid_: Area, Zone
+
+**House Preset**:
+A named slot in the Show, with a fade and an optional MIDI note, that sets the House Lights to that slot's house look. Fired by its note (Go only) or its button in Perform and on the Fallback Panel. One holds at a time.
+_Avoid_: House Scene, house cue
+
+**House look**:
+Intensity and colour for some House Groups, defined in the Venue Patch for one House Preset or as the Startup look. Groups it does not list stay where they are.
+
+**Startup look**:
+The house look a Venue Patch sends from launch and when it is opened. Full white when not set.
+
 ### Show
 
 **Show**:
@@ -103,11 +123,11 @@ _Avoid_: MIDI device, controller
 The Scene designated as the safe fallback look, available from the Fallback Panel at any time. Going to it clears every other Layer.
 
 **Fallback Panel**:
-The always-visible manual controls that need no MIDI: Blackout, Base Look, Grand Master, Tap Tempo, Freeze and a few Scene buttons chosen per Show, each with a keyboard shortcut. Also shows the MIDI Input status.
+The always-visible manual controls that need no MIDI: Blackout, Base Look, Grand Master, Tap Tempo, Freeze, a few Scene buttons chosen per Show and the House Preset buttons, each with a keyboard shortcut. Also shows the MIDI Input status.
 _Avoid_: Manual panel, fader panel
 
 **Blackout**:
-Takes every Fixture's intensity to 0 until turned off, in Blind too. The active Scenes stay active.
+Takes every Fixture's intensity to 0 until turned off, in Blind too. The active Scenes stay active. House Lights are not affected.
 
 **Default Direction**:
 The Direction a Show gives moving Fixtures where no Rule sets one, and the base of a movement Effect with none. Down unless changed.
@@ -116,13 +136,13 @@ The Direction a Show gives moving Fixtures where no Rule sets one, and the base 
 The colour a Show gives Fixtures where no Rule sets one. White unless changed.
 
 **Grand Master**:
-A global intensity scaler applied after all Scenes are combined.
+A global intensity scaler applied after all Scenes are combined. House Lights are not affected.
 
 **Monitor**:
 The default mode, where the preview mirrors exactly what is being sent to the rig.
 
 **Blind**:
-A mode where the preview updates but nothing is sent to the rig, except Blackout.
+A mode where the preview updates but nothing is sent to the rig, except Blackout and House Lights, which always send.
 _Avoid_: Offline, preview mode
 
 **Venue Check**:

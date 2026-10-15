@@ -1,12 +1,12 @@
 import { validateShow, type Colour, type Show } from '../shared/show';
 
 // The .lcshow file: a Show as versioned JSON. Version 2 added the default
-// colour, version 3 the Fallback Panel's Scene buttons and version 4 Rule
-// Directions, movement Effects and the Default Direction; older files load
-// without them.
+// colour, version 3 the Fallback Panel's Scene buttons, version 4 Rule
+// Directions, movement Effects and the Default Direction and version 5 House
+// Presets; older files load without them.
 
-const VERSION = 4;
-const VERSIONS = [1, 2, 3, VERSION];
+const VERSION = 5;
+const VERSIONS = [1, 2, 3, 4, VERSION];
 
 interface ShowFile extends Show {
   version: number;
@@ -29,6 +29,9 @@ export function loadShowFile(json: string): Show {
   if (!hasParts(show)) {
     throw new Error('Invalid Show: layers, scenes and triggers are required');
   }
+  if (show.housePresets !== undefined && !Array.isArray(show.housePresets)) {
+    throw new Error('Invalid Show: housePresets must be a list');
+  }
   throwIfInvalid(checkMalformed(() => [...unknownFields(file as ShowFile), ...validateShow(show)]));
   return show;
 }
@@ -50,7 +53,7 @@ function checkMalformed(check: () => string[]): string[] {
   try {
     return check();
   } catch {
-    return ['a Layer, Scene, Rule or Trigger is missing fields'];
+    return ['a Layer, Scene, Rule, Trigger or House Preset is missing fields'];
   }
 }
 
@@ -75,6 +78,7 @@ function unknownFields(file: ShowFile): string[] {
     ['defaultColour'],
     ['panelScenes'],
     ['defaultDirection'],
+    ['housePresets'],
   ];
   allow(file, added.slice(0, file.version).flat(), '');
   if (file.version !== 1 && file.defaultColour !== undefined) {
@@ -99,5 +103,11 @@ function unknownFields(file: ShowFile): string[] {
   file.triggers.forEach((trigger, i) => {
     allow(trigger, ['channel', 'note', 'scene', 'mode'], `triggers[${i}].`);
   });
+  if (file.version >= 5) {
+    file.housePresets?.forEach(({ note, ...rest }, i) => {
+      allow(rest, ['id', 'name', 'fade'], `housePresets[${i}].`);
+      if (note !== undefined) allow(note, ['channel', 'note'], `housePresets[${i}].note.`);
+    });
+  }
   return found;
 }

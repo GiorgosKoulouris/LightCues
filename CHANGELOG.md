@@ -7,6 +7,7 @@ What changed in each LightCues release. The format follows [Keep a Changelog](ht
 ### Added
 
 - House Lights: patch the venue's own lights, such as the bar, in House Groups in the Venue Patch's new **House** tab. They start at full white, or at the Startup look you set, and Scenes, Blackout, the Grand Master, Freeze and Blind never reach them.
+- House Presets: up to 8 named slots per Show for the House Lights, such as Dim and Up, each with a fade and an optional MIDI note. Add them under the Triggers in the **Triggers** tab. A note cannot be both a Trigger and a House Preset's.
 
 ## [0.1.1] - 2026-10-12
 

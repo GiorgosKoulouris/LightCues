@@ -1,0 +1,67 @@
+.panel {
+  /* As wide as the Trigger panel above. */
+  --house-panel-width: 960px;
+  --name-width: 220px;
+  --fade-width: 80px;
+  --channel-width: 64px;
+  --note-width: 80px;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: var(--house-panel-width);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.heading {
+  font-size: var(--text-md);
+}
+
+.hint {
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+/* Handle, name, fade, note, remove. */
+.item {
+  display: grid;
+  grid-template-columns:
+    auto var(--name-width) var(--fade-width) minmax(0, 1fr)
+    auto;
+  align-items: start;
+  gap: var(--space-2);
+  padding: var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.channel {
+  width: var(--channel-width);
+}
+
+.noteNumber {
+  width: var(--note-width);
+}
+
+.none {
+  align-self: center;
+  color: var(--text-faint);
+}
+
+.empty {
+  padding: var(--space-4);
+  color: var(--text-faint);
+}

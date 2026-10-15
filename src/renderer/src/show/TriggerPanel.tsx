@@ -1,7 +1,8 @@
 import { Plus, Radio, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { MidiInputStatus } from '../../../shared/protocol';
 import {
+  findHousePresetOn,
   findTrigger,
   TRIGGER_MODES,
   type MidiNote,
@@ -15,16 +16,15 @@ import { NumberField } from '../ui/fields';
 import { Select } from '../ui/Select';
 import { useToast } from '../ui/Toast';
 import styles from './TriggerPanel.module.css';
+import { noteLabel, noteName } from './notes';
 import { sceneName } from './scenes';
-import { midiWarning } from './useMidiInput';
+import { midiWarning, useMidiLearn } from './useMidiInput';
 
 const MODE_LABELS: Record<TriggerMode, string> = {
   go: 'Go',
   flash: 'Flash',
   release: 'Release',
 };
-
-const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
 // Selects the MIDI Input and maps notes to Scenes. Learn fills the channel
 // and note from the next note played.
@@ -149,22 +149,14 @@ function NewTrigger({
   const [mode, setMode] = useState<TriggerMode>('go');
   const [learning, setLearning] = useState(false);
 
-  useEffect(() => {
-    if (!learning) return;
-    const unsubscribe = window.engine.onEvent((event) => {
-      if (event.type !== 'triggerLearned') return;
-      setChannel(event.note.channel);
-      setNote(event.note.note);
-      setLearning(false);
-    });
-    window.engine.send({ type: 'learnTrigger' });
-    return () => {
-      unsubscribe();
-      window.engine.send({ type: 'cancelLearn' });
-    };
-  }, [learning]);
+  useMidiLearn(learning, (learned) => {
+    setChannel(learned.channel);
+    setNote(learned.note);
+    setLearning(false);
+  });
 
   const mapped = findTrigger(show, { channel, note });
+  const house = findHousePresetOn(show, { channel, note });
   const sceneId = show.scenes.some((s) => s.id === scene) ? scene : show.scenes[0]?.id;
 
   return (
@@ -198,7 +190,7 @@ function NewTrigger({
         variant="primary"
         icon={<Plus />}
         className={styles.map}
-        disabled={sceneId === undefined}
+        disabled={sceneId === undefined || house !== undefined}
         onClick={() => {
           if (sceneId !== undefined) onPut({ channel, note, scene: sceneId, mode });
         }}
@@ -207,6 +199,11 @@ function NewTrigger({
       </Button>
       {mapped && (
         <span className={styles.replaces}>Replaces the Trigger for {sceneName(mapped.scene)}.</span>
+      )}
+      {house && (
+        <span className={styles.clash}>
+          This is the note of House Preset {house.name}. Change it there first.
+        </span>
       )}
     </section>
   );
@@ -232,15 +229,4 @@ function ModeSelect({
       onChange={onChange}
     />
   );
-}
-
-// A note and its channel, as named in labels: "C4 on channel 1".
-function noteLabel({ channel, note }: MidiNote): string {
-  return `${noteName(note)} on channel ${channel}`;
-}
-
-// Note 60 is C4.
-function noteName(note: number): string {
-  if (!Number.isInteger(note) || note < 0 || note > 127) return '';
-  return `${NOTE_NAMES[note % 12]}${Math.floor(note / 12) - 1}`;
 }

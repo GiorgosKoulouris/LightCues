@@ -51,10 +51,21 @@ const show: Show = {
   defaultColour: { hue: 30, saturation: 0.2 },
   defaultDirection: 'Centre',
   panelScenes: ['hit', 'verse'],
+  housePresets: [
+    { id: 'dim', name: 'Dim', fade: 3 },
+    { id: 'up', name: 'Up', fade: 5, note: { channel: 2, note: 10 } },
+  ],
 };
 
+// `show` as version 4 had it, without House Presets.
+function withoutHousePresets({ housePresets, ...rest }: Show): Show {
+  void housePresets;
+  return rest;
+}
+
 // `show` as an older version had it, without Directions or movement Effects.
-function withoutDirections({ defaultDirection, ...rest }: Show): Show {
+function withoutDirections(full: Show): Show {
+  const { defaultDirection, ...rest } = withoutHousePresets(full);
   void defaultDirection;
   return {
     ...rest,
@@ -75,8 +86,8 @@ describe('.lcshow file', () => {
   it('rejects a file of an unknown version', () => {
     const saved = JSON.parse(saveShowFile(show));
 
-    expect(() => loadShowFile(JSON.stringify({ ...saved, version: 5 }))).toThrow(
-      'Unsupported Show version: 5',
+    expect(() => loadShowFile(JSON.stringify({ ...saved, version: 6 }))).toThrow(
+      'Unsupported Show version: 6',
     );
     expect(() => loadShowFile(JSON.stringify({ ...show }))).toThrow(
       'Unsupported Show version: undefined',
@@ -108,8 +119,19 @@ describe('.lcshow file', () => {
     const v3 = withoutDirections(show);
 
     expect(loadShowFile(JSON.stringify({ version: 3, ...v3 }))).toEqual(v3);
-    expect(() => loadShowFile(JSON.stringify({ version: 3, ...show }))).toThrow(
+    expect(() =>
+      loadShowFile(JSON.stringify({ version: 3, ...withoutHousePresets(show) })),
+    ).toThrow(
       'Invalid Show:\nunknown field "defaultDirection"\nunknown field "scenes[1].rules[1].direction"\nunknown field "scenes[1].rules[2].effect"',
+    );
+  });
+
+  it('loads a version 4 file, which has no House Presets', () => {
+    const v4 = withoutHousePresets(show);
+
+    expect(loadShowFile(JSON.stringify({ version: 4, ...v4 }))).toEqual(v4);
+    expect(() => loadShowFile(JSON.stringify({ version: 4, ...show }))).toThrow(
+      'Invalid Show:\nunknown field "housePresets"',
     );
   });
 
@@ -142,8 +164,14 @@ describe('.lcshow file', () => {
     delete saved.scenes[0].rules[0].target;
 
     expect(() => loadShowFile(JSON.stringify(saved))).toThrow(
-      'Invalid Show:\na Layer, Scene, Rule or Trigger is missing fields',
+      'Invalid Show:\na Layer, Scene, Rule, Trigger or House Preset is missing fields',
     );
+    expect(() =>
+      loadShowFile(JSON.stringify({ ...show, version: 5, housePresets: [null] })),
+    ).toThrow('Invalid Show:\na Layer, Scene, Rule, Trigger or House Preset is missing fields');
+    expect(() =>
+      loadShowFile(JSON.stringify({ ...show, version: 5, housePresets: 'Dim' })),
+    ).toThrow('Invalid Show: housePresets must be a list');
     expect(() => loadShowFile('null')).toThrow(/^Invalid Show: /);
     expect(() => loadShowFile('{"version": 1,')).toThrow(/^Invalid Show: /);
   });
@@ -160,6 +188,8 @@ describe('.lcshow file', () => {
     saved.scenes[0].rules[1].target.zones[0].dmx = 255;
     saved.scenes[1].rules[2].effect.phase = 0.5;
     saved.triggers[2].velocity = 100;
+    saved.housePresets[0].look = 'dim';
+    saved.housePresets[1].note.velocity = 100;
     saved.defaultColour.value = 1;
     saved.author = 'someone';
 
@@ -172,6 +202,8 @@ describe('.lcshow file', () => {
         'unknown field "scenes[0].rules[1].target.zones[0].dmx"',
         'unknown field "scenes[1].rules[2].effect.phase"',
         'unknown field "triggers[2].velocity"',
+        'unknown field "housePresets[0].look"',
+        'unknown field "housePresets[1].note.velocity"',
       ].join('\n'),
     );
   });
