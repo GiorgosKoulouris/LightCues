@@ -58,8 +58,9 @@ const FOCUS_CHECK_OPTIONS = [
 
 // Edits the current Venue Patch. Fixtures: the Fixture list, the stage plan
 // and the inspector, with Shift/Ctrl multi-select in the list and on the plan.
-// House: the House Groups, their House Lights and the Startup look, shown
-// only while the view is active, so leaving it ends a house look preview.
+// House: the House Groups, their House Lights, the Startup look and the
+// house looks, shown only while the view is active, so leaving it ends a
+// house look preview.
 // Rig setup: stage size, Universes and Outputs. Removing is instant, and
 // undone with Undo. While `active`, Ctrl+N, O, S and Shift+S act on its file,
 // Ctrl+Z and Ctrl+Shift+Z undo and redo, and Ctrl+F searches the Fixtures.
@@ -257,7 +258,12 @@ export function VenuePatchView({ active }: { active: boolean }) {
           </div>
         ) : tab === 'house' ? (
           active && (
-            <HouseSetup patch={patch} profiles={entries.map((e) => e.profile)} change={change} />
+            <HouseSetup
+              patch={patch}
+              show={show}
+              profiles={entries.map((e) => e.profile)}
+              change={change}
+            />
           )
         ) : (
           <RigSetup

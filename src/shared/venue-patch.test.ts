@@ -22,6 +22,7 @@ import {
   removeHouseGroup,
   removeHouseLights,
   removeUniverse,
+  setHouseLook,
   setStage,
   setStartupLook,
   suggestZone,
@@ -764,6 +765,19 @@ describe('House Lights', () => {
     });
   });
 
+  it('removes a House Group from every house look, dropping a look it leaves empty', () => {
+    let patch = withBar(emptyPatch(stage), houseLight());
+    patch = ok(putHouseGroup(patch, { id: 'ceiling', name: 'Ceiling' }));
+    const bar = { intensity: 0.2, colour: { swatch: 'Amber' } } as const;
+    const ceiling = { intensity: 0, colour: { swatch: 'White' } } as const;
+    patch = ok(setHouseLook(patch, 'dim', { bar, ceiling }));
+    patch = ok(setHouseLook(patch, 'bar-only', { bar }));
+
+    expect(patchHouse(removeHouseGroup(patch, 'bar')).looks).toEqual({ dim: { ceiling } });
+    const none = removeHouseGroup(removeHouseGroup(patch, 'bar'), 'ceiling');
+    expect(patchHouse(none).looks).toBeUndefined();
+  });
+
   it('removes the House Lights of a removed Universe', () => {
     const two = putUniverse(emptyPatch(stage), { number: 2 });
     if ('errors' in two) throw new Error(two.errors.join('\n'));
@@ -813,5 +827,61 @@ describe('House Lights', () => {
         },
       }),
     ).toEqual(['House Group id "bar" is used twice']);
+  });
+});
+
+describe('House looks', () => {
+  const amber = { intensity: 0.2, colour: { swatch: 'Amber' } } as const;
+  const white = { intensity: 1, colour: { swatch: 'White' } } as const;
+
+  it('has none in a new patch', () => {
+    expect(patchHouse(withBar(emptyPatch(stage))).looks).toBeUndefined();
+  });
+
+  it('sets a look per House Preset id, and replaces it', () => {
+    let patch = withBar(emptyPatch(stage));
+
+    patch = ok(setHouseLook(patch, 'dim', { bar: amber }));
+    patch = ok(setHouseLook(patch, 'up', { bar: white }));
+    expect(patchHouse(patch).looks).toEqual({ dim: { bar: amber }, up: { bar: white } });
+
+    patch = ok(setHouseLook(patch, 'dim', { bar: { ...amber, intensity: 0.1 } }));
+    expect(patchHouse(patch).looks?.dim).toEqual({ bar: { ...amber, intensity: 0.1 } });
+    // In place, so the looks keep their order.
+    expect(Object.keys(patchHouse(patch).looks ?? {})).toEqual(['dim', 'up']);
+  });
+
+  it('keeps the Startup look apart', () => {
+    const patch = ok(setStartupLook(withBar(emptyPatch(stage)), { bar: white }));
+
+    const house = patchHouse(ok(setHouseLook(patch, 'dim', { bar: amber })));
+    expect(house.startupLook).toEqual({ bar: white });
+    expect(house.looks).toEqual({ dim: { bar: amber } });
+  });
+
+  it('removes a look when cleared or left with no Group', () => {
+    const plain = withBar(emptyPatch(stage));
+    const patch = ok(setHouseLook(ok(setHouseLook(plain, 'dim', { bar: amber })), 'up', {}));
+    expect(patchHouse(patch).looks).toEqual({ dim: { bar: amber } });
+
+    expect(patchHouse(ok(setHouseLook(patch, 'dim', undefined)))).toEqual(patchHouse(plain));
+    expect(patchHouse(ok(setHouseLook(patch, 'dim', {})))).toEqual(patchHouse(plain));
+  });
+
+  it('rejects a look for an unknown Group, or with a bad intensity or colour', () => {
+    const patch = withBar(emptyPatch(stage));
+
+    expect(setHouseLook(patch, 'dim', { ceiling: white })).toEqual({
+      errors: ['House look "dim": House Group "ceiling" is not in the patch'],
+    });
+    expect(setHouseLook(patch, 'dim', { bar: { ...white, intensity: -1 } })).toEqual({
+      errors: ['House look "dim": "Bar" intensity must be from 0 to 1'],
+    });
+  });
+
+  it('rejects a look with no House Preset id', () => {
+    expect(setHouseLook(withBar(emptyPatch(stage)), '', { bar: white })).toEqual({
+      errors: ['A house look needs a House Preset id'],
+    });
   });
 });

@@ -87,7 +87,28 @@
   text-align: right;
 }
 
-/* The Startup look: one setting per House Group. */
+/* One house look: its name, badge and remove button over its settings. */
+.lookCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.lookHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.lookName {
+  font-weight: var(--weight-medium);
+}
+
+.lookRemove {
+  margin-left: auto;
+}
+
+/* A house look: one setting per House Group. */
 .look {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(var(--look-setting-width), 1fr));

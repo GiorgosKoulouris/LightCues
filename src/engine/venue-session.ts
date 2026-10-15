@@ -15,6 +15,7 @@ import {
   removeHouseLights,
   removeUniverse,
   setStage,
+  setHouseLook,
   setStartupLook,
   type PatchResult,
   type StageBounds,
@@ -170,6 +171,8 @@ export function createVenueSession({
       }
       case 'setStartupLook':
         return setStartupLook(patch, change.look);
+      case 'setHouseLook':
+        return setHouseLook(patch, change.preset, change.look);
     }
   }
 
@@ -243,8 +246,8 @@ export function createVenueSession({
 
 // What an edit changes, for merging quick edits into one undo step: the
 // stage, an existing Universe, the same existing Fixtures, an existing House
-// Group or House Light, or the Startup look. Adding, removing and moving on
-// the stage plan never merge.
+// Group or House Light, the Startup look, or one house look. Adding,
+// removing and moving on the stage plan never merge.
 function mergeKey(patch: VenuePatch, change: VenueEdit): string | undefined {
   const patched = (id: string) => patch.fixtures.some((f) => f.id === id);
   const { groups, lights } = patchHouse(patch);
@@ -253,6 +256,8 @@ function mergeKey(patch: VenuePatch, change: VenueEdit): string | undefined {
       return 'stage';
     case 'setStartupLook':
       return 'startup look';
+    case 'setHouseLook':
+      return `house look ${change.preset}`;
     case 'putHouseGroup': {
       const { id } = change.group;
       return groups.some((g) => g.id === id) ? `house group ${id}` : undefined;

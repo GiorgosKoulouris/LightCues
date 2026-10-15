@@ -146,4 +146,4 @@ A mode where the preview updates but nothing is sent to the rig, except Blackout
 _Avoid_: Offline, preview mode
 
 **Venue Check**:
-A report, produced when a Show is combined with a Venue Patch, listing Scenes whose targets are missing or only approximated in that rig.
+A report, produced when a Show is combined with a Venue Patch, listing Scenes whose targets are missing or only approximated in that rig, and House Presets that Venue Patch has no house look for (not set up in this venue).

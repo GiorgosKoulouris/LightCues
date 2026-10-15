@@ -2,11 +2,21 @@
 // makings of the Venue Check. Pure, and shared so the editors can show it
 // where the operator fixes it.
 import { aimAt, type Approximation } from './aim';
-import { DEFAULT_DIRECTION, DIRECTIONS, ruleTargets, type Direction, type Show } from './show';
+import {
+  DEFAULT_DIRECTION,
+  DIRECTIONS,
+  ruleTargets,
+  showHousePresets,
+  type Direction,
+  type HousePreset,
+  type Show,
+} from './show';
 import {
   fixtureMode,
   fixtureMounting,
+  houseLook,
   isMovingFixture,
+  patchHouse,
   type PatchedFixture,
   type VenuePatch,
 } from './venue-patch';
@@ -49,4 +59,17 @@ export function fixtureApproximatedAims(
     const approximations = aim?.approximations ?? [];
     return approximations.length > 0 ? [{ fixtureId: fixture.id, direction, approximations }] : [];
   });
+}
+
+// The Show's House Presets this Venue Patch has no house look for, in Show
+// order: not set up in this venue, so firing them does nothing.
+export function unsetHousePresets(show: Show, patch: VenuePatch): HousePreset[] {
+  return showHousePresets(show).filter((preset) => !houseLook(patch, preset.id));
+}
+
+// The House Preset ids this Venue Patch has a house look for that the Show
+// lacks, in patch order. The looks are kept, for another Show.
+export function lookPresetsNotInShow(show: Show, patch: VenuePatch): string[] {
+  const ids = new Set(showHousePresets(show).map((p) => p.id));
+  return Object.keys(patchHouse(patch).looks ?? {}).filter((id) => !ids.has(id));
 }

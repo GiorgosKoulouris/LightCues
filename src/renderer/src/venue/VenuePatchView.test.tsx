@@ -17,6 +17,7 @@ import {
   removeHouseGroup,
   removeHouseLights,
   removeUniverse,
+  setHouseLook,
   setStage,
   setStartupLook,
   type PatchedFixture,
@@ -156,6 +157,8 @@ function applied(current: VenuePatch, edit: VenueEdit): PatchResult {
       return { patch: removeHouseLights(current, edit.ids) };
     case 'setStartupLook':
       return setStartupLook(current, edit.look);
+    case 'setHouseLook':
+      return setHouseLook(current, edit.preset, edit.look);
   }
 }
 
@@ -772,6 +775,80 @@ describe('House', () => {
       screen.getByText('"Bar 2" (1.28–1.30) overlaps "Bar 1" (1.25–1.30)'),
     ).toBeInTheDocument();
     expect(edits()).toEqual([]);
+  });
+
+  describe('house looks', () => {
+    const bar = { groups: [{ id: 'bar', name: 'Bar' }], lights: [] };
+    const amber = { intensity: 0.2, colour: { swatch: 'Amber' as const } };
+    const presets = (...names: string[]): Show => ({
+      layers: [],
+      scenes: [],
+      triggers: [],
+      housePresets: names.map((name) => ({ id: name.toLowerCase(), name, fade: 2 })),
+    });
+    const look = (name: string) => within(screen.getByRole('region', { name }));
+
+    it('sets the look of a House Preset of the Show live, by name', async () => {
+      show = presets('Dim', 'Up');
+      patch = { ...PATCH, house: { ...bar, looks: { up: { bar: amber } } } };
+      await openHouse();
+      const user = userEvent.setup();
+
+      const dim = within(await screen.findByRole('region', { name: 'House look Dim' }));
+      expect(dim.getByText('Not set up in this venue')).toBeInTheDocument();
+      expect(look('House look Up').queryByText('Not set up in this venue')).toBeNull();
+      expect(look('House look Up').getByRole('slider', { name: 'Bar intensity' })).toHaveValue(
+        '20',
+      );
+
+      await user.click(dim.getByRole('checkbox', { name: 'Set in this look' }));
+      const full = { bar: { intensity: 1, colour: white } };
+      expect(edits()).toEqual([{ type: 'setHouseLook', preset: 'dim', look: full }]);
+      await vi.waitFor(() =>
+        expect(previews().at(-1)).toEqual({ type: 'previewHouseLook', look: full }),
+      );
+      expect(dim.queryByText('Not set up in this venue')).toBeNull();
+
+      await user.click(dim.getByRole('checkbox', { name: 'Set in this look' }));
+      expect(edits().at(-1)).toEqual({ type: 'setHouseLook', preset: 'dim' });
+
+      await user.click(screen.getByRole('tab', { name: 'Fixtures' }));
+      expect(previews().at(-1)).toEqual({ type: 'previewHouseLook' });
+    });
+
+    it('lists a look for a House Preset not in the Show, and removes it', async () => {
+      show = presets('Dim');
+      patch = { ...PATCH, house: { ...bar, looks: { gone: { bar: amber } } } };
+      await openHouse();
+
+      const other = within(await screen.findByRole('region', { name: 'Other look 1' }));
+      expect(other.getByText('Not in this Show')).toBeInTheDocument();
+      expect(other.getByRole('slider', { name: 'Bar intensity' })).toHaveValue('20');
+      await userEvent.click(other.getByRole('button', { name: 'Remove Other look 1' }));
+
+      expect(edits()).toEqual([{ type: 'setHouseLook', preset: 'gone' }]);
+      expect(await screen.findByRole('status')).toHaveTextContent('Removed Other look 1');
+      expect(screen.queryByRole('region', { name: 'Other look 1' })).toBeNull();
+    });
+
+    it('marks every House Preset not set up before a House Group is added', async () => {
+      show = presets('Dim');
+      await openHouse();
+
+      const dim = within(await screen.findByRole('region', { name: 'House look Dim' }));
+      expect(dim.getByText('Not set up in this venue')).toBeInTheDocument();
+      expect(screen.getByText('Add a House Group to set the house looks.')).toBeInTheDocument();
+    });
+
+    it('shows only the Startup look and the stored looks with no Show', async () => {
+      patch = { ...PATCH, house: { ...bar, looks: { gone: { bar: amber } } } };
+      await openHouse();
+
+      expect(screen.getByRole('region', { name: 'Startup look' })).toBeInTheDocument();
+      const other = look('Other look 1');
+      expect(other.queryByText('Not in this Show')).toBeNull();
+      expect(screen.queryByRole('region', { name: /^House look/ })).toBeNull();
+    });
   });
 });
 

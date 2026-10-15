@@ -9,6 +9,7 @@ import {
   putFixture,
   putHouseGroup,
   putHouseLight,
+  setHouseLook,
   setStartupLook,
   type HouseLight,
   type PatchedFixture,
@@ -127,17 +128,15 @@ describe('.lcvenue file', () => {
     expect(loadVenueFile(JSON.stringify(v1)).fixtures).toEqual([bar]);
   });
 
-  it('keeps the House Groups, House Lights and Startup look', () => {
+  it('keeps the House Groups, House Lights, Startup look and house looks', () => {
     const light: HouseLight = {
       ...{ id: 'h1', name: 'Bar 1', group: 'bar', profileId: 'acme/led-bar', mode: '1ch' },
       ...{ universe: 1, address: 10 },
     };
-    const lit = ok(
-      setStartupLook(
-        ok(putHouseLight(ok(putHouseGroup(patch(), { id: 'bar', name: 'Bar' })), light, handMade)),
-        { bar: { intensity: 0.4, colour: { swatch: 'Warm White' } } },
-      ),
-    );
+    let lit = ok(putHouseGroup(patch(), { id: 'bar', name: 'Bar' }));
+    lit = ok(putHouseLight(lit, light, handMade));
+    lit = ok(setStartupLook(lit, { bar: { intensity: 0.4, colour: { swatch: 'Warm White' } } }));
+    lit = ok(setHouseLook(lit, 'dim', { bar: { intensity: 0.1, colour: { swatch: 'Amber' } } }));
 
     const opened = loadVenueFile(saveVenueFile(lit));
 
@@ -164,11 +163,13 @@ describe('.lcvenue file', () => {
   it.each([
     { house: { groups: [] } },
     { house: { groups: [], lights: [], startupLook: { bar: { intensity: 1 } } } },
+    { house: { groups: [], lights: [], looks: { dim: { bar: { intensity: 1 } } } } },
+    { house: { groups: [], lights: [], looks: { dim: 1 } } },
   ])('rejects a House without its parts: $house', ({ house }) => {
     const saved = { ...JSON.parse(saveVenueFile(patch())), house };
 
     expect(() => loadVenueFile(JSON.stringify(saved))).toThrow(
-      'Invalid Venue Patch: a House needs groups, lights and a colour per Startup look setting',
+      'Invalid Venue Patch: a House needs groups, lights and a colour per house look setting',
     );
   });
 

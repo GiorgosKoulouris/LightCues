@@ -1,11 +1,16 @@
-import { validatePatch, type House, type VenuePatch } from '../shared/venue-patch';
+import {
+  validatePatch,
+  type House,
+  type HouseSetting,
+  type VenuePatch,
+} from '../shared/venue-patch';
 
 // The .lcvenue file: a Venue Patch as versioned JSON. The patch embeds its
 // Profiles, so a file opens without the Profile Library.
 //
 // Version 2 adds each Fixture's optional Mounting. Version 3 adds the
-// optional House: House Groups, House Lights and the Startup look. Older
-// files still load, without them.
+// optional House: House Groups, House Lights, the Startup look and the house
+// looks. Older files still load, without them.
 
 const VERSION = 3;
 const READABLE_VERSIONS = [1, 2, 3];
@@ -32,7 +37,7 @@ export function loadVenueFile(json: string): VenuePatch {
   }
   if (patch.house !== undefined && !isHouse(patch.house)) {
     throw new Error(
-      'Invalid Venue Patch: a House needs groups, lights and a colour per Startup look setting',
+      'Invalid Venue Patch: a House needs groups, lights and a colour per house look setting',
     );
   }
   throwIfInvalid(validatePatch(patch));
@@ -55,14 +60,20 @@ function hasParts(patch: Partial<VenuePatch>): boolean {
 // The House's parts are there, so validatePatch can check them.
 function isHouse(house: unknown): boolean {
   if (!isObject(house)) return false;
-  const { groups, lights, startupLook } = house as Partial<House>;
+  const { groups, lights, startupLook, looks } = house as Partial<House>;
   return (
     [groups, lights].every(Array.isArray) &&
-    (startupLook === undefined ||
-      (isObject(startupLook) &&
-        Object.values(startupLook).every(
-          (setting) => isObject(setting) && isObject(setting.colour),
-        )))
+    (startupLook === undefined || isHouseLook(startupLook)) &&
+    (looks === undefined || (isObject(looks) && Object.values(looks).every(isHouseLook)))
+  );
+}
+
+function isHouseLook(look: unknown): boolean {
+  return (
+    isObject(look) &&
+    Object.values(look as object).every(
+      (setting) => isObject(setting) && isObject((setting as Partial<HouseSetting>).colour),
+    )
   );
 }
 

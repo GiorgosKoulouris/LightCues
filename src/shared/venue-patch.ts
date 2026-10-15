@@ -150,6 +150,9 @@ export interface House {
   groups: HouseGroup[];
   lights: HouseLight[];
   startupLook?: HouseLook;
+  // House looks by House Preset id, kept for House Presets the current Show
+  // lacks. Edits never leave one with no Group.
+  looks?: Record<string, HouseLook>;
 }
 
 export interface VenuePatch {
@@ -306,16 +309,20 @@ export function putHouseGroup(patch: VenuePatch, group: HouseGroup): PatchResult
 }
 
 // Removes a House Group together with its House Lights and its setting in
-// the Startup look.
+// the Startup look and every house look. A look left with no Group goes.
 export function removeHouseGroup(patch: VenuePatch, id: string): VenuePatch {
-  const { groups, lights, startupLook } = patchHouse(patch);
+  const { groups, lights, startupLook, looks } = patchHouse(patch);
   const house: House = {
     groups: groups.filter((g) => g.id !== id),
     lights: lights.filter((l) => l.group !== id),
   };
   const look = startupLook && withoutGroup(startupLook, id);
   if (look) house.startupLook = look;
-  return dropUnusedProfiles({ ...patch, house });
+  const kept = Object.entries(looks ?? {}).flatMap(([preset, l]) => {
+    const rest = withoutGroup(l, id);
+    return rest ? [[preset, rest] as const] : [];
+  });
+  return dropUnusedProfiles({ ...patch, house: withLooks(house, kept) });
 }
 
 // `look` without its setting for a House Group; undefined when nothing is left.
@@ -360,6 +367,35 @@ export function setStartupLook(patch: VenuePatch, look: HouseLook | undefined): 
   const house = { ...patchHouse(patch), startupLook: look };
   if (look === undefined) delete house.startupLook;
   return validated({ ...patch, house });
+}
+
+// The house look of the House Preset with id `preset`, if the patch has one.
+export function houseLook(patch: VenuePatch, preset: string): HouseLook | undefined {
+  const { looks } = patchHouse(patch);
+  return looks && Object.hasOwn(looks, preset) ? looks[preset] : undefined;
+}
+
+// Sets the house look of the House Preset with id `preset`. Undefined, or a
+// look with no Group, removes it.
+export function setHouseLook(
+  patch: VenuePatch,
+  preset: string,
+  look: HouseLook | undefined,
+): PatchResult {
+  if (preset === '') return { errors: ['A house look needs a House Preset id'] };
+  const house = patchHouse(patch);
+  // A Map keeps a replaced look in its place.
+  const looks = new Map(Object.entries(house.looks ?? {}));
+  if (look && Object.keys(look).length > 0) looks.set(preset, look);
+  else looks.delete(preset);
+  return validated({ ...patch, house: withLooks(house, [...looks]) });
+}
+
+// `house` with these house looks, by House Preset id; with none, no `looks`.
+function withLooks(house: House, looks: (readonly [string, HouseLook])[]): House {
+  const next: House = { ...house, looks: Object.fromEntries(looks) };
+  if (looks.length === 0) delete next.looks;
+  return next;
 }
 
 // The stage Fixtures and House Lights: everything with an address.
@@ -424,12 +460,15 @@ export function validatePatch(patch: VenuePatch): string[] {
   return errors;
 }
 
-function validateHouse({ groups, startupLook }: House): string[] {
+function validateHouse({ groups, startupLook, looks }: House): string[] {
   const errors = duplicates(groups.map((g) => g.id)).map(
     (id) => `House Group id "${id}" is used twice`,
   );
   if (startupLook !== undefined) {
     errors.push(...houseLookProblems(groups, startupLook).map((p) => `Startup look: ${p}`));
+  }
+  for (const [preset, look] of Object.entries(looks ?? {})) {
+    errors.push(...houseLookProblems(groups, look).map((p) => `House look "${preset}": ${p}`));
   }
   return errors;
 }

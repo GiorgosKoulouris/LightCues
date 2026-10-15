@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { FixtureProfile } from '../shared/fixture-profile';
 import type { EngineCommand, EngineEvent, ShowEdit, VenueEdit } from '../shared/protocol';
 import type { Scene, Show } from '../shared/show';
-import { fixtureZone, type PatchedFixture, type VenuePatch } from '../shared/venue-patch';
+import {
+  fixtureZone,
+  type HouseLook,
+  type PatchedFixture,
+  type VenuePatch,
+} from '../shared/venue-patch';
 import { createEngine } from './engine';
 import { readLibraryFile } from './profile-library';
 import { gdtfDimmer } from './gdtf-test-files';
@@ -417,6 +422,38 @@ describe('engine House', () => {
     undo();
 
     expect(patch().house).toEqual({ groups: [{ id: 'bar', name: 'Bar' }], lights: [] });
+  });
+
+  it('undoes quick changes to one house look as one step, apart from other looks', () => {
+    const clock = { now: 0 };
+    const { edit, patch, undo } = venueEngine(new Map(), clock);
+    edit({ type: 'putHouseGroup', group: { id: 'bar', name: 'Bar' } });
+    const look = (intensity: number): HouseLook => ({
+      bar: { intensity, colour: { swatch: 'White' } },
+    });
+    for (const intensity of [0.2, 0.4]) {
+      clock.now += 100;
+      edit({ type: 'setHouseLook', preset: 'dim', look: look(intensity) });
+    }
+    clock.now += 100;
+    expect(edit({ type: 'setHouseLook', preset: 'up', look: look(1) })).toEqual([]);
+
+    undo();
+    expect(patch().house?.looks).toEqual({ dim: look(0.4) });
+    undo();
+    expect(patch().house?.looks).toBeUndefined();
+  });
+
+  it('rejects a house look for a House Group not in the patch', () => {
+    const { edit } = venueEngine();
+
+    expect(
+      edit({
+        type: 'setHouseLook',
+        preset: 'dim',
+        look: { bar: { intensity: 1, colour: { swatch: 'White' } } },
+      }),
+    ).toEqual(['House look "dim": House Group "bar" is not in the patch']);
   });
 });
 

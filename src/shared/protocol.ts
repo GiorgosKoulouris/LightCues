@@ -173,7 +173,10 @@ export type VenueEdit =
   | { type: 'putHouseLight'; light: HouseLight }
   | { type: 'removeHouseLights'; ids: string[] }
   // Without a look, the House Lights start at full white.
-  | { type: 'setStartupLook'; look?: HouseLook };
+  | { type: 'setStartupLook'; look?: HouseLook }
+  // The house look of the House Preset with id `preset`. Without a look, or
+  // with one that sets no House Group, removes it.
+  | { type: 'setHouseLook'; preset: string; look?: HouseLook };
 
 // A DMX interface port that Universes are sent to. `id` is what a Universe's
 // `output` names: the device's USB serial number, or its port when it has

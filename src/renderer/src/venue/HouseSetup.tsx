@@ -1,9 +1,12 @@
 import { Plus, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { FixtureProfile } from '../../../shared/fixture-profile';
 import type { VenueEdit } from '../../../shared/protocol';
+import { showHousePresets, type Show } from '../../../shared/show';
+import { lookPresetsNotInShow, unsetHousePresets } from '../../../shared/venue-check';
 import {
   FULL_WHITE,
+  houseLook,
   patchHouse,
   patchProfile,
   putHouseLight,
@@ -15,6 +18,7 @@ import {
   withoutGroup,
 } from '../../../shared/venue-patch';
 import { ColourPicker } from '../show/ColourPicker';
+import { Badge } from '../ui/Badge';
 import { Button, IconButton } from '../ui/Button';
 import { Checkbox } from '../ui/Checkbox';
 import { parseName, TextField } from '../ui/fields';
@@ -27,22 +31,39 @@ import styles from './HouseSetup.module.css';
 
 interface HouseSetupProps {
   patch: VenuePatch;
+  // The Show whose House Presets get a house look each; none while loading.
+  show: Show | undefined;
   // The Profile Library's Profiles.
   profiles: FixtureProfile[];
   // Resolves to whether the edit was made.
   change(edit: VenueEdit): Promise<boolean>;
 }
 
-// The House Groups, their House Lights and the Startup look. Mounted only
-// while the House tab shows: once the Startup look is edited, the rig shows
-// it live until the tab is left, then goes back to the house state.
-export function HouseSetup({ patch, profiles, change }: HouseSetupProps) {
+// The look last edited: a House Preset's house look, or the Startup look
+// when `preset` is absent.
+interface EditedLook {
+  preset?: string;
+}
+
+// The House Groups, their House Lights, the Startup look and a house look per
+// House Preset of the Show. Looks stored for House Presets the Show lacks are
+// listed after them, to remove. Mounted only while the House tab shows: once
+// a look is edited, the rig shows it live until the tab is left, then goes
+// back to the house state.
+export function HouseSetup({ patch, show, profiles, change }: HouseSetupProps) {
   const toast = useToast();
-  const { groups, lights, startupLook } = patchHouse(patch);
+  const { groups, lights, startupLook, looks } = patchHouse(patch);
   // The House Group a House Light is being added to.
   const [addingTo, setAddingTo] = useState<string>();
-  const [edited, setEdited] = useState(false);
-  useHouseLookPreview(edited, startupLook);
+  // None until a look is edited.
+  const [edited, setEdited] = useState<EditedLook>();
+  useHouseLookPreview(
+    edited !== undefined,
+    edited?.preset === undefined ? startupLook : houseLook(patch, edited.preset),
+  );
+  const presets = show ? showHousePresets(show) : [];
+  const unset = new Set(show ? unsetHousePresets(show, patch).map((p) => p.id) : []);
+  const others = show ? lookPresetsNotInShow(show, patch) : Object.keys(looks ?? {});
 
   async function removeGroup(group: HouseGroup) {
     const its = lights.filter((l) => l.group === group.id);
@@ -65,9 +86,22 @@ export function HouseSetup({ patch, profiles, change }: HouseSetupProps) {
     }
   }
 
-  function setLook(look: HouseLook) {
-    setEdited(true);
-    void change({ type: 'setStartupLook', ...(Object.keys(look).length > 0 && { look }) });
+  // Sets the Startup look, or the house look of `preset`. A look with no
+  // Group is cleared.
+  function setLook(preset: string | undefined, look: HouseLook) {
+    setEdited({ preset });
+    const set = Object.keys(look).length > 0 && { look };
+    void change(
+      preset === undefined
+        ? { type: 'setStartupLook', ...set }
+        : { type: 'setHouseLook', preset, ...set },
+    );
+  }
+
+  async function removeLook(preset: string, label: string) {
+    if (await change({ type: 'setHouseLook', preset })) {
+      toast({ message: removedMessage(label) });
+    }
   }
 
   return (
@@ -103,18 +137,60 @@ export function HouseSetup({ patch, profiles, change }: HouseSetupProps) {
           Add House Group
         </Button>
       </section>
-      <section className={styles.section}>
+      <section aria-label="Startup look" className={styles.section}>
         <h3 className={styles.heading}>Startup look</h3>
         <p className={styles.hint}>
           Sent from launch and when this Venue Patch is opened. A Group it does not set starts at
-          full white. While you edit it, the rig shows it until you leave this tab.
+          full white. While you edit a look, the rig shows it until you leave this tab.
         </p>
         {groups.length > 0 ? (
-          <HouseLookEditor groups={groups} look={startupLook ?? {}} onChange={setLook} />
+          <HouseLookEditor
+            groups={groups}
+            look={startupLook ?? {}}
+            onChange={(look) => setLook(undefined, look)}
+          />
         ) : (
           <p className={styles.empty}>Add a House Group to set the Startup look.</p>
         )}
       </section>
+      {(presets.length > 0 || others.length > 0) && (
+        <section className={styles.section}>
+          <h3 className={styles.heading}>House looks</h3>
+          <p className={styles.hint}>
+            What each House Preset of the Show sets in this venue. A House Preset with no look does
+            nothing here. A Group a look does not set stays where it is.
+          </p>
+          {groups.length === 0 && (
+            <p className={styles.empty}>Add a House Group to set the house looks.</p>
+          )}
+          {presets.map((preset) => (
+            <HouseLookCard
+              key={preset.id}
+              name={preset.name}
+              label={`House look ${preset.name}`}
+              badge={unset.has(preset.id) && <Badge tone="warning">Not set up in this venue</Badge>}
+              groups={groups}
+              look={houseLook(patch, preset.id) ?? {}}
+              onChange={(look) => setLook(preset.id, look)}
+            />
+          ))}
+          {others.map((id, i) => {
+            const name = `Other look ${i + 1}`;
+            return (
+              <HouseLookCard
+                key={id}
+                name={name}
+                label={name}
+                badge={show && <Badge>Not in this Show</Badge>}
+                groups={groups}
+                look={houseLook(patch, id) ?? {}}
+                onChange={(look) => setLook(id, look)}
+                onRemove={() => void removeLook(id, name)}
+              />
+            );
+          })}
+        </section>
+      )}
       <AddFixtureDialog
         title="Add House Light"
         open={addingTo !== undefined}
@@ -304,6 +380,44 @@ function HouseLightRow({
         <IconButton icon={<Trash2 />} label={`Remove ${light.name}`} onClick={onRemove} />
       </td>
     </tr>
+  );
+}
+
+// One house look, under its name, with a badge and a remove button when
+// given. With no House Group, only its name and badge show.
+function HouseLookCard({
+  name,
+  label,
+  badge,
+  groups,
+  look,
+  onChange,
+  onRemove,
+}: {
+  name: string;
+  label: string;
+  badge?: ReactNode;
+  groups: HouseGroup[];
+  look: HouseLook;
+  onChange(look: HouseLook): void;
+  onRemove?(): void;
+}) {
+  return (
+    <section aria-label={label} className={styles.lookCard}>
+      <div className={styles.lookHeader}>
+        <h4 className={styles.lookName}>{name}</h4>
+        {badge}
+        {onRemove && (
+          <IconButton
+            icon={<Trash2 />}
+            label={`Remove ${label}`}
+            className={styles.lookRemove}
+            onClick={onRemove}
+          />
+        )}
+      </div>
+      {groups.length > 0 && <HouseLookEditor groups={groups} look={look} onChange={onChange} />}
+    </section>
   );
 }
 
