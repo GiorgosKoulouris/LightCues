@@ -1,13 +1,13 @@
 import type { ReactNode } from 'react';
-import type { TempoSource } from '../../../shared/protocol';
-import type { Show } from '../../../shared/show';
+import type { HouseFired, TempoSource } from '../../../shared/protocol';
+import type { HousePreset, Show } from '../../../shared/show';
 import { isActive } from '../show/scenes';
 import type { PlaybackState } from '../show/usePlayback';
 import { Button } from '../ui/Button';
 import { cx } from '../ui/cx';
 import styles from './controls.module.css';
 import { runPanelAction } from './usePanelKeys';
-import { SHORTCUTS } from './shortcuts';
+import { housePresetKey, SHORTCUTS } from './shortcuts';
 import type { TempoState } from './useTempo';
 
 // The Fallback Panel's controls, shared by its strip and the Perform view,
@@ -133,5 +133,30 @@ export function GrandMasterFader({
       />
       <output className={styles.percent}>{Math.round(playback.grandMaster * 100)}%</output>
     </label>
+  );
+}
+
+// Fires a House Preset, with its key: Shift and its place, `index` + 1.
+// Pressed while it is the one fired last, during its fade too.
+export function HousePresetButton({
+  preset,
+  index,
+  fired,
+  className,
+}: {
+  preset: HousePreset;
+  index: number;
+  fired: HouseFired | undefined;
+  className?: string;
+}) {
+  return (
+    <Button
+      size="lg"
+      className={className}
+      aria-pressed={fired?.type === 'preset' && fired.id === preset.id}
+      onClick={() => window.engine.send({ type: 'fireHousePreset', id: preset.id })}
+    >
+      <span className={styles.name}>{preset.name}</span> <Key>{housePresetKey(index)}</Key>
+    </Button>
   );
 }

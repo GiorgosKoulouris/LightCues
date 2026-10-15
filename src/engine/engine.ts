@@ -9,7 +9,7 @@ import {
   type LibraryImportResult,
   type RestoreResult,
 } from '../shared/protocol';
-import { findTrigger, validateShow } from '../shared/show';
+import { findHousePresetOn, findTrigger, validateShow } from '../shared/show';
 import { validatePatch } from '../shared/venue-patch';
 import { profileName } from '../shared/profile-edit';
 import { createChannelMonitor } from './channel-monitor';
@@ -115,6 +115,7 @@ const SNAPSHOT_PARTS: Partial<Record<EngineEvent['type'], keyof EngineSnapshot>>
   venue: 'venue',
   playback: 'playback',
   tempo: 'playback',
+  house: 'house',
   midiInput: 'midiInput',
 };
 
@@ -176,7 +177,7 @@ export function createEngine({
     show: show.show,
     patch: venue.patch,
   });
-  const house = createHouse({ patch: venue.patch });
+  const house = createHouse({ patch: venue.patch, show: show.show, now, emit });
   const outputs =
     serialPorts &&
     createOutputs({
@@ -210,7 +211,10 @@ export function createEngine({
       return;
     }
     const trigger = findTrigger(show.show(), note);
+    // A House Preset's note only does Go.
+    const preset = findHousePresetOn(show.show(), note);
     if (trigger) playback.fire(trigger);
+    else if (preset) house.fire(preset.id);
   }
 
   function libraryChanged(): void {
@@ -308,6 +312,7 @@ export function createEngine({
       show: show.snapshot(),
       venue: venue.snapshot(),
       playback: { ...playback.snapshot(), bpm: tempo.bpm(), tempoSource: tempo.source() },
+      house: house.snapshot(),
       midiInput: selected === undefined ? {} : { selected },
     };
   }
@@ -315,12 +320,13 @@ export function createEngine({
   // Brings back the snapshot of an engine that stopped (ADR 0011). The look
   // is resolved once at the end, so a snapshot that breaks resolution throws
   // here, not later in the frame loop. Failing that, the documents come back
-  // with the Base Look, Blackout and Grand Master as they were; failing that
-  // too, the engine starts empty.
+  // with the Base Look, Blackout and Grand Master as they were and the House
+  // Lights at the Startup look; failing that too, the engine starts empty.
   function restore(from: EngineSnapshot): RestoreResult {
     try {
       restoreDocuments(from);
       playback.restore(from.playback);
+      house.restore(from.house);
       tempo.restore(from.playback.bpm, from.playback.tempoSource);
       midiInput?.select(from.midiInput.selected);
       resolveOnce();
@@ -345,7 +351,7 @@ export function createEngine({
   }
 
   // The Venue Patch first, so the Show's Scenes resolve against it. The
-  // House Lights go to its Startup look, as the house state is not kept.
+  // House Lights go to its Startup look, until the house state is restored.
   // Their files are granted, as the last engine held them: main re-grants
   // only the paths it granted, not the recent files the engine reopened
   // itself. The errors name no contents, since they are logged.
@@ -491,6 +497,15 @@ export function createEngine({
           break;
         case 'previewHouseLook':
           house.preview(command.look);
+          break;
+        case 'getHouse':
+          house.emitHouse();
+          break;
+        case 'fireHousePreset':
+          house.fire(command.id);
+          break;
+        case 'goStartupLook':
+          house.goStartupLook();
           break;
       }
     },

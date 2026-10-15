@@ -106,7 +106,19 @@ export type EngineCommand =
   // While a house look is previewed, the House Lights show it over the house
   // state. Without a look, they go back to the house state, which the
   // preview never changes.
-  | { type: 'previewHouseLook'; look?: HouseLook };
+  | { type: 'previewHouseLook'; look?: HouseLook }
+  | { type: 'getHouse' }
+  // Crossfades the House Lights to the House Preset's house look in this
+  // Venue Patch, over its fade. Does nothing when the patch has no look for
+  // it. Not in the undo history.
+  | { type: 'fireHousePreset'; id: string }
+  // Crossfades the House Lights to the Startup look, Groups it does not set
+  // to full white, over a fixed fade.
+  | { type: 'goStartupLook' };
+
+// What the House Lights went to last: the Startup look, or a House Preset's
+// look, by House Preset id.
+export type HouseFired = { type: 'startup' } | { type: 'preset'; id: string };
 
 // Monitor sends the active Scenes to the Outputs. Blind holds the Outputs at
 // the frames sent last.
@@ -288,6 +300,9 @@ export type EngineEvent =
       freeze: boolean;
       focusCheck?: Direction;
     }
+  // What the House Lights went to last, during its fade too. Sent on request
+  // and after every change.
+  | { type: 'house'; fired: HouseFired }
   // The MIDI input status. Sent on request and after every change.
   | { type: 'midiInput'; status: MidiInputStatus }
   // The Tempo and where it comes from. Sent on request and after every change
@@ -332,6 +347,7 @@ export interface EngineSnapshot {
   show: DocumentSnapshot<Show>;
   venue: DocumentSnapshot<VenuePatch>;
   playback: PlaybackSnapshot;
+  house: HouseSnapshot;
   // The selected MIDI Input's name, absent when none is selected.
   midiInput: { selected?: string };
 }
@@ -355,6 +371,13 @@ export interface PlaybackSnapshot {
   freeze: boolean;
   bpm: number;
   tempoSource: TempoSource;
+}
+
+// The house state: what each House Group goes to, fades done, and what was
+// fired last.
+export interface HouseSnapshot {
+  look: HouseLook;
+  fired: HouseFired;
 }
 
 // Sent by the engine to main on the parent port: the whole snapshot once on
@@ -514,6 +537,7 @@ export const STATE_REQUESTS: readonly EngineCommand['type'][] = [
   'getVenue',
   'getShow',
   'getPlayback',
+  'getHouse',
   'listOutputs',
   'listMidiInputs',
   'getTempo',

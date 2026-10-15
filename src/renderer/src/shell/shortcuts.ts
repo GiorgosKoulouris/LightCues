@@ -14,10 +14,6 @@ export type AppAction =
   // Focuses the current list's search.
   | { type: 'find' };
 
-export interface AppKeyPress extends KeyPress {
-  shiftKey: boolean;
-}
-
 // The key each file command takes with Ctrl, and whether it also takes Shift.
 const FILE_KEYS: Record<FileCommand, { key: string; shift: boolean }> = {
   new: { key: 'n', shift: false },
@@ -41,7 +37,7 @@ export function appShortcut({
   altKey,
   metaKey,
   repeat,
-}: AppKeyPress): AppAction | undefined {
+}: KeyPress): AppAction | undefined {
   if (!ctrlKey || altKey || metaKey) return undefined;
   const lower = key.toLowerCase();
   if (lower === UNDO_KEY) return { type: 'history', command: shiftKey ? 'redo' : 'undo' };

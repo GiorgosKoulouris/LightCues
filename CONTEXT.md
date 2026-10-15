@@ -56,7 +56,7 @@ _Avoid_: House Scene, house cue
 Intensity and colour for some House Groups, defined in the Venue Patch for one House Preset or as the Startup look. Groups it does not list stay where they are.
 
 **Startup look**:
-The house look a Venue Patch sends from launch and when it is opened. Full white when not set.
+The house look a Venue Patch sends from launch and when it is opened, and that Startup in Perform fades back to. Going to it sends the Groups it does not list to full white, as at launch. Full white when not set.
 
 ### Show
 

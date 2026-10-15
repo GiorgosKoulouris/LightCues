@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EngineEvent, EngineSnapshot, PlaybackSnapshot, ShowEdit } from '../shared/protocol';
+import type {
+  EngineEvent,
+  EngineSnapshot,
+  PlaybackSnapshot,
+  ShowEdit,
+  VenueEdit,
+} from '../shared/protocol';
 import type { Scene } from '../shared/show';
 import { createEngine } from './engine';
 import type { MidiPorts } from './midi-input';
@@ -49,6 +55,8 @@ function snapshotEngine(midi = fakeMidi(['Pads', 'Keys'])) {
   let requestId = 1;
   const editShow = (edit: ShowEdit) =>
     engine.handle({ type: 'editShow', requestId: requestId++, edit });
+  const editVenue = (edit: VenueEdit) =>
+    engine.handle({ type: 'editVenue', requestId: requestId++, edit });
 
   return {
     engine,
@@ -58,6 +66,14 @@ function snapshotEngine(midi = fakeMidi(['Pads', 'Keys'])) {
     clock,
     midi,
     editShow,
+    editVenue,
+    // A House Preset Dim, with a look in the Venue Patch for House Group Bar.
+    dimPreset() {
+      editVenue({ type: 'putHouseGroup', group: { id: 'bar', name: 'Bar' } });
+      editShow({ type: 'putHousePreset', preset: { id: 'dim', name: 'Dim', fade: 2 } });
+      const look = { bar: { intensity: 0.2, colour: { swatch: 'White' as const } } };
+      editVenue({ type: 'setHouseLook', preset: 'dim', look });
+    },
     scenes: (...scenes: Scene[]) => scenes.forEach((s) => editShow({ type: 'putScene', scene: s })),
     // The parts reported since the last call.
     take: () => parts.splice(0),
@@ -76,7 +92,7 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe('engine snapshot', () => {
-  it('starts whole: documents, playback, Tempo and MIDI Input', () => {
+  it('starts whole: documents, playback, Tempo, house state and MIDI Input', () => {
     const { full } = snapshotEngine();
 
     expect(full).toEqual({
@@ -91,6 +107,7 @@ describe('engine snapshot', () => {
         bpm: 120,
         tempoSource: 'default',
       },
+      house: { look: {}, fired: { type: 'startup' } },
       midiInput: {},
     });
   });
@@ -256,6 +273,25 @@ describe('engine snapshot', () => {
     ]);
   });
 
+  it('sends the house state when a House Preset fires, not when nothing changes', () => {
+    const { take, engine, dimPreset } = snapshotEngine();
+    dimPreset();
+    take();
+
+    engine.handle({ type: 'fireHousePreset', id: 'dim' });
+    engine.handle({ type: 'getHouse' });
+    engine.handle({ type: 'fireHousePreset', id: 'none' });
+
+    expect(take()).toEqual([
+      {
+        house: {
+          look: { bar: { intensity: 0.2, colour: { swatch: 'White' } } },
+          fired: { type: 'preset', id: 'dim' },
+        },
+      },
+    ]);
+  });
+
   it('sends the MIDI Input when the selection changes', () => {
     const { take, engine } = snapshotEngine();
 
@@ -286,10 +322,12 @@ describe('engine restore', () => {
     s.clock.now = 400;
     s.engine.handle({ type: 'tapTempo' });
     s.engine.handle({ type: 'selectMidiInput', name: 'Keys' });
+    s.dimPreset();
+    s.engine.handle({ type: 'fireHousePreset', id: 'dim' });
     return s.engine.snapshot();
   }
 
-  it('brings back the documents, unsaved state, live look, Tempo and MIDI Input', () => {
+  it('brings back the documents, unsaved state, live look, Tempo, house state and MIDI Input', () => {
     const before = liveSnapshot();
     const after = snapshotEngine();
 
@@ -303,6 +341,7 @@ describe('engine restore', () => {
       freeze: true,
       bpm: 150,
     });
+    expect(before.house.fired).toEqual({ type: 'preset', id: 'dim' });
   });
 
   it('can save the restored Show to its file, which it holds again', () => {
@@ -333,8 +372,9 @@ describe('engine restore', () => {
 
     expect(after.engine.restore(broken)).toBe('baseLook');
 
-    const { show, playback } = after.engine.snapshot();
+    const { show, playback, house } = after.engine.snapshot();
     expect(show).toEqual(before.show);
+    expect(house).toEqual({ look: {}, fired: { type: 'startup' } });
     expect(playback).toMatchObject({
       active: [{ layer: 'layer-1', scene: 'base' }],
       grandMaster: 0.6,

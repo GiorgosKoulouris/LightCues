@@ -236,10 +236,10 @@ describe('serve', () => {
   it('restores a snapshot from the parent and replies with the result', () => {
     const before = fakePort();
     serve(before.port as ParentPortLike, { now: () => 0 });
-    const { show, venue, playback, midiInput } = before.sent[0] as EngineSnapshot;
+    const { show, venue, playback, house, midiInput } = before.sent[0] as EngineSnapshot;
     const restore: EngineRestore = {
       type: 'restore',
-      snapshot: { show, venue, midiInput, playback: { ...playback, grandMaster: 0.3 } },
+      snapshot: { show, venue, house, midiInput, playback: { ...playback, grandMaster: 0.3 } },
     };
     const after = fakePort();
     serve(after.port as ParentPortLike, { now: () => 0 });

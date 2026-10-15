@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import type { Show } from '../../../shared/show';
+import { showHousePresets, type Show } from '../../../shared/show';
 import { pressScene } from '../show/scenes';
 import type { PlaybackState } from '../show/usePlayback';
 import { isTextEntry, panelAction, type PanelAction } from './shortcuts';
@@ -40,6 +40,11 @@ export function runPanelAction(action: PanelAction, show: Show, playback: Playba
       const sceneId = show.panelScenes?.[action.index];
       const scene = show.scenes.find((s) => s.id === sceneId);
       if (scene) window.engine.send(pressScene(playback.active, scene));
+      break;
+    }
+    case 'housePreset': {
+      const preset = showHousePresets(show)[action.index];
+      if (preset) window.engine.send({ type: 'fireHousePreset', id: preset.id });
       break;
     }
     case 'grandMaster': {

@@ -3,6 +3,8 @@ import { isTextEntry, panelAction, type KeyPress } from './shortcuts';
 
 const press = (key: string, more: Partial<KeyPress> = {}): KeyPress => ({
   key,
+  code: /^\d$/.test(key) ? `Digit${key}` : '',
+  shiftKey: false,
   ctrlKey: false,
   altKey: false,
   metaKey: false,
@@ -17,6 +19,35 @@ describe('panelAction', () => {
     expect(panelAction(press('0'))).toEqual({ type: 'baseLook' });
     expect(panelAction(press('1'))).toEqual({ type: 'scene', index: 0 });
     expect(panelAction(press('9'))).toEqual({ type: 'scene', index: 8 });
+  });
+
+  it('maps Shift+1–8 to the House Preset buttons by physical key, not while held', () => {
+    expect(panelAction(press('!', { code: 'Digit1', shiftKey: true }))).toEqual({
+      type: 'housePreset',
+      index: 0,
+    });
+    expect(panelAction(press('*', { code: 'Digit8', shiftKey: true }))).toEqual({
+      type: 'housePreset',
+      index: 7,
+    });
+    // A layout that types digits with Shift.
+    expect(panelAction(press('2', { code: 'Digit2', shiftKey: true }))).toEqual({
+      type: 'housePreset',
+      index: 1,
+    });
+    expect(panelAction(press('(', { code: 'Digit9', shiftKey: true }))).toBeUndefined();
+    expect(panelAction(press(')', { code: 'Digit0', shiftKey: true }))).toBeUndefined();
+    expect(
+      panelAction(press('!', { code: 'Digit1', shiftKey: true, repeat: true })),
+    ).toBeUndefined();
+  });
+
+  it('keeps Shift for keys typed with it: Blackout and the Grand Master', () => {
+    expect(panelAction(press('B', { shiftKey: true }))).toEqual({ type: 'blackout' });
+    expect(panelAction(press('+', { code: 'Equal', shiftKey: true }))).toEqual({
+      type: 'grandMaster',
+      step: 0.1,
+    });
   });
 
   it('maps T to Tap Tempo, not while held', () => {

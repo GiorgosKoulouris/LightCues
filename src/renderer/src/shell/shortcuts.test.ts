@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { panelAction } from '../panel/shortcuts';
-import { appShortcut, type AppKeyPress } from './shortcuts';
+import { panelAction, type KeyPress } from '../panel/shortcuts';
+import { appShortcut } from './shortcuts';
 
-const press = (key: string, more: Partial<AppKeyPress> = {}): AppKeyPress => ({
+const press = (key: string, more: Partial<KeyPress> = {}): KeyPress => ({
   key,
+  code: '',
   ctrlKey: false,
   shiftKey: false,
   altKey: false,
@@ -11,8 +12,7 @@ const press = (key: string, more: Partial<AppKeyPress> = {}): AppKeyPress => ({
   repeat: false,
   ...more,
 });
-const ctrl = (key: string, more: Partial<AppKeyPress> = {}) =>
-  press(key, { ctrlKey: true, ...more });
+const ctrl = (key: string, more: Partial<KeyPress> = {}) => press(key, { ctrlKey: true, ...more });
 
 describe('appShortcut', () => {
   it('switches view with Ctrl+1 to 4', () => {

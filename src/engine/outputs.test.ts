@@ -693,6 +693,86 @@ describe('engine House Lights', () => {
     expect(house()).toBe(255);
   });
 
+  // `houseEngine` with House Preset Dim, fading over 2 s to `dim`.
+  async function dimEngine() {
+    const engine = await houseEngine();
+    engine.editShow({ type: 'putHousePreset', preset: { id: 'dim', name: 'Dim', fade: 2 } });
+    engine.editVenue({ type: 'setHouseLook', preset: 'dim', look: dim });
+    return engine;
+  }
+
+  it('crossfades to a fired House Preset over its fade', async () => {
+    const { send, house } = await dimEngine();
+
+    send({ type: 'fireHousePreset', id: 'dim' });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(house()).toBeGreaterThan(140);
+    expect(house()).toBeLessThan(165);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(house()).toBe(51);
+  });
+
+  it('fades on through Blackout, the Grand Master, Freeze and Blind', async () => {
+    const { send, house, level } = await dimEngine();
+
+    send({ type: 'fireHousePreset', id: 'dim' });
+    await vi.advanceTimersByTimeAsync(500);
+    send({ type: 'setBlackout', on: true });
+    send({ type: 'setGrandMaster', level: 0 });
+    send({ type: 'setFreeze', on: true });
+    send({ type: 'setMode', mode: 'blind' });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(level()).toBe(0);
+    expect(house()).toBeGreaterThan(140);
+    expect(house()).toBeLessThan(165);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(house()).toBe(51);
+  });
+
+  it('keeps the house state when the Show is replaced, and goes to the Startup look when the Venue Patch is', async () => {
+    const { send, editVenue, reopenVenue, house } = await dimEngine();
+    editVenue({ type: 'setStartupLook', look: { bar: { ...dim.bar!, intensity: 0.6 } } });
+    send({ type: 'fireHousePreset', id: 'dim' });
+    await vi.advanceTimersByTimeAsync(2000);
+
+    send({ type: 'newShow' });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(house()).toBe(51);
+
+    reopenVenue('venue.lcvenue');
+    await vi.advanceTimersByTimeAsync(100);
+    expect(house()).toBe(153);
+  });
+
+  it('goes back to the Startup look from its button', async () => {
+    const { send, house, events } = await dimEngine();
+    send({ type: 'fireHousePreset', id: 'dim' });
+    await vi.advanceTimersByTimeAsync(2000);
+
+    send({ type: 'goStartupLook' });
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(house()).toBe(255);
+    expect(events.findLast((e) => e.type === 'house')).toEqual({
+      type: 'house',
+      fired: { type: 'startup' },
+    });
+  });
+
+  it('leaves the undo history alone', async () => {
+    const { send, events } = await dimEngine();
+    const before = events.length;
+
+    send({ type: 'fireHousePreset', id: 'dim' });
+    send({ type: 'undoVenue' });
+
+    expect(events.slice(before).map((e) => e.type)).toEqual(['house', 'venue']);
+    const venue = events.findLast((e) => e.type === 'venue');
+    expect(venue?.type === 'venue' && venue.patch.house?.looks).toBeUndefined();
+  });
+
   it('shows in the channel monitor', async () => {
     const { events, send } = await houseEngine();
     send({ type: 'setBlackout', on: true });

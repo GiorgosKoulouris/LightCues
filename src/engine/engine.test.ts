@@ -255,6 +255,7 @@ describe('engine Venue Patch', () => {
         canUndo: false,
         canRedo: false,
       },
+      { type: 'house', fired: { type: 'startup' } },
       { type: 'venueDone', requestId: 1, errors: [] },
     ]);
   });

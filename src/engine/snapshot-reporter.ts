@@ -9,7 +9,8 @@ type Part = keyof EngineSnapshot;
 // Reports the engine's snapshot to main (ADR 0011): whole on `full`, then
 // each part that changed. Before the first `full`, changes are not reported.
 // A document part goes at once, and only when the document, its path or its
-// unsaved state differ from the last one sent. Playback parts go at most
+// unsaved state differ from the last one sent; the house part, when the
+// house state was changed. Playback parts go at most
 // every PLAYBACK_PART_MS: the first at once, then the latest at the end of
 // the wait.
 export function createSnapshotReporter(
@@ -47,7 +48,9 @@ export function createSnapshotReporter(
       const same =
         part === 'midiInput'
           ? now.midiInput.selected === last.midiInput.selected
-          : sameDocument(now[part], last[part]);
+          : part === 'house'
+            ? now.house === last.house
+            : sameDocument(now[part], last[part]);
       if (same) return;
       last = { ...last, [part]: now[part] };
       report({ [part]: now[part] });

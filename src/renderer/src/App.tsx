@@ -16,6 +16,7 @@ import { useViewShortcuts } from './shell/useShortcuts';
 import type { View } from './shell/views';
 import { ShowView } from './show/ShowView';
 import { useMidiInput } from './show/useMidiInput';
+import { useHouse } from './show/useHouse';
 import { usePlayback } from './show/usePlayback';
 import { useShow } from './show/useShow';
 import { cx } from './ui/cx';
@@ -33,6 +34,7 @@ export function App() {
   const show = showDocument.show;
   const venue = venueDocument.venue;
   const playback = usePlayback();
+  const house = useHouse();
   const midiInput = useMidiInput();
   const tempo = useTempo();
   const outputs = useOutputs();
@@ -84,11 +86,12 @@ export function App() {
               patch={venue?.patch}
               playback={playback}
               tempo={tempo}
+              house={house}
             />
           </div>
         </main>
         {view !== 'perform' && (
-          <FallbackPanel show={show?.show} playback={playback} tempo={tempo} />
+          <FallbackPanel show={show?.show} playback={playback} tempo={tempo} house={house} />
         )}
       </div>
       <EngineRecovery />

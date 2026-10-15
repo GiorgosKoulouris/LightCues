@@ -28,6 +28,7 @@ const snapshot: EngineSnapshot = {
     bpm: 120,
     tempoSource: 'default',
   },
+  house: { look: {}, fired: { type: 'startup' } },
   midiInput: {},
 };
 
@@ -39,6 +40,9 @@ describe('createSnapshotStore', () => {
     expect(store.latest()).toBeUndefined();
 
     store.merge({ type: 'snapshot', playback: snapshot.playback, midiInput: snapshot.midiInput });
+    expect(store.latest()).toBeUndefined();
+
+    store.merge({ type: 'snapshot', house: snapshot.house });
     expect(store.latest()).toEqual(snapshot);
   });
 

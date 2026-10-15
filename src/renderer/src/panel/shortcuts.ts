@@ -1,6 +1,6 @@
 // The Fallback Panel's keyboard shortcuts. Pure, so they are testable without
 // a DOM.
-import { MAX_PANEL_SCENES } from '../../../shared/show';
+import { MAX_HOUSE_PRESETS, MAX_PANEL_SCENES } from '../../../shared/show';
 
 export type PanelAction =
   | { type: 'blackout' }
@@ -9,12 +9,17 @@ export type PanelAction =
   | { type: 'freeze' }
   // The Scene button at `index`, 0 first.
   | { type: 'scene'; index: number }
+  // The House Preset at `index`, 0 first.
+  | { type: 'housePreset'; index: number }
   // Changes the Grand Master by `step`.
   | { type: 'grandMaster'; step: number };
 
 // The parts of a keydown event the shortcuts read.
 export interface KeyPress {
   key: string;
+  // The physical key, such as Digit1, whatever the layout types.
+  code: string;
+  shiftKey: boolean;
   ctrlKey: boolean;
   altKey: boolean;
   metaKey: boolean;
@@ -32,13 +37,19 @@ export const SHORTCUTS = {
   grandMasterUp: '+',
 } as const;
 
+// The House Preset key at `index`, 0 first, as shown on the panel.
+export const housePresetKey = (index: number) => `⇧${index + 1}`;
+
 const GRAND_MASTER_STEP = 0.1;
 
 // The action a key press runs, or undefined. Keys with Ctrl, Alt or Meta are
 // left to the app and the system. Holding a key repeats only Grand Master
 // steps, so Blackout and Freeze do not flicker and a held T is one tap.
+// Shift+1–8 go by the physical key, since Shift changes the digit typed.
 export function panelAction({
   key,
+  code,
+  shiftKey,
   ctrlKey,
   altKey,
   metaKey,
@@ -50,6 +61,9 @@ export function panelAction({
   if (key === SHORTCUTS.grandMasterUp || key === '=')
     return { type: 'grandMaster', step: GRAND_MASTER_STEP };
   if (repeat) return undefined;
+  const shiftedDigit = shiftKey && /^Digit\d$/.test(code) ? Number(code.slice(-1)) : 0;
+  if (shiftedDigit >= 1 && shiftedDigit <= MAX_HOUSE_PRESETS)
+    return { type: 'housePreset', index: shiftedDigit - 1 };
   if (key.toUpperCase() === SHORTCUTS.blackout) return { type: 'blackout' };
   if (key.toUpperCase() === SHORTCUTS.tapTempo) return { type: 'tapTempo' };
   if (key.toUpperCase() === SHORTCUTS.freeze) return { type: 'freeze' };

@@ -1,11 +1,13 @@
 import { useId, useState } from 'react';
-import type { Show } from '../../../shared/show';
-import type { VenuePatch } from '../../../shared/venue-patch';
+import type { HouseFired } from '../../../shared/protocol';
+import { showHousePresets, type Show } from '../../../shared/show';
+import { patchHouse, type VenuePatch } from '../../../shared/venue-patch';
 import {
   BaseLookButton,
   BlackoutButton,
   FreezeButton,
   GrandMasterFader,
+  HousePresetButton,
   Key,
   TapTempoButton,
 } from '../panel/controls';
@@ -30,13 +32,15 @@ interface PerformViewProps {
   patch: VenuePatch | undefined;
   playback: PlaybackState | undefined;
   tempo: TempoState | undefined;
+  house: HouseFired | undefined;
 }
 
 // The gig view: Blackout, the Base Look, the Grand Master, Tap Tempo and Freeze along the top,
-// every Scene as a button grouped by Layer, each Layer with a small Clear, and
-// the Preview with Monitor/Blind. Nothing is edited here. It replaces the Fallback Panel strip,
+// the House section while the Venue Patch has House Lights, every Scene as a
+// button grouped by Layer, each Layer with a small Clear, and the Preview with
+// Monitor/Blind. Nothing is edited here. It replaces the Fallback Panel strip,
 // whose keys still work.
-export function PerformView({ active, show, patch, playback, tempo }: PerformViewProps) {
+export function PerformView({ active, show, patch, playback, tempo, house }: PerformViewProps) {
   // The Preview column, below 1280px where it is hidden by default.
   const [sideOpen, setSideOpen] = useState(false);
 
@@ -67,6 +71,7 @@ export function PerformView({ active, show, patch, playback, tempo }: PerformVie
       </div>
       <div className={styles.body}>
         <div className={styles.groups}>
+          {patchHouse(patch).lights.length > 0 && <HouseSection show={show} fired={house} />}
           {show.scenes.length === 0 ? (
             <p className={styles.empty}>No Scenes: add them in the Show view.</p>
           ) : (
@@ -89,6 +94,42 @@ export function PerformView({ active, show, patch, playback, tempo }: PerformVie
         </SidePanel>
       </div>
     </div>
+  );
+}
+
+// The Startup look and each House Preset, the one fired last pressed.
+function HouseSection({ show, fired }: { show: Show; fired: HouseFired | undefined }) {
+  const headingId = useId();
+  const presets = showHousePresets(show);
+
+  return (
+    <section aria-labelledby={headingId} className={styles.layer}>
+      <h3 id={headingId} className={styles.heading}>
+        House
+      </h3>
+      <div className={styles.scenes}>
+        <Button
+          size="lg"
+          className={styles.scene}
+          aria-pressed={fired?.type === 'startup'}
+          onClick={() => window.engine.send({ type: 'goStartupLook' })}
+        >
+          Startup
+        </Button>
+        {presets.map((preset, i) => (
+          <HousePresetButton
+            key={preset.id}
+            preset={preset}
+            index={i}
+            fired={fired}
+            className={styles.scene}
+          />
+        ))}
+      </div>
+      {presets.length === 0 && (
+        <p className={styles.empty}>No House Presets: add them in the Show view.</p>
+      )}
+    </section>
   );
 }
 

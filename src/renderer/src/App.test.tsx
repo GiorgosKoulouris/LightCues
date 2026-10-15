@@ -23,6 +23,7 @@ const SHOW: Show = {
   scenes: [{ id: 'warm', name: 'Warm', tags: [], layer: 'layer-1', fadeIn: 0, rules: [] }],
   triggers: [],
   panelScenes: ['warm'],
+  housePresets: [{ id: 'dim', name: 'Show dim', fade: 3 }],
 };
 
 const playback = (more: Partial<Extract<EngineEvent, { type: 'playback' }>> = {}): EngineEvent => ({
@@ -62,6 +63,8 @@ function answer(command: EngineCommand): EngineEvent[] {
       ];
     case 'getPlayback':
       return [playback()];
+    case 'getHouse':
+      return [{ type: 'house', fired: { type: 'startup' } }];
     case 'getTempo':
       return [{ type: 'tempo', bpm: 120, source: 'default' }];
     case 'listMidiInputs':
@@ -199,6 +202,20 @@ describe('App shortcuts', () => {
     ]);
     await userEvent.keyboard('{Control>}1{/Control}');
     expect(screen.getByRole('region', { name: 'Fallback Panel' })).toBeInTheDocument();
+  });
+
+  it('fires a House Preset with Shift and its number, and presses the one the engine reports', async () => {
+    await renderApp();
+    const dim = screen.getByRole('button', { name: /Show dim/ });
+    expect(dim).toHaveAttribute('aria-pressed', 'false');
+
+    await userEvent.keyboard('{Shift>}1{/Shift}');
+    expect(engine.sent.at(-1)).toEqual({ type: 'fireHousePreset', id: 'dim' });
+    engine.emit({ type: 'house', fired: { type: 'preset', id: 'dim' } });
+
+    expect(dim).toHaveAttribute('aria-pressed', 'true');
+    expect(currentView()).toHaveTextContent('Venue Patch');
+    expect(panelCommands()).toEqual([]);
   });
 
   it('fires the Scene button on a bare digit without switching view', async () => {

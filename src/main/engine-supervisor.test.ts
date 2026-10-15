@@ -48,6 +48,7 @@ const snapshot: EngineSnapshot = {
     bpm: 128,
     tempoSource: 'tap',
   },
+  house: { look: {}, fired: { type: 'preset', id: 'dim' } },
   midiInput: { selected: 'Pads' },
 };
 

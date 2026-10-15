@@ -125,6 +125,35 @@ describe('engine MIDI Triggers', () => {
     expect(active()).toEqual({ 'layer-1': 'wash' });
   });
 
+  it('fires a House Preset with its note, Go only, through the same MIDI Input', async () => {
+    const { midi, engine, edit, events, select } = midiEngine();
+    midi.plug('Pads');
+    engine.handle({
+      type: 'editVenue',
+      requestId: 100,
+      edit: { type: 'putHouseGroup', group: { id: 'bar', name: 'Bar' } },
+    });
+    const look = { bar: { intensity: 0.2, colour: { swatch: 'White' as const } } };
+    engine.handle({
+      type: 'editVenue',
+      requestId: 101,
+      edit: { type: 'setHouseLook', preset: 'dim', look },
+    });
+    edit({
+      type: 'putHousePreset',
+      preset: { id: 'dim', name: 'Dim', fade: 0, note: { channel: 2, note: 40 } },
+    });
+    select('Pads');
+    await vi.advanceTimersByTimeAsync(1000);
+    const fired = () => events.filter((e) => e.type === 'house');
+
+    midi.send('Pads', noteOn(2, 40));
+    midi.send('Pads', noteOff(2, 40));
+    midi.send('Pads', noteOn(2, 41));
+
+    expect(fired()).toEqual([{ type: 'house', fired: { type: 'preset', id: 'dim' } }]);
+  });
+
   it('goes again with a Go Trigger on the active Scene, rather than toggling it off', async () => {
     const { midi, scenes, map, select, active } = midiEngine();
     midi.plug('Pads');

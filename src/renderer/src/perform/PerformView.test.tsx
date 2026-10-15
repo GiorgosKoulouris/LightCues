@@ -1,8 +1,9 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
+import type { HouseFired } from '../../../shared/protocol';
 import type { Scene, Show } from '../../../shared/show';
-import { emptyPatch } from '../../../shared/venue-patch';
+import { emptyPatch, type VenuePatch } from '../../../shared/venue-patch';
 import type { TempoState } from '../panel/useTempo';
 import type { PlaybackState } from '../show/usePlayback';
 import { installFakeEngine, type FakeEngine } from '../test-engine';
@@ -45,15 +46,38 @@ let engine: FakeEngine;
 
 const TEMPO: TempoState = { bpm: 128, source: 'clock' };
 
-function renderView(show: Show = SHOW, playback: PlaybackState = PLAYBACK, active = true) {
+// A Venue Patch with one House Light, in House Group Bar.
+const HOUSE_PATCH: VenuePatch = {
+  ...emptyPatch({ width: 10, depth: 6 }),
+  house: {
+    groups: [{ id: 'bar', name: 'Bar' }],
+    lights: [
+      {
+        ...{ id: 'h1', name: 'Bar 1', group: 'bar', profileId: 'acme/dimmer', mode: '1ch' },
+        ...{ universe: 1, address: 10 },
+      },
+    ],
+  },
+};
+
+function renderView(
+  show: Show = SHOW,
+  playback: PlaybackState = PLAYBACK,
+  active = true,
+  {
+    patch = emptyPatch({ width: 10, depth: 6 }),
+    house,
+  }: { patch?: VenuePatch; house?: HouseFired } = {},
+) {
   render(
     <UiProvider>
       <PerformView
         active={active}
         show={show}
-        patch={emptyPatch({ width: 10, depth: 6 })}
+        patch={patch}
         playback={playback}
         tempo={TEMPO}
+        house={house}
       />
     </UiProvider>,
   );
@@ -187,5 +211,62 @@ describe('PerformView', () => {
     renderView({ ...SHOW, scenes: [], baseLook: undefined, panelScenes: undefined });
     expect(screen.getByText('No Scenes: add them in the Show view.')).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Base' })).toBeNull();
+  });
+});
+
+describe('PerformView House', () => {
+  const HOUSE_SHOW: Show = {
+    ...SHOW,
+    housePresets: [
+      { id: 'dim', name: 'Show dim', fade: 3 },
+      { id: 'up', name: 'House up', fade: 2 },
+    ],
+  };
+  const house = () => screen.getByRole('region', { name: 'House' });
+
+  it('shows Startup and each House Preset with its Shift key, the last fired pressed', () => {
+    renderView(HOUSE_SHOW, PLAYBACK, true, {
+      patch: HOUSE_PATCH,
+      house: { type: 'preset', id: 'dim' },
+    });
+
+    const buttons = within(house()).getAllByRole('button');
+    expect(buttons.map((b) => b.textContent)).toEqual(['Startup', 'Show dim ⇧1', 'House up ⇧2']);
+    expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false']);
+  });
+
+  it('presses Startup when it was fired last', () => {
+    renderView(HOUSE_SHOW, PLAYBACK, true, { patch: HOUSE_PATCH, house: { type: 'startup' } });
+
+    expect(within(house()).getByRole('button', { name: 'Startup' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('fires a House Preset and goes back to the Startup look', async () => {
+    renderView(HOUSE_SHOW, PLAYBACK, false, { patch: HOUSE_PATCH });
+
+    await userEvent.click(within(house()).getByRole('button', { name: /House up/ }));
+    await userEvent.click(within(house()).getByRole('button', { name: 'Startup' }));
+
+    expect(engine.sent).toEqual([{ type: 'fireHousePreset', id: 'up' }, { type: 'goStartupLook' }]);
+  });
+
+  it('says where to add House Presets when the Show has none', () => {
+    renderView(SHOW, PLAYBACK, true, { patch: HOUSE_PATCH });
+
+    expect(
+      within(house())
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Startup']);
+    expect(within(house()).getByText('No House Presets: add them in the Show view.')).toBeVisible();
+  });
+
+  it('leaves the House section out with no House Lights', () => {
+    renderView(HOUSE_SHOW);
+
+    expect(screen.queryByRole('region', { name: 'House' })).toBeNull();
   });
 });
