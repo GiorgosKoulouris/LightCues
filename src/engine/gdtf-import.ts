@@ -272,6 +272,7 @@ function importMode(
 ): FixtureMode {
   const name = mode.Name ?? '';
   const cellsOf = cellLookup(mode, geometries);
+  const masterDefault = masterDefaults(mode);
   const placements = (mode.DMXChannels?.DMXChannel ?? []).flatMap((dmxChannel) =>
     placementsOf(dmxChannel, cellsOf(dmxChannel.Geometry)),
   );
@@ -315,8 +316,13 @@ function importMode(
       continue;
     }
     names.add(channelName);
-    const imported = importChannel(dmxChannel, channelName, offsets.length, wheels, (feature) =>
-      report.add({ channel: channelName, feature }),
+    const imported = importChannel(
+      dmxChannel,
+      channelName,
+      offsets.length,
+      wheels,
+      masterDefault,
+      (feature) => report.add({ channel: channelName, feature }),
     );
     imported.forEach((channel, byte) => (channels[offsets[byte]! - 1] = channel));
   }
@@ -445,10 +451,12 @@ function importChannel(
   name: string,
   width: number,
   wheels: Wheels,
+  masterDefault: MasterDefault,
   reportFeature: (feature: string) => void,
 ): Channel[] {
-  const functions = modeIndependent(
+  const functions = functionsAtMasterDefault(
     dmxChannel.LogicalChannel?.[0]?.ChannelFunction ?? [],
+    masterDefault,
     reportFeature,
   );
   const ranges: CapabilityRange[] =
@@ -484,15 +492,61 @@ function defaultText(
   return initial?.Default;
 }
 
+// A ModeMaster's default value and its width in bytes, or undefined when the
+// mode has no such channel.
+type MasterDefault = (modeMaster: string) => { value: number; width: number } | undefined;
+
+// A ModeMaster links a DMX channel of the mode, `<geometry>_<attribute>` as in
+// InitialFunction, or a function on one after a dot. A cell channel's master
+// is named by the cell's geometry, as the channel is.
+function masterDefaults(mode: GdtfDmxMode): MasterDefault {
+  const dmxChannels = mode.DMXChannels?.DMXChannel ?? [];
+  return (modeMaster) => {
+    const name = modeMaster.split('.')[0];
+    const master = dmxChannels.find(
+      (c) => `${c.Geometry}_${c.LogicalChannel?.[0]?.Attribute}` === name,
+    );
+    if (!master) return undefined;
+    const width = isVirtual(master) ? 1 : master.Offset!.split(',').length;
+    const masterFunctions = master.LogicalChannel?.[0]?.ChannelFunction ?? [];
+    const value = dmxValueOrUndefined(defaultText(master, masterFunctions) ?? '0/1', width);
+    return value === undefined ? undefined : { value, width };
+  };
+}
+
+// A master's default or a mode range was ignored before, so a malformed one
+// falls back instead of failing the import.
+function dmxValueOrUndefined(text: string, width: number): number | undefined {
+  try {
+    return dmxValue(text, width);
+  } catch {
+    return undefined;
+  }
+}
+
 // Functions that depend on another channel's value (ModeMaster) overlap the
-// rest. Keeps those that apply together with the first one.
-function modeIndependent(
+// rest. Keeps those with no master and those that apply while their master is
+// at its default; failing that, those that apply together with the first one.
+function functionsAtMasterDefault(
   functions: GdtfChannelFunction[],
+  masterDefault: MasterDefault,
   reportFeature: (feature: string) => void,
 ): GdtfChannelFunction[] {
-  const group = (f: GdtfChannelFunction) => [f.ModeMaster, f.ModeFrom, f.ModeTo].join('|');
-  const first = functions[0] && group(functions[0]);
-  const kept = functions.filter((f) => group(f) === first);
+  const appliesAtDefault = (f: GdtfChannelFunction) => {
+    const master = f.ModeMaster && masterDefault(f.ModeMaster);
+    if (!master) return false;
+    const { value, width } = master;
+    const from = dmxValueOrUndefined(f.ModeFrom ?? '0/1', width);
+    const to = dmxValueOrUndefined(f.ModeTo ?? '255/1', width);
+    return from !== undefined && to !== undefined && from <= value && value <= to;
+  };
+  let kept = functions.filter((f) => !f.ModeMaster || appliesAtDefault(f));
+  const noGroupApplies = !kept.some((f) => f.ModeMaster) && kept.length < functions.length;
+  if (noGroupApplies) {
+    const group = (f: GdtfChannelFunction) => [f.ModeMaster, f.ModeFrom, f.ModeTo].join('|');
+    const first = functions[0] && group(functions[0]);
+    kept = functions.filter((f) => group(f) === first);
+  }
   if (kept.length < functions.length) reportFeature('Mode-dependent channel functions');
   return kept;
 }

@@ -262,7 +262,7 @@ describe('importGdtfFixture', () => {
     ]);
   });
 
-  it('imports one mode per DMX mode, keeping functions that apply together', () => {
+  it('imports one mode per DMX mode, dropping functions whose master is outside their range', () => {
     const modeDependent = { ModeMaster: 'Body_Control', ModeFrom: '128/1', ModeTo: '255/1' };
     const { profile, unsupported } = importGdtfFixture(
       gdtf(
@@ -292,6 +292,110 @@ describe('importGdtfFixture', () => {
     expect(unsupported).toEqual([
       { channel: 'Dimmer', feature: 'Mode-dependent channel functions' },
     ]);
+  });
+
+  describe('mode-dependent functions', () => {
+    // A channel whose functions depend on a Control1 channel: dimmer below 128,
+    // strobe from 128.
+    const shutter = (master = 'Body_Control1', dmx: string | Record<string, string> = '1') =>
+      channel(
+        dmx,
+        'Shutter1',
+        channelFunction('Dimmer', '0/1', { ModeMaster: master, ModeFrom: '0/1', ModeTo: '127/1' }),
+        channelFunction('Shutter1Strobe', '0/1', {
+          ModeMaster: master,
+          ModeFrom: '128/1',
+          ModeTo: '255/1',
+        }),
+      );
+    const control = (dmx: string | Record<string, string>, defaultValue: string) =>
+      channel(dmx, 'Control1', channelFunction('NoFeature', '0/1', { Default: defaultValue }));
+    const firstChannel = (fixture: Uint8Array) =>
+      importGdtfFixture(fixture).profile.modes[0]!.channels[0];
+
+    it('keeps the group that applies at the master channel default', () => {
+      const { profile, unsupported } = importGdtfFixture(
+        gdtf(
+          { Manufacturer: 'Generic', Name: 'Spot' },
+          mode('2ch', shutter(), control('2', '200/1')),
+        ),
+      );
+
+      expect(profile.modes[0]!.channels[0]).toMatchObject({
+        ranges: [{ from: 0, to: 255, capability: { type: 'strobe' } }],
+      });
+      expect(unsupported).toContainEqual({
+        channel: 'Shutter1',
+        feature: 'Mode-dependent channel functions',
+      });
+    });
+
+    it('keeps the first group when the master default is in it', () => {
+      expect(
+        firstChannel(
+          gdtf(
+            { Manufacturer: 'Generic', Name: 'Spot' },
+            mode('2ch', shutter(), control('2', '0/1')),
+          ),
+        ),
+      ).toMatchObject({ ranges: [{ capability: { type: 'intensity' } }] });
+    });
+
+    it('resolves a 16-bit master linked through its channel function', () => {
+      expect(
+        firstChannel(
+          gdtf(
+            { Manufacturer: 'Generic', Name: 'Spot' },
+            mode('3ch', shutter('Body_Control1.Control1.NoFeature'), control('2,3', '51200/2')),
+          ),
+        ),
+      ).toMatchObject({ ranges: [{ capability: { type: 'strobe' } }] });
+    });
+
+    it('falls back to the first group when a virtual master has a malformed default', () => {
+      expect(
+        firstChannel(
+          gdtf(
+            { Manufacturer: 'Generic', Name: 'Spot' },
+            mode('1ch', shutter(), control({}, 'full')),
+          ),
+        ),
+      ).toMatchObject({ ranges: [{ capability: { type: 'intensity' } }] });
+    });
+
+    it('falls back to the first group when the master is missing', () => {
+      expect(
+        firstChannel(
+          gdtf({ Manufacturer: 'Generic', Name: 'Spot' }, mode('2ch', shutter('Body_Gone'))),
+        ),
+      ).toMatchObject({ ranges: [{ capability: { type: 'intensity' } }] });
+    });
+
+    it('resolves the master of a cell channel in the same mode', () => {
+      const cellShutter = shutter('SectionBeam_Control1', { Offset: '1', Geometry: 'SectionBeam' });
+      const { profile } = importGdtfFixture(
+        gdtfWithGeometries(
+          { Manufacturer: 'Generic', Name: 'Bar' },
+          [
+            geometry(
+              'Geometry',
+              'Body',
+              geometryReference('Section 1', 'Section', ['1', '1']),
+              geometryReference('Section 2', 'Section', ['1', '3']),
+            ),
+            geometry('Geometry', 'Section', geometry('Beam', 'SectionBeam')),
+          ],
+          mode('4ch', cellShutter, control({ Offset: '2', Geometry: 'SectionBeam' }, '255/1')),
+        ),
+      );
+
+      const channels = profile.modes[0]!.channels;
+      for (const index of [0, 2]) {
+        expect(channels[index]).toMatchObject({
+          ranges: [{ capability: { type: 'strobe' } }],
+        });
+      }
+    });
   });
 
   it('reports channels it cannot place instead of overwriting slots', () => {

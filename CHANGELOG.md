@@ -22,6 +22,7 @@ What changed in each LightCues release. The format follows [Keep a Changelog](ht
 - Venue Patches and Shows saved by this version do not open in older versions of LightCues, as they can hold House Lights, House Presets, strobe and the new Effect settings. Older files still open.
 - Strobe speeds given as slow and fast in Open Fixture Library files now import as 1 to 20 Hz, in the right direction, so a fast-to-slow strobe channel no longer runs backwards. Re-import the Fixture Profile and apply it again to pick this up.
 - A "dark" brightness in Open Fixture Library files now imports as 5%. Re-import the Fixture Profile and apply it again to pick this up.
+- GDTF channels whose meaning depends on another channel now import the meaning that applies at that channel's default. Re-import the Fixture Profile and apply it again to pick this up.
 
 ## [0.1.1] - 2026-10-12
 
