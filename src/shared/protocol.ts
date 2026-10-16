@@ -2,7 +2,17 @@
 // The UI sends EngineCommands; the engine sends EngineEvents.
 import type { AimAngles } from './aim';
 import type { FixtureProfile, UnsupportedFeature } from './fixture-profile';
-import type { Colour, Direction, HousePreset, Layer, MidiNote, Scene, Show, Trigger } from './show';
+import type {
+  Colour,
+  Direction,
+  EffectLength,
+  HousePreset,
+  Layer,
+  MidiNote,
+  Scene,
+  Show,
+  Trigger,
+} from './show';
 import type {
   HouseGroup,
   HouseLight,
@@ -139,6 +149,10 @@ export interface FixtureLight {
 
 // The active Scene id per Layer id. A Layer without an entry is clear.
 export type ActiveByLayer = Record<string, string>;
+
+// The longest length in beats the Speed limit runs an active Scene's movement
+// Effects at, by Layer id, for the Layers it slows.
+export type LimitedByLayer = Record<string, EffectLength>;
 
 // A change to the current Show.
 export type ShowEdit =
@@ -291,8 +305,9 @@ export type EngineEvent =
   // was done.
   | { type: 'showDone'; requestId: number; errors: string[] }
   // The active Scenes, the mode, the Grand Master (0–1), whether Blackout
-  // and Freeze are on, and the Focus Check's Direction while it is on. Sent on
-  // request and after every change.
+  // and Freeze are on, the Focus Check's Direction while it is on, and the
+  // Layers whose Scene the Speed limit slows, while any does. Sent on request
+  // and after every change.
   | {
       type: 'playback';
       active: ActiveByLayer;
@@ -301,6 +316,7 @@ export type EngineEvent =
       blackout: boolean;
       freeze: boolean;
       focusCheck?: Direction;
+      limited?: LimitedByLayer;
     }
   // What the House Lights went to last, during its fade too. Sent on request
   // and after every change.

@@ -3,10 +3,22 @@ import type {
   EngineCommand,
   EngineEvent,
   FixtureLight,
+  LimitedByLayer,
   PlaybackMode,
   PlaybackSnapshot,
 } from '../shared/protocol';
-import { sameNote, type Direction, type MidiNote, type Show, type Trigger } from '../shared/show';
+import {
+  NO_EFFECT,
+  SPEED_LIMIT,
+  sameNote,
+  type Direction,
+  type EffectLength,
+  type MidiNote,
+  type MovementEffect,
+  type Show,
+  type Trigger,
+} from '../shared/show';
+import { fitSpeedLimit } from '../shared/speed-limit';
 import type { VenuePatch } from '../shared/venue-patch';
 import {
   activate,
@@ -18,6 +30,7 @@ import {
   resolveLights,
   type ActiveScene,
   type ActiveScenes,
+  type EffectRuns,
 } from './scene-resolution';
 
 export type PlaybackCommand = Extract<
@@ -35,6 +48,18 @@ export type PlaybackCommand = Extract<
       | 'setFocusCheck';
   }
 >;
+
+// How far under the Speed limit an Effect must be at a shorter length to step
+// back down to it, so the length does not flip while the Tempo hovers.
+const STEP_DOWN_LIMIT = 0.9 * SPEED_LIMIT;
+
+// The length and size a movement Effect runs at, held between frames, and the
+// Effect they were fitted for.
+interface HeldLength {
+  effect: MovementEffect;
+  length: EffectLength;
+  size: number;
+}
 
 // The playback part of a snapshot, without the Tempo.
 export type LiveLook = Omit<PlaybackSnapshot, 'bpm' | 'tempoSource'>;
@@ -72,8 +97,9 @@ interface Flash {
 // overrides the moving Fixtures on the Outputs in both modes, at full unless
 // Blackout is on. Freeze holds the beat that Effects run to, so they
 // keep their offsets; turned off, they jump to where the beat has got to.
-// Strobe runs on, at the Tempo as it is. None of this is part of the Show or
-// the Venue Patch.
+// Strobe runs on, at the Tempo as it is. Each movement Effect runs at a
+// length held to keep it under the Speed limit (ADR 0015). None of this is
+// part of the Show or the Venue Patch.
 export function createPlayback({ emit, now, beat, bpm, show, patch }: PlaybackOptions) {
   let active: ActiveScenes = {};
   // By Layer id.
@@ -85,8 +111,16 @@ export function createPlayback({ emit, now, beat, bpm, show, patch }: PlaybackOp
   let frozenBeat: number | undefined;
   let focusCheck: Direction | undefined;
   let sent = new Map<number, Uint8Array>();
+  // By Rule index and Scene id, for the Scenes active or faded from.
+  let held = new Map<string, HeldLength>();
+  // The beat the held lengths were last updated at.
+  let heldBeat: number | undefined;
+  let runs: EffectRuns = {};
+  let limited: LimitedByLayer = {};
 
+  // Sends the playback as it is, the held lengths brought up to date.
   function emitPlayback(): void {
+    refresh();
     const scenes: ActiveByLayer = Object.fromEntries(
       Object.entries(active).map(([id, a]) => [id, a.scene]),
     );
@@ -98,7 +132,85 @@ export function createPlayback({ emit, now, beat, bpm, show, patch }: PlaybackOp
       blackout,
       freeze: frozenBeat !== undefined,
       ...(focusCheck === undefined ? {} : { focusCheck }),
+      ...(Object.keys(limited).length === 0 ? {} : { limited }),
     });
+  }
+
+  // Updates the length each movement Effect of the Scenes shown runs at, to
+  // the shortest that keeps it under the Speed limit at the Tempo. An Effect
+  // new to them takes it at once. One already running steps to it only on a
+  // beat that is a whole multiple of the longer of the two lengths, where
+  // both are at the same point in their cycle, Spread delays included, and
+  // steps down only when well under the limit. Under Freeze, both hold.
+  // Whether a Layer's limited length changed.
+  function refresh(): boolean {
+    const at = effectBeat();
+    const tempo = bpm();
+    const next = new Map<string, HeldLength>();
+    const nextRuns: EffectRuns = {};
+    for (const id of shownScenes()) {
+      const scene = show().scenes.find((s) => s.id === id);
+      for (const [index, { movementEffect: effect }] of (scene?.rules ?? []).entries()) {
+        if (effect === undefined || effect === NO_EFFECT) continue;
+        const key = `${index} ${id}`;
+        const previous = held.get(key);
+        let length: EffectLength;
+        let size: number;
+        if (frozenBeat !== undefined && previous && sameEffect(previous.effect, effect)) {
+          ({ length, size } = previous);
+        } else {
+          const fit = fitSpeedLimit(effect, tempo);
+          length = heldLength(previous, effect, fit.length, tempo, at);
+          // At 16 beats and still too fast, the size shrinks to fit.
+          size = length === fit.length ? fit.size : effect.size;
+        }
+        next.set(key, { effect, length, size });
+        if (length !== effect.length || size !== effect.size) {
+          (nextRuns[id] ??= {})[index] = { length, size };
+        }
+      }
+    }
+    held = next;
+    heldBeat = at;
+    runs = nextRuns;
+    const was = limited;
+    limited = {};
+    for (const [layer, { scene }] of Object.entries(active)) {
+      const lengths = Object.values(runs[scene] ?? {}).map((run) => run.length);
+      if (lengths.length > 0) limited[layer] = Math.max(...lengths) as EffectLength;
+    }
+    return !sameLimited(was, limited);
+  }
+
+  // The length an Effect runs at now, held at `previous` until a switch to
+  // `fit`, the length that fits at `tempo`, is due at `at`.
+  function heldLength(
+    previous: HeldLength | undefined,
+    effect: MovementEffect,
+    fit: EffectLength,
+    tempo: number,
+    at: number,
+  ): EffectLength {
+    if (!previous || !sameEffect(previous.effect, effect)) return fit;
+    const target =
+      fit >= previous.length
+        ? fit
+        : (Math.min(
+            previous.length,
+            fitSpeedLimit(effect, tempo, STEP_DOWN_LIMIT).length,
+          ) as EffectLength);
+    if (target === previous.length || heldBeat === undefined) return previous.length;
+    const boundary = Math.max(target, previous.length);
+    return Math.floor(heldBeat / boundary) === Math.floor(at / boundary) ? previous.length : target;
+  }
+
+  // The Scenes the Layers show, and those they still fade from.
+  function shownScenes(): Set<string> {
+    const ids = new Set<string>();
+    for (const entry of Object.values(active)) {
+      for (let e: ActiveScene | undefined = entry; e; e = e.from) ids.add(e.scene);
+    }
+    return ids;
   }
 
   // The Grand Master as resolved, Blackout included.
@@ -119,7 +231,16 @@ export function createPlayback({ emit, now, beat, bpm, show, patch }: PlaybackOp
   }
 
   function go(from: ActiveScenes, sceneId: string): ActiveScenes {
-    return activate(from, show(), patch(), sceneId, seconds(), resolvedGrandMaster(), effectBeat());
+    return activate(
+      from,
+      show(),
+      patch(),
+      sceneId,
+      seconds(),
+      resolvedGrandMaster(),
+      effectBeat(),
+      runs,
+    );
   }
 
   return {
@@ -159,7 +280,12 @@ export function createPlayback({ emit, now, beat, bpm, show, patch }: PlaybackOp
           break;
         case 'setFreeze':
           if (command.on) frozenBeat ??= beat();
-          else frozenBeat = undefined;
+          else if (frozenBeat !== undefined) {
+            frozenBeat = undefined;
+            // The jump to where the beat has got to is no boundary to switch
+            // lengths on; the next one is.
+            heldBeat = beat();
+          }
           break;
         case 'setFocusCheck':
           focusCheck = command.direction;
@@ -253,6 +379,7 @@ export function createPlayback({ emit, now, beat, bpm, show, patch }: PlaybackOp
     },
     // The frames to send now, one per Universe. Resolved once per call.
     frames(): Map<number, Uint8Array> {
+      if (refresh()) emitPlayback();
       if (mode === 'monitor') {
         sent = resolveFrames(
           show(),
@@ -262,11 +389,12 @@ export function createPlayback({ emit, now, beat, bpm, show, patch }: PlaybackOp
           resolvedGrandMaster(),
           effectBeat(),
           bpm(),
+          runs,
         );
       }
       let frames = sent;
       if (mode === 'blind' && blackout) {
-        frames = resolveFrames(show(), patch(), active, seconds(), 0, effectBeat(), bpm());
+        frames = resolveFrames(show(), patch(), active, seconds(), 0, effectBeat(), bpm(), runs);
       }
       if (focusCheck === undefined) return frames;
       return focusCheckFrames(patch(), frames, focusCheck, blackout ? 0 : 1);
@@ -275,6 +403,7 @@ export function createPlayback({ emit, now, beat, bpm, show, patch }: PlaybackOp
     // from `frames`, so Blind can preview what it does not send. The Focus
     // Check shows as it is sent.
     lights(): Record<string, FixtureLight> {
+      if (refresh()) emitPlayback();
       const lights = resolveLights(
         show(),
         patch(),
@@ -283,9 +412,21 @@ export function createPlayback({ emit, now, beat, bpm, show, patch }: PlaybackOp
         resolvedGrandMaster(),
         effectBeat(),
         bpm(),
+        runs,
       );
       if (focusCheck === undefined) return lights;
       return focusCheckLights(patch(), lights, focusCheck, blackout ? 0 : 1);
     },
   };
+}
+
+// Whether two Effects run at the same speed.
+function sameEffect(a: MovementEffect, b: MovementEffect): boolean {
+  return a.shape === b.shape && a.size === b.size && a.length === b.length;
+}
+
+// Whether two reports of limited Layers say the same.
+function sameLimited(a: LimitedByLayer, b: LimitedByLayer): boolean {
+  const layers = Object.keys(a);
+  return layers.length === Object.keys(b).length && layers.every((layer) => a[layer] === b[layer]);
 }

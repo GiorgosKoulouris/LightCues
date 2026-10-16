@@ -11,6 +11,7 @@ import {
   ruleTargets,
   type Colour,
   type Direction,
+  type EffectLength,
   type Scene,
   type Show,
   type StrobeRate,
@@ -62,9 +63,14 @@ export interface ShownAim extends AimAngles {
 // Keyed by Layer id. A Layer without an entry is clear.
 export type ActiveScenes = Record<string, ActiveScene>;
 
+// The length and size each movement Effect runs at under the Speed limit, by
+// Scene id, then by the index of its Rule. An Effect not listed runs as
+// programmed. Playback holds them (ADR 0015).
+export type EffectRuns = Record<string, Record<number, { length: EffectLength; size: number }>>;
+
 // Activates a Scene at `time`, replacing the active Scene in its Layer. It
 // keeps what each moving Fixture in the Venue Patch shows then, under the
-// Grand Master and at `beat` of the Tempo.
+// Grand Master and at `beat` of the Tempo, its movement Effects at `runs`.
 export function activate(
   active: ActiveScenes,
   show: Show,
@@ -73,6 +79,7 @@ export function activate(
   time: number,
   grandMaster = 1,
   beat = 0,
+  runs: EffectRuns = {},
 ): ActiveScenes {
   const scene = findScene(show, sceneId);
   if (!scene) return active;
@@ -80,7 +87,7 @@ export function activate(
   const entry: ActiveScene = {
     scene: sceneId,
     since: time,
-    shown: shownAims(show, patch, active, time, grandMaster, beat),
+    shown: shownAims(show, patch, active, time, grandMaster, beat, runs),
   };
   // A finished fade no longer needs what it faded from.
   if (from) entry.from = fading(show, from, time) ? from : { scene: from.scene, since: from.since };
@@ -95,6 +102,7 @@ function shownAims(
   time: number,
   grandMaster: number,
   beat: number,
+  runs: EffectRuns,
 ): Record<string, ShownAim> {
   const shown: Record<string, ShownAim> = {};
   for (const fixture of patch.fixtures) {
@@ -108,6 +116,7 @@ function shownAims(
       grandMaster,
       beat,
       DEFAULT_BPM,
+      runs,
     );
     const { aim, direction, intensity } = output;
     if (aim && direction) shown[fixture.id] = { ...aim, direction, dark: intensity === 0 };
@@ -141,8 +150,8 @@ export function clamp(value: number): number {
 
 // One frame per Universe in the patch, channel 1 first, at `time` (seconds).
 // The Grand Master (0–1) scales intensity after the Layers are combined.
-// Movement Effects run at `beat`, the Tempo's beat count; beat strobe rates
-// at `bpm`, the Tempo.
+// Movement Effects run at `beat`, the Tempo's beat count, and at `runs`; beat
+// strobe rates at `bpm`, the Tempo.
 export function resolveFrames(
   show: Show,
   patch: VenuePatch,
@@ -151,10 +160,21 @@ export function resolveFrames(
   grandMaster = 1,
   beat = 0,
   bpm = DEFAULT_BPM,
+  runs: EffectRuns = {},
 ): Map<number, Uint8Array> {
   const frames = new Map(patch.universes.map((u) => [u.number, new Uint8Array(DMX_CHANNELS)]));
   for (const fixture of patch.fixtures) {
-    const resolved = fixtureOutput(show, patch, active, fixture, time, grandMaster, beat, bpm);
+    const resolved = fixtureOutput(
+      show,
+      patch,
+      active,
+      fixture,
+      time,
+      grandMaster,
+      beat,
+      bpm,
+      runs,
+    );
     const { channels, output } = resolved;
     frames.get(fixture.universe)!.set(encodeChannels(channels, output), fixture.address - 1);
   }
@@ -171,10 +191,21 @@ export function resolveLights(
   grandMaster = 1,
   beat = 0,
   bpm = DEFAULT_BPM,
+  runs: EffectRuns = {},
 ): Record<string, FixtureLight> {
   return Object.fromEntries(
     patch.fixtures.map((fixture) => {
-      const resolved = fixtureOutput(show, patch, active, fixture, time, grandMaster, beat, bpm);
+      const resolved = fixtureOutput(
+        show,
+        patch,
+        active,
+        fixture,
+        time,
+        grandMaster,
+        beat,
+        bpm,
+        runs,
+      );
       const { channels, output } = resolved;
       return [fixture.id, fixtureLight(channels, output)];
     }),
@@ -209,6 +240,7 @@ function fixtureOutput(
   grandMaster: number,
   beat: number,
   bpm: number,
+  runs: EffectRuns,
 ): { channels: Channel[]; output: FixtureOutput } {
   let intensity = 0;
   let colour: ColourLevels | undefined;
@@ -219,7 +251,7 @@ function fixtureOutput(
   let strobe: StrobeRate | undefined;
   const entries = byChange(show, active);
   for (const entry of entries) {
-    const look = layerLook(show, patch, fixture, entry, time, beat);
+    const look = layerLook(show, patch, fixture, entry, time, beat, runs);
     intensity = Math.max(intensity, look.intensity ?? 0);
     effectColour = combinedEffectColour(effectColour, look, colour ?? defaultColour(show));
     colour = look.colour ?? colour;
@@ -517,12 +549,13 @@ function layerLook(
   { scene: id, since, from }: ActiveScene,
   time: number,
   beat: number,
+  runs: EffectRuns,
 ): Look {
   const scene = findScene(show, id);
-  const target = scene ? sceneLook(patch, fixture, scene, beat) : {};
+  const target = scene ? sceneLook(patch, fixture, scene, beat, runs) : {};
   const p = progress(show, id, since, time);
   if (p === 1) return target;
-  const before = from ? layerLook(show, patch, fixture, from, since, beat) : {};
+  const before = from ? layerLook(show, patch, fixture, from, since, beat, runs) : {};
   const look: Look = {};
   if (before.intensity !== undefined || target.intensity !== undefined) {
     look.intensity = lerp(before.intensity ?? 0, target.intensity ?? 0, p);
@@ -555,13 +588,20 @@ function layerLook(
   return look;
 }
 
-// What a Scene sets on a Fixture, its Effects at `beat`. An intensity or
-// colour Effect's Spread orders every Fixture the Rule targets. A plain colour
-// stops the colour Effects before it, as a None does.
-function sceneLook(patch: VenuePatch, fixture: PatchedFixture, scene: Scene, beat: number): Look {
+// What a Scene sets on a Fixture, its Effects at `beat` and its movement
+// Effects at `runs`. An intensity or colour Effect's Spread orders every
+// Fixture the Rule targets. A plain colour stops the colour Effects before it,
+// as a None does.
+function sceneLook(
+  patch: VenuePatch,
+  fixture: PatchedFixture,
+  scene: Scene,
+  beat: number,
+  runs: EffectRuns,
+): Look {
   const look: Look = {};
   const moving = isMovingFixture(patch, fixture);
-  for (const rule of scene.rules) {
+  for (const [index, rule] of scene.rules.entries()) {
     if (!ruleTargets(patch, fixture, rule)) continue;
     if (rule.intensity !== undefined) look.intensity = rule.intensity;
     if (rule.colour !== undefined) {
@@ -578,7 +618,8 @@ function sceneLook(patch: VenuePatch, fixture: PatchedFixture, scene: Scene, bea
         (other) => isMovingFixture(patch, other) && ruleTargets(patch, other, rule),
       );
       const delay = spreadDelay(effect.spread, fixture, targeted);
-      look.turn = effectTurn(effect, beat, delay, fixture.id);
+      const run = runs[scene.id]?.[index];
+      look.turn = effectTurn(run ? { ...effect, ...run } : effect, beat, delay, fixture.id);
     }
     const intensityEffect = rule.intensityEffect;
     if (intensityEffect === NO_EFFECT) {

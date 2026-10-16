@@ -42,6 +42,10 @@ export function beatsLabel(beats: number): string {
 // The largest Effect size, in degrees.
 export const MAX_EFFECT_SIZE = 180;
 
+// The Speed limit: how fast a movement Effect may turn a moving Fixture, in
+// degrees per second on pan and on tilt (ADR 0015).
+export const SPEED_LIMIT = 300;
+
 // Quick picks for an Effect's size, in degrees.
 export const EFFECT_SIZES = { Small: 5, Medium: 12, Large: 25 } as const;
 

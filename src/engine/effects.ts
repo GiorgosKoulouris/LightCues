@@ -33,6 +33,7 @@ export function effectTurn(
     case 'Ballyhoo': {
       // Two waves per axis at whole cycles, so it repeats each cycle, with
       // offsets of the Fixture's own. The weights add up to 1: at most `size`.
+      // The Speed limit takes its peak speed from them (shared/speed-limit).
       const [a, b, c, d] = seeded(fixtureId, 4);
       return {
         pan: size * (0.6 * wave(1, a) + 0.4 * wave(2, b)),
