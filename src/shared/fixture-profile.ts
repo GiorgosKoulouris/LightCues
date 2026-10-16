@@ -85,4 +85,7 @@ export interface UnsupportedFeature {
   channel?: string;
   mode?: string;
   feature: string;
+  // The 8-bit default the channel is held at when nothing drives it. Absent
+  // on mode-level lines and on channels left out of the Profile.
+  held?: number;
 }

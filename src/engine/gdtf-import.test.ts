@@ -256,8 +256,8 @@ describe('importGdtfFixture', () => {
       },
     ]);
     expect(unsupported).toEqual([
-      { channel: 'Zoom', feature: 'Zoom' },
-      { channel: 'Shutter1', feature: 'Shutter1 Pulse' },
+      { channel: 'Zoom', feature: 'Zoom', held: 0 },
+      { channel: 'Shutter1', feature: 'Shutter1 Pulse', held: 0 },
       { channel: 'Dimmer', mode: 'Basic', feature: 'Virtual channel' },
     ]);
   });
@@ -290,7 +290,7 @@ describe('importGdtfFixture', () => {
       ranges: [{ from: 0, to: 255, capability: { type: 'intensity' } }],
     });
     expect(unsupported).toEqual([
-      { channel: 'Dimmer', feature: 'Mode-dependent channel functions' },
+      { channel: 'Dimmer', feature: 'Mode-dependent channel functions', held: 0 },
     ]);
   });
 
@@ -327,6 +327,7 @@ describe('importGdtfFixture', () => {
       expect(unsupported).toContainEqual({
         channel: 'Shutter1',
         feature: 'Mode-dependent channel functions',
+        held: 0,
       });
     });
 
@@ -648,7 +649,7 @@ describe('importGdtfFixture', () => {
       ranges: [emitterRange('red')],
     });
     expect(channels[14]).toMatchObject({ name: 'White (Cell 3)', ranges: [emitterRange('white')] });
-    expect(unsupported).toEqual([{ channel: 'ColorMacro1', feature: 'ColorMacro1' }]);
+    expect(unsupported).toEqual([{ channel: 'ColorMacro1', feature: 'ColorMacro1', held: 0 }]);
     expect(profile.defaultRole).toBe('Wash');
   });
 
@@ -731,7 +732,7 @@ describe('importGdtfFixture', () => {
       'Zoom (Cell 1)',
     ]);
     expect(unsupported).toEqual([
-      { channel: 'Zoom (Cell 1)', feature: 'Zoom' },
+      { channel: 'Zoom (Cell 1)', feature: 'Zoom', held: 0 },
       { channel: 'Zoom (Cell 2)', mode: '2ch', feature: 'Invalid DMXOffset in cell 2' },
     ]);
   });
@@ -806,6 +807,58 @@ describe('importGdtfFixture', () => {
       { channel: 'Iris', mode: 'Remote', feature: 'Invalid DMX offset "x"' },
       { mode: 'Remote', feature: 'DMX break 3 (1 channel)' },
     ]);
+  });
+
+  describe('held values', () => {
+    const rotation = (dmx: string | Record<string, string>, defaultValue: string) =>
+      channel(dmx, 'Rotation', channelFunction('Rotation', '0/1', { Default: defaultValue }));
+
+    it('names the channel default, the coarse byte of a 16-bit one', () => {
+      const { unsupported } = importGdtfFixture(
+        gdtf(
+          { Manufacturer: 'Generic', Name: 'Spot' },
+          mode(
+            '3ch',
+            rotation('1', '64/1'),
+            channel('2,3', 'Zoom', channelFunction('Zoom', '0/1', { Default: '32896/2' })),
+          ),
+        ),
+      );
+
+      expect(unsupported).toEqual([
+        { channel: 'Rotation', feature: 'Rotation', held: 64 },
+        { channel: 'Zoom', feature: 'Zoom', held: 128 },
+      ]);
+    });
+
+    it('gives one line for a channel held at the same value in every mode', () => {
+      const { unsupported } = importGdtfFixture(
+        gdtf(
+          { Manufacturer: 'Generic', Name: 'Spot' },
+          mode('A', rotation('1', '64/1')),
+          mode('B', rotation('2', '64/1')),
+        ),
+      );
+
+      expect(unsupported).toEqual([{ channel: 'Rotation', feature: 'Rotation', held: 64 }]);
+    });
+
+    it('names the mode when a channel is held at different values', () => {
+      const { unsupported } = importGdtfFixture(
+        gdtf(
+          { Manufacturer: 'Generic', Name: 'Spot' },
+          mode('A', rotation('1', '64/1')),
+          mode('B', rotation('1', '64/1')),
+          mode('C', rotation('1', '0/1')),
+        ),
+      );
+
+      expect(unsupported).toEqual([
+        { channel: 'Rotation', mode: 'A', feature: 'Rotation', held: 64 },
+        { channel: 'Rotation', mode: 'B', feature: 'Rotation', held: 64 },
+        { channel: 'Rotation', mode: 'C', feature: 'Rotation', held: 0 },
+      ]);
+    });
   });
 });
 

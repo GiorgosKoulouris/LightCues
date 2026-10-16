@@ -322,7 +322,7 @@ function importMode(
       offsets.length,
       wheels,
       masterDefault,
-      (feature) => report.add({ channel: channelName, feature }),
+      (feature, held) => report.add({ channel: channelName, mode: name, feature, held }),
     );
     imported.forEach((channel, byte) => (channels[offsets[byte]! - 1] = channel));
   }
@@ -445,29 +445,33 @@ function channelNameOf(logical: GdtfLogicalChannel | undefined): string {
 }
 
 // The control channel, then one fine channel per further byte of its `width`.
-// `reportFeature` takes a feature the Profile cannot represent.
+// `reportFeature` takes a feature the Profile cannot represent, and the 8-bit
+// default the channel holds.
 function importChannel(
   dmxChannel: GdtfDmxChannel,
   name: string,
   width: number,
   wheels: Wheels,
   masterDefault: MasterDefault,
-  reportFeature: (feature: string) => void,
+  reportFeature: (feature: string, held: number) => void,
 ): Channel[] {
+  // Reported once the default is known.
+  const features: string[] = [];
   const functions = functionsAtMasterDefault(
     dmxChannel.LogicalChannel?.[0]?.ChannelFunction ?? [],
     masterDefault,
-    reportFeature,
+    (feature) => features.push(feature),
   );
   const ranges: CapabilityRange[] =
     functions.length > 0
       ? importRanges(functions, width, wheels)
       : [{ from: 0, to: DMX_MAX_VALUE, capability: unsupported('No channel function') }];
   for (const { capability } of ranges) {
-    if (capability.type === 'unsupported') reportFeature(capability.feature);
+    if (capability.type === 'unsupported') features.push(capability.feature);
   }
   const defaultValue = dmxValue(defaultText(dmxChannel, functions) ?? '0/1', width);
   const defaultByte = (byte: number) => Math.floor(defaultValue / 256 ** (width - 1 - byte)) % 256;
+  features.forEach((feature) => reportFeature(feature, defaultByte(0)));
   return [
     { kind: 'control', name, defaultValue: defaultByte(0), ranges },
     ...Array.from({ length: width - 1 }, (_, i): Channel => ({

@@ -287,12 +287,12 @@ describe('importOflFixture', () => {
       ],
     });
     expect(unsupported).toEqual([
-      { channel: 'Gobo Wheel', feature: 'WheelSlot between slots' },
-      { channel: 'Gobo Wheel', feature: 'WheelSlot Gobo' },
-      { channel: 'Zoom', feature: 'Zoom' },
-      { channel: 'Strobe', feature: 'ShutterStrobe Pulse' },
-      { channel: 'Mode', feature: 'Switching channels' },
-      { channel: 'Speed/Zoom', feature: 'Switching channel' },
+      { channel: 'Gobo Wheel', feature: 'WheelSlot between slots', held: 0 },
+      { channel: 'Gobo Wheel', feature: 'WheelSlot Gobo', held: 0 },
+      { channel: 'Zoom', feature: 'Zoom', held: 0 },
+      { channel: 'Strobe', feature: 'ShutterStrobe Pulse', held: 0 },
+      { channel: 'Mode', feature: 'Switching channels', held: 0 },
+      { channel: 'Speed/Zoom', feature: 'Switching channel', held: 0 },
     ]);
   });
 
@@ -487,7 +487,7 @@ describe('importOflFixture', () => {
     );
 
     expect(profile.modes[0]!.channels).toHaveLength(2);
-    expect(unsupported).toEqual([{ channel: 'Dimer', feature: 'Unknown channel' }]);
+    expect(unsupported).toEqual([{ channel: 'Dimer', feature: 'Unknown channel', held: 0 }]);
   });
 
   it('rejects JSON that is not an OFL fixture', () => {
@@ -696,11 +696,11 @@ describe('importOflFixture', () => {
       { type: 'none' },
     ]);
     expect(unsupported).toEqual([
-      { channel: 'Hz', feature: 'PanTiltSpeed speed not relative' },
-      { channel: 'Reverse', feature: 'PanTiltSpeed speed not relative' },
-      { channel: 'Over', feature: 'PanTiltSpeed speed not relative' },
-      { channel: 'Words', feature: 'PanTiltSpeed duration not in ms or s' },
-      { channel: 'Pan/Tilt Speed', feature: 'Maintenance' },
+      { channel: 'Hz', feature: 'PanTiltSpeed speed not relative', held: 0 },
+      { channel: 'Reverse', feature: 'PanTiltSpeed speed not relative', held: 0 },
+      { channel: 'Over', feature: 'PanTiltSpeed speed not relative', held: 0 },
+      { channel: 'Words', feature: 'PanTiltSpeed duration not in ms or s', held: 0 },
+      { channel: 'Pan/Tilt Speed', feature: 'Maintenance', held: 0 },
     ]);
   });
 
@@ -726,9 +726,47 @@ describe('importOflFixture', () => {
       profile.modes[0]!.channels.map((c) => c.kind === 'control' && c.ranges[0]!.capability),
     ).toEqual([{ type: 'pan' }, { type: 'strobeSpeed' }, { type: 'intensity' }]);
     expect(unsupported).toEqual([
-      { channel: 'Pan', feature: 'Pan angle not in degrees' },
-      { channel: 'Strobe', feature: 'StrobeSpeed speed not in Hz' },
-      { channel: 'Dimmer', feature: 'Intensity brightness not in %' },
+      { channel: 'Pan', feature: 'Pan angle not in degrees', held: 0 },
+      { channel: 'Strobe', feature: 'StrobeSpeed speed not in Hz', held: 0 },
+      { channel: 'Dimmer', feature: 'Intensity brightness not in %', held: 0 },
+    ]);
+  });
+
+  it('names the value an unsupported channel holds: its default, or its coarse byte', () => {
+    const { unsupported } = importOflFixture(
+      {
+        name: 'Held Head',
+        categories: ['Moving Head'],
+        meta,
+        availableChannels: {
+          Motor: { defaultValue: 64, capability: { type: 'Rotation' } },
+          Zoom: {
+            fineChannelAliases: ['Zoom fine'],
+            defaultValue: 32896,
+            capability: { type: 'Zoom' },
+          },
+          Focus: {
+            dmxValueResolution: '8bit',
+            fineChannelAliases: ['Focus fine'],
+            defaultValue: 200,
+            capability: { type: 'Focus' },
+          },
+          Prism: { capability: { type: 'Prism' } },
+        },
+        modes: [
+          { name: 'Standard', channels: ['Motor', 'Zoom', 'Zoom fine', 'Focus', 'Focus fine'] },
+          { name: 'Extra', channels: ['Motor', 'Prism', 'Gobo'] },
+        ],
+      },
+      'Generic',
+    );
+
+    expect(unsupported).toEqual([
+      { channel: 'Motor', feature: 'Rotation', held: 64 },
+      { channel: 'Zoom', feature: 'Zoom', held: 128 },
+      { channel: 'Focus', feature: 'Focus', held: 200 },
+      { channel: 'Prism', feature: 'Prism', held: 0 },
+      { channel: 'Gobo', feature: 'Unknown channel', held: 0 },
     ]);
   });
 

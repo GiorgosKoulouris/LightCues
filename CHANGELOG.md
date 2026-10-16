@@ -23,6 +23,7 @@ What changed in each LightCues release. The format follows [Keep a Changelog](ht
 - Strobe speeds given as slow and fast in Open Fixture Library files now import as 1 to 20 Hz, in the right direction, so a fast-to-slow strobe channel no longer runs backwards. Re-import the Fixture Profile and apply it again to pick this up.
 - A "dark" brightness in Open Fixture Library files now imports as 5%. Re-import the Fixture Profile and apply it again to pick this up.
 - GDTF channels whose meaning depends on another channel now import the meaning that applies at that channel's default. Re-import the Fixture Profile and apply it again to pick this up.
+- The fixture import report names the value each channel it cannot drive is held at. In the Profile editor, a channel with an unsupported range shows "held at default" by its default value, as that is what LightCues sends there. Re-import the Fixture Profile to see the held values in the report.
 
 ## [0.1.1] - 2026-10-12
 

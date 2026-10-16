@@ -357,6 +357,41 @@ describe('Profile editor fields', () => {
     });
   });
 
+  it('marks the default of a channel with an unsupported range as held', async () => {
+    const held: FixtureProfile = {
+      ...par,
+      modes: [
+        {
+          name: '2ch',
+          channels: [
+            {
+              kind: 'control',
+              name: 'Motor',
+              defaultValue: 0,
+              ranges: [
+                { from: 0, to: 127, capability: { type: 'none' } },
+                { from: 128, to: 255, capability: { type: 'unsupported', feature: 'Rotation' } },
+              ],
+            },
+            blankChannel('Dimmer'),
+          ],
+        },
+      ],
+    };
+    entries = [{ profile: held, handEdited: false }];
+    await renderView();
+    const user = userEvent.setup();
+    await user.click(option('Acme Par'));
+
+    const table = within(editor().getByRole('table', { name: 'Channels' }));
+    expect(
+      table.getByRole('textbox', { name: 'Default of channel 1' }),
+    ).toHaveAccessibleDescription('held at default');
+    expect(
+      table.getByRole('textbox', { name: 'Default of channel 2' }),
+    ).not.toHaveAccessibleDescription();
+  });
+
   it('shows modes as tabs and channel numbers in the table', async () => {
     await renderView();
     const user = userEvent.setup();
@@ -440,14 +475,20 @@ describe('fixture import', () => {
         status: 'imported',
         profileId: 'acme/par',
         name: 'Acme Par',
-        unsupported: [{ feature: 'Prism', mode: '6ch', channel: 'Prism' }],
+        unsupported: [
+          { feature: 'Rotation', channel: 'Motor', held: 0 },
+          { feature: 'Prism', mode: '6ch', channel: 'Prism', held: 12 },
+          { feature: 'DMX break 2 (3 channels)', mode: '6ch' },
+        ],
       },
     ];
     await renderView();
     const user = userEvent.setup();
     await importPar(user);
 
-    expect(await dialog().findByText('Prism (mode 6ch) (channel Prism)')).toBeInTheDocument();
+    expect(await dialog().findByText('Rotation (channel Motor, held at 0)')).toBeInTheDocument();
+    expect(dialog().getByText('Prism (mode 6ch) (channel Prism, held at 12)')).toBeInTheDocument();
+    expect(dialog().getByText('DMX break 2 (3 channels) (mode 6ch)')).toBeInTheDocument();
     await user.click(dialog().getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });

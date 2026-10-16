@@ -180,6 +180,9 @@ function FixtureImportForm({
   );
 }
 
-function describe({ feature, mode, channel }: UnsupportedFeature): string {
-  return feature + (mode ? ` (mode ${mode})` : '') + (channel ? ` (channel ${channel})` : '');
+function describe({ feature, mode, channel, held }: UnsupportedFeature): string {
+  const heldAt = held === undefined ? '' : `, held at ${held}`;
+  return (
+    feature + (mode ? ` (mode ${mode})` : '') + (channel ? ` (channel ${channel}${heldAt})` : '')
+  );
 }

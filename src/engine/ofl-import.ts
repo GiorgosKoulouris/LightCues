@@ -270,7 +270,7 @@ function unresolvedChannel(
     channel.capabilities?.some((cap) => cap.switchChannels && key in cap.switchChannels),
   );
   const feature = switching ? 'Switching channel' : 'Unknown channel';
-  report.add({ channel: key, feature });
+  report.add({ channel: key, feature, held: 0 });
   return {
     kind: 'control',
     name: key,
@@ -297,7 +297,7 @@ function importChannel(
 
   const context: CapabilityContext = {
     wheel: (wheelName) => fixture.wheels?.[wheelName ?? name],
-    report: (feature) => report.add({ channel: name, feature }),
+    report: (feature) => report.add({ channel: name, feature, held: defaultByte(0) }),
   };
   const oflCapabilities = channel.capabilities ?? [
     { ...channel.capability!, dmxRange: [0, 256 ** resolution - 1] },

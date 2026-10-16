@@ -59,7 +59,7 @@ describe('Profile Library', () => {
     );
 
     expect(profile.id).toBe('generic/hazer');
-    expect(unsupported).toEqual([{ channel: 'Dimmer', feature: 'Fog' }]);
+    expect(unsupported).toEqual([{ channel: 'Dimmer', feature: 'Fog', held: 0 }]);
   });
 
   it('replaces a Profile when the same fixture is imported again', () => {

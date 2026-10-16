@@ -254,6 +254,7 @@ function ModeEditor({
                         <NumberField
                           label={`Default of channel ${n}`}
                           hideLabel
+                          hint={isHeld(channel) ? 'held at default' : undefined}
                           value={channel.defaultValue}
                           min={0}
                           max={DMX_MAX_VALUE}
@@ -349,6 +350,13 @@ const BYTES = [
 // Control channels a fine channel at `index` may belong to: never itself.
 function otherControlNames(mode: FixtureMode, index: number): string[] {
   return mode.channels.flatMap((c, i) => (i !== index && c.kind === 'control' ? [c.name] : []));
+}
+
+// Nothing drives an unsupported range, so the channel outputs its default there.
+function isHeld(channel: Channel): boolean {
+  return (
+    channel.kind === 'control' && channel.ranges.some((r) => r.capability.type === 'unsupported')
+  );
 }
 
 function changeKind(channel: Channel, kind: Channel['kind'], controlNames: string[]): Channel {

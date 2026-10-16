@@ -18,17 +18,37 @@ export function unsupported(feature: string): Capability {
   return { type: 'unsupported', feature };
 }
 
-// Collects unsupported features once each, in the order found.
+// Collects unsupported features once each, in the order found. A channel line
+// given with its mode and held value drops the mode when the channel is held
+// at the same value in every mode that reports it.
 export function createImportReport(): ImportReport {
-  const features: UnsupportedFeature[] = [];
+  const lines: UnsupportedFeature[] = [];
   const seen = new Set<string>();
+  const heldPerMode = (line: UnsupportedFeature) =>
+    line.mode !== undefined && line.held !== undefined;
+  const channelFeatureKey = (line: UnsupportedFeature) =>
+    JSON.stringify([line.channel, line.feature]);
   return {
-    features,
+    get features() {
+      const heldValues = new Map<string, Set<number>>();
+      for (const line of lines.filter(heldPerMode)) {
+        const key = channelFeatureKey(line);
+        heldValues.set(key, (heldValues.get(key) ?? new Set()).add(line.held!));
+      }
+      const merged = new Set<string>();
+      return lines.flatMap((line) => {
+        const key = channelFeatureKey(line);
+        if (!heldPerMode(line) || heldValues.get(key)!.size > 1) return [line];
+        if (merged.has(key)) return [];
+        merged.add(key);
+        return [{ channel: line.channel, feature: line.feature, held: line.held }];
+      });
+    },
     add(feature) {
       const key = JSON.stringify([feature.channel, feature.mode, feature.feature]);
       if (seen.has(key)) return;
       seen.add(key);
-      features.push(feature);
+      lines.push(feature);
     },
   };
 }
