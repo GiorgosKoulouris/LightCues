@@ -17,6 +17,7 @@ import {
   fullRange,
   profileId,
   renameChannel,
+  byHand,
 } from '../../../shared/profile-edit';
 import { Badge } from '../ui/Badge';
 import { Button, IconButton } from '../ui/Button';
@@ -487,7 +488,7 @@ function CapabilityFields({ name, capability, onChange }: CapabilityProps) {
           label={`Level of ${name}`}
           unit="level"
           span={capability.level}
-          onChange={(level) => onChange({ ...capability, level })}
+          onChange={(level) => onChange({ ...byHand(capability), level })}
         />
       );
     case 'emitter':
@@ -504,7 +505,7 @@ function CapabilityFields({ name, capability, onChange }: CapabilityProps) {
             label={`Level of ${name}`}
             unit="level"
             span={capability.level}
-            onChange={(level) => onChange({ ...capability, level })}
+            onChange={(level) => onChange({ ...byHand(capability), level })}
           />
         </>
       );
@@ -561,7 +562,7 @@ function CapabilityFields({ name, capability, onChange }: CapabilityProps) {
           label={`Hz of ${name}`}
           unit="Hz"
           span={capability.hz}
-          onChange={(hz) => onChange({ ...capability, hz })}
+          onChange={(hz) => onChange({ ...byHand(capability), hz })}
         />
       );
     case 'unsupported':

@@ -811,10 +811,11 @@ function levelPoint(ranges: CapabilityRange[], level: number): Point {
   return { from: range.from, to: range.to, t };
 }
 
-// The point that sets `hz` on strobe `ranges`, clamped to their Hz span. The
-// first range whose span holds `hz` is used, or else the nearest.
-function ratePoint({ ranges, assumed }: Extract<StrobeDrive, { kind: 'rate' }>, hz: number): Point {
-  const span = (range: CapabilityRange) => (assumed ? ASSUMED_STROBE_HZ : hzSpan(range)!);
+// The point that sets `hz` on strobe `ranges`, clamped to their Hz span, or
+// to the assumed span for a range without one. The first range whose span
+// holds `hz` is used, or else the nearest.
+function ratePoint({ ranges }: Extract<StrobeDrive, { kind: 'rate' }>, hz: number): Point {
+  const span = (range: CapabilityRange) => hzSpan(range) ?? ASSUMED_STROBE_HZ;
   const off = (range: CapabilityRange) => {
     const [a, b] = span(range);
     return Math.max(Math.min(a, b) - hz, hz - Math.max(a, b), 0);

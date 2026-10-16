@@ -57,6 +57,11 @@ const unspannedSpeed = profile('test/unspanned-speed', [
   control('Shutter', { type: 'strobe' }),
   control('Speed', { type: 'strobeSpeed' }),
 ]);
+// A strobe span made from words, like OFL's slow → fast.
+const wordy = profile('test/wordy', [
+  dimmer,
+  control('Strobe', { type: 'strobe', hz: [1, 20], assumed: true }),
+]);
 
 function fixture(id: string, profileId: string, overrides: Partial<PatchedFixture> = {}) {
   return {
@@ -79,7 +84,7 @@ function patch(...fixtures: PatchedFixture[]): VenuePatch {
     stage: { width: 10, depth: 8 },
     universes: [{ number: 1 }],
     fixtures: fixtures.map((f, i) => ({ ...f, address: 1 + i * 3 })),
-    profiles: [mover, bare, noTiltDegrees, bar, par, strobe, unspanned, unspannedSpeed],
+    profiles: [mover, bare, noTiltDegrees, bar, par, strobe, unspanned, unspannedSpeed, wordy],
   };
 }
 
@@ -191,6 +196,7 @@ describe('approximatedStrobes', () => {
       fixture('strobe', strobe.id),
       fixture('unspanned', unspanned.id),
       fixture('speed', unspannedSpeed.id),
+      fixture('wordy', wordy.id),
     );
     const s = shows(
       ['fast', [{ target: {}, strobe: 'Fast' }]],
@@ -202,6 +208,7 @@ describe('approximatedStrobes', () => {
       { fixtureId: 'par', scenes: ['fast', 'beat'], approximation: 'noStrobeChannel' },
       { fixtureId: 'unspanned', scenes: ['fast', 'beat'], approximation: 'assumedHzSpan' },
       { fixtureId: 'speed', scenes: ['fast', 'beat'], approximation: 'assumedHzSpan' },
+      { fixtureId: 'wordy', scenes: ['fast', 'beat'], approximation: 'assumedHzSpan' },
     ]);
   });
 

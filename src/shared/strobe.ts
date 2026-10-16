@@ -15,8 +15,8 @@ export function strobeHz(rate: StrobeRate, bpm: number): number {
 }
 
 // What strobing sets on one channel: the rate across `ranges`, `assumed` when
-// none gives its Hz span; or `range`, which turns strobe on while another
-// channel sets the rate.
+// none gives its Hz span or a span is made from words; or `range`, which turns
+// strobe on while another channel sets the rate.
 export type StrobeDrive =
   | { kind: 'rate'; ranges: CapabilityRange[]; assumed: boolean }
   | { kind: 'on'; range: CapabilityRange };
@@ -37,8 +37,10 @@ export function strobeDrives(channels: Channel[]): Map<string, StrobeDrive> {
     const own = strobe.length > 0 ? strobe : of('strobeSpeed', ranges);
     if (own.length === 0) continue;
     const rated = own.filter((r) => hzSpan(r) !== undefined);
-    if (rated.length > 0) drives.set(name, { kind: 'rate', ranges: rated, assumed: false });
-    else if (strobe.length > 0 && speedElsewhere(name))
+    if (rated.length > 0) {
+      const assumed = rated.some(({ capability: c }) => 'assumed' in c && c.assumed === true);
+      drives.set(name, { kind: 'rate', ranges: rated, assumed });
+    } else if (strobe.length > 0 && speedElsewhere(name))
       drives.set(name, { kind: 'on', range: strobe[0]! });
     else drives.set(name, { kind: 'rate', ranges: own, assumed: true });
   }

@@ -551,6 +551,64 @@ describe('importOflFixture', () => {
     expect(unsupported).toEqual([]);
   });
 
+  it('takes slow and fast as 1 and 20 Hz and dark as 5%, in file order, assumed', () => {
+    const { profile, unsupported } = importOflFixture(
+      {
+        name: 'Wordy Strobe',
+        categories: ['Strobe'],
+        meta,
+        availableChannels: {
+          Speed: { capability: { type: 'StrobeSpeed', speedStart: 'slow', speedEnd: 'fast' } },
+          Strobe: {
+            capabilities: [
+              { dmxRange: [0, 9], type: 'ShutterStrobe', shutterEffect: 'Open' },
+              {
+                dmxRange: [10, 127],
+                type: 'ShutterStrobe',
+                shutterEffect: 'Strobe',
+                speedStart: 'fast',
+                speedEnd: 'slow',
+              },
+              {
+                dmxRange: [128, 191],
+                type: 'ShutterStrobe',
+                shutterEffect: 'Strobe',
+                speedStart: 'slow',
+                speedEnd: '10Hz',
+              },
+              {
+                dmxRange: [192, 255],
+                type: 'ShutterStrobe',
+                shutterEffect: 'Strobe',
+                speedStart: '10Hz',
+                speedEnd: '20Hz',
+              },
+            ],
+          },
+          Dimmer: {
+            capability: { type: 'Intensity', brightnessStart: 'dark', brightnessEnd: 'bright' },
+          },
+        },
+        modes: [{ name: '3ch', channels: ['Speed', 'Strobe', 'Dimmer'] }],
+      },
+      'Generic',
+    );
+
+    expect(
+      profile.modes[0]!.channels.flatMap((c) =>
+        c.kind === 'control' ? c.ranges.map((r) => r.capability) : [],
+      ),
+    ).toStrictEqual([
+      { type: 'strobeSpeed', hz: [1, 20], assumed: true },
+      { type: 'shutter', effect: 'open' },
+      { type: 'strobe', hz: [20, 1], assumed: true },
+      { type: 'strobe', hz: [1, 10], assumed: true },
+      { type: 'strobe', hz: [10, 20] },
+      { type: 'intensity', level: [0.05, 1], assumed: true },
+    ]);
+    expect(unsupported).toEqual([]);
+  });
+
   it('reports values it cannot place in its units', () => {
     const { profile, unsupported } = importOflFixture(
       {
@@ -559,9 +617,9 @@ describe('importOflFixture', () => {
         meta,
         availableChannels: {
           Pan: { capability: { type: 'Pan', angleStart: '0%', angleEnd: '100%' } },
-          Strobe: { capability: { type: 'StrobeSpeed', speedStart: 'slow', speedEnd: 'fast' } },
+          Strobe: { capability: { type: 'StrobeSpeed', speedStart: 'stop', speedEnd: 'fast' } },
           Dimmer: {
-            capability: { type: 'Intensity', brightnessStart: 'dark', brightnessEnd: 'bright' },
+            capability: { type: 'Intensity', brightnessStart: '0lm', brightnessEnd: 'bright' },
           },
         },
         modes: [{ name: '3ch', channels: ['Pan', 'Strobe', 'Dimmer'] }],

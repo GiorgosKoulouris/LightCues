@@ -15,6 +15,7 @@ import {
   type FixtureImport,
   type ImportReport,
 } from './import-report';
+import { ASSUMED_STROBE_HZ } from '../shared/strobe';
 
 // The subset of the Open Fixture Library fixture format we read.
 // https://github.com/OpenLightingProject/open-fixture-library/blob/master/docs/fixture-format.md
@@ -325,19 +326,29 @@ interface CapabilityContext {
 }
 
 function importCapability(cap: OflCapability, context: CapabilityContext): Capability {
+  // Whether a span read so far was made from words.
+  let assumed = false;
   // Reads an optional [start, end] property pair, reporting values we cannot place.
-  const span = (parsed: Span | null | undefined, what: string): Span | undefined => {
+  const span = (parsed: ParsedSpan | null | undefined, what: string): Span | undefined => {
     if (parsed === null) context.report(`${cap.type} ${what}`);
-    return parsed ?? undefined;
+    if (parsed?.assumed) assumed = true;
+    return parsed?.span;
   };
+  const flagged = <C extends Capability>(capability: C): C =>
+    assumed ? { ...capability, assumed: true } : capability;
   const level = () =>
     span(
-      pair(cap.brightnessStart ?? cap.brightness, cap.brightnessEnd ?? cap.brightness, brightness),
+      pair(
+        cap.brightnessStart ?? cap.brightness,
+        cap.brightnessEnd ?? cap.brightness,
+        brightness,
+        ASSUMED_BRIGHTNESS,
+      ),
       'brightness not in %',
     );
   const hz = () =>
     span(
-      pair(cap.speedStart ?? cap.speed, cap.speedEnd ?? cap.speed, unit('Hz')),
+      pair(cap.speedStart ?? cap.speed, cap.speedEnd ?? cap.speed, unit('Hz'), ASSUMED_SPEEDS),
       'speed not in Hz',
     );
   const degrees = () =>
@@ -350,10 +361,10 @@ function importCapability(cap: OflCapability, context: CapabilityContext): Capab
     case 'NoFunction':
       return { type: 'none' };
     case 'Intensity':
-      return { type: 'intensity', level: level() };
+      return flagged({ type: 'intensity', level: level() });
     case 'ColorIntensity': {
       const emitter = EMITTERS[cap.color!];
-      if (emitter) return { type: 'emitter', emitter, level: level() };
+      if (emitter) return flagged({ type: 'emitter', emitter, level: level() });
       break;
     }
     case 'ShutterStrobe':
@@ -363,11 +374,11 @@ function importCapability(cap: OflCapability, context: CapabilityContext): Capab
         case 'Closed':
           return { type: 'shutter', effect: 'closed' };
         case 'Strobe':
-          return { type: 'strobe', hz: hz() };
+          return flagged({ type: 'strobe', hz: hz() });
       }
       return unsupported(`ShutterStrobe ${cap.shutterEffect}`);
     case 'StrobeSpeed':
-      return { type: 'strobeSpeed', hz: hz() };
+      return flagged({ type: 'strobeSpeed', hz: hz() });
     case 'Pan':
       return { type: 'pan', degrees: degrees() };
     case 'Tilt':
@@ -393,24 +404,44 @@ function importWheelSlot(cap: OflCapability, context: CapabilityContext): Capabi
   return { type: 'wheelSlot', slot: { name: slot.name ?? colour, colour } };
 }
 
+// A span read from an OFL start/end pair, `assumed` when either end is a word
+// taken at an assumed value.
+interface ParsedSpan {
+  span: Span;
+  assumed: boolean;
+}
+
 // An OFL start/end property pair: undefined when absent, null when either
 // value is in a unit or word we cannot place.
 function pair(
   start: string | undefined,
   end: string | undefined,
   parse: (value: string) => number | undefined,
-): Span | null | undefined {
+  words: ReadonlyMap<string, number> = NO_WORDS,
+): ParsedSpan | null | undefined {
   if (start === undefined || end === undefined) return undefined;
-  const from = parse(start);
-  const to = parse(end);
-  return from === undefined || to === undefined ? null : [from, to];
+  const from = parse(start) ?? words.get(start);
+  const to = parse(end) ?? words.get(end);
+  if (from === undefined || to === undefined) return null;
+  return { span: [from, to], assumed: words.has(start) || words.has(end) };
 }
+
+// Speed words, at the ends of the assumed strobe rate span.
+const ASSUMED_SPEEDS: ReadonlyMap<string, number> = new Map([
+  ['slow', ASSUMED_STROBE_HZ[0]],
+  ['fast', ASSUMED_STROBE_HZ[1]],
+]);
+
+const NO_WORDS: ReadonlyMap<string, number> = new Map();
+
+// Brightness words with no fixed fraction of full output, at an assumed one.
+const ASSUMED_BRIGHTNESS: ReadonlyMap<string, number> = new Map([['dark', 0.05]]);
 
 function unit(suffix: string) {
   return (value: string) => (value.endsWith(suffix) ? parseFloat(value) : undefined);
 }
 
-// Brightness as a fraction of full output. 'dark' and lumens have no fixed fraction.
+// Brightness as a fraction of full output. Lumens have no fixed fraction.
 function brightness(value: string): number | undefined {
   if (value === 'off') return 0;
   if (value === 'bright') return 1;

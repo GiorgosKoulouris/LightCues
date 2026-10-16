@@ -61,6 +61,13 @@ export function fullRange(capability: Capability = { type: 'intensity' }): Capab
   return { from: 0, to: DMX_MAX_VALUE, capability };
 }
 
+// `capability` with a span set by hand, so no longer assumed.
+export function byHand<C extends Capability>(capability: C): C {
+  const next: C & { assumed?: true } = { ...capability };
+  delete next.assumed;
+  return next;
+}
+
 // "Acme Par", as a Profile is named in messages.
 export function profileName({ manufacturer, model }: FixtureProfile): string {
   return `${manufacturer} ${model}`.trim();

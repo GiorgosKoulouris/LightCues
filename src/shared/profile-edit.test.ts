@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FixtureMode } from './fixture-profile';
-import { blankProfile, profileId, profileName, renameChannel } from './profile-edit';
+import { blankProfile, profileId, profileName, renameChannel, byHand } from './profile-edit';
 
 describe('profile editing', () => {
   it('derives the Profile id from manufacturer and model', () => {
@@ -22,6 +22,19 @@ describe('profile editing', () => {
       { kind: 'fine', name: 'Pan fine', of: 'Pan coarse', byte: 1, defaultValue: 0 },
       { kind: 'unused' },
     ]);
+  });
+});
+
+describe('byHand', () => {
+  it('clears the assumed flag of a span edited by hand', () => {
+    expect(byHand({ type: 'strobe', hz: [1, 20], assumed: true })).toStrictEqual({
+      type: 'strobe',
+      hz: [1, 20],
+    });
+    expect(byHand({ type: 'intensity', level: [0.05, 1] })).toStrictEqual({
+      type: 'intensity',
+      level: [0.05, 1],
+    });
   });
 });
 

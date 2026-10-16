@@ -1455,6 +1455,21 @@ describe('strobe', () => {
     expect(strobing(shared, 'Slow')).toEqual([255, 7]);
   });
 
+  it('keeps the direction of a span made from words', () => {
+    // An OFL fast → slow strobe: 20 Hz at the low end.
+    const backwards = profile('test/backwards', [
+      channel('Dimmer', { type: 'intensity' }),
+      control('Strobe', [
+        range(0, 9, open),
+        range(10, 255, { type: 'strobe', hz: [20, 1], assumed: true }),
+      ]),
+    ]);
+
+    // 12 Hz is 8/19 of the way from 20 Hz down to 1 Hz; 2 Hz is 18/19.
+    expect(strobing(backwards, 'Fast')).toEqual([255, 113]);
+    expect(strobing(backwards, 'Slow')).toEqual([255, 242]);
+  });
+
   it('lets later Rules and higher Layers override it, Off included', () => {
     const s = show(
       scene('fast', [

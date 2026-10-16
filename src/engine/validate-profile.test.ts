@@ -390,6 +390,16 @@ describe('numbers', () => {
     }
   });
 
+  it('passes spans flagged as assumed', () => {
+    const channels = [
+      control('Dimmer', { type: 'intensity', level: [0.05, 1], assumed: true }),
+      control('Red', { type: 'emitter', emitter: 'red', level: [0.05, 1], assumed: true }),
+      control('Strobe', { type: 'strobe', hz: [20, 1], assumed: true }),
+      control('Speed', { type: 'strobeSpeed', hz: [1, 20], assumed: true }),
+    ];
+    expect(validateProfile(profile(channels))).toEqual([]);
+  });
+
   // Fixed in this issue: such a span made the pan or tilt DMX value, or the
   // intensity, NaN, which the Output sends as 0.
   it('fails a span that is not two finite numbers', () => {
