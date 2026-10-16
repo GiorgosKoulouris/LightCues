@@ -15,7 +15,7 @@ Found while building a 45-minute metal show for The Temple rig (4 FOS Smart Beam
 
 ## Triage (2026-10-16)
 
-- 1 and 2: specced in `.scratch/strobe-and-effects/`.
+- 1 and 2: done (strobe, and intensity and colour Effects).
 - 3, 4 and 5: still needs-triage.
 - 6: wontfix. Built-in programs aren't portable across rigs and don't follow the Tempo. Engine Effects cover them.
 
