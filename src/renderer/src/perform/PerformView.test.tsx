@@ -207,6 +207,21 @@ describe('PerformView', () => {
     );
   });
 
+  it('badges the active Scene while the Speed limit slows it, naming the length', () => {
+    renderView(SHOW, { ...PLAYBACK, limited: { 'layer-1': 0.5 } });
+    const badges = screen.getAllByText('Limited');
+    expect(badges).toHaveLength(1);
+    expect(within(layer('Base')).getByRole('button', { name: /Blue/ })).toContainElement(
+      badges[0]!,
+    );
+    expect(badges[0]).toHaveAttribute('title', 'Speed limit: movement Effects run at 1/2 beat');
+  });
+
+  it('shows no Speed limit badge while no Layer is limited', () => {
+    renderView();
+    expect(screen.queryByText('Limited')).toBeNull();
+  });
+
   it('says where to add Scenes when the Show has none', () => {
     renderView({ ...SHOW, scenes: [], baseLook: undefined, panelScenes: undefined });
     expect(screen.getByText('No Scenes: add them in the Show view.')).toBeInTheDocument();

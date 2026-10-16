@@ -16,6 +16,7 @@ What changed in each LightCues release. The format follows [Keep a Changelog](ht
 - Intensity Effects: Pulse, Ramp up, Ramp down, Square and Chase scale the intensity of a Rule's Fixtures, even intensity from other Layers. Chase lights one Spread position at a time. **None** stops the intensity Effect of lower Layers and earlier Rules.
 - Colour Effects: a Rule can step or fade through 2 to 4 colours, or run a Rainbow, in place of its colour. Spread offsets each Fixture, so Alternate with two colours gives odd and even. Fixtures with a colour wheel snap to its nearest colour. **None** stops the colour Effect of lower Layers and earlier Rules, back to the colour under it.
 - Speed limit: a movement Effect that would turn a moving Fixture faster than 300°/s runs at a longer length instead, still on the beat and at its size, so moving Fixtures are not overdriven at high Tempos. Only if 16 beats is still too fast does its size shrink. The length switches without a jump, and back when the Tempo falls. The Show keeps the length you set.
+- The Scene editor says when the Speed limit slows a Rule's movement Effect at the current Tempo, and to what length. In Perform and on the Fallback Panel, an active Scene's button shows **Limited** while the Speed limit slows it; hover it to see the length.
 - Pan/Tilt speed channels in Open Fixture Library files now import as a speed from slow to fast, and the Profile editor can set one. LightCues still leaves the channel at its default. Re-import the Fixture Profile to pick this up.
 
 ### Changed

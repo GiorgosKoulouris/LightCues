@@ -2,7 +2,7 @@ import { Play, Plus, Trash2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { ROLES, type Role } from '../../../shared/fixture-profile';
 import {
-  beatsLabel,
+  beatsText,
   DIRECTIONS,
   STROBE_HZ,
   STROBE_RATES,
@@ -41,13 +41,15 @@ const STROBE_OPTIONS = [
 function strobeLabel(rate: StrobeRate): string {
   if (rate === 'Off') return rate;
   if (typeof rate === 'string') return `${rate} (${STROBE_HZ[rate]} Hz)`;
-  return `${beatsLabel(rate)} beat`;
+  return beatsText(rate);
 }
 
 interface SceneEditorProps {
   scene: Scene;
   show: Show;
   patch: VenuePatch;
+  // The current Tempo, for the Speed limit note on movement Effects.
+  bpm: number | undefined;
   // Every change is sent at once, so an active Scene updates live. Resolves
   // to whether it was done.
   onPut(scene: Scene): Promise<boolean>;
@@ -57,7 +59,7 @@ interface SceneEditorProps {
 
 // Edits one Scene: name, tags, Layer and fade-in in a header, and its Rules as
 // cards, reordered by dragging their handle.
-export function SceneEditor({ scene, show, patch, onPut, onGo, onRemove }: SceneEditorProps) {
+export function SceneEditor({ scene, show, patch, bpm, onPut, onGo, onRemove }: SceneEditorProps) {
   const toast = useToast();
   // Rules have no ids; these keep focus with a Rule as it moves.
   const ruleKeys = useItemKeys(scene.rules.length);
@@ -140,6 +142,7 @@ export function SceneEditor({ scene, show, patch, onPut, onGo, onRemove }: Scene
                 handle={handle}
                 rule={rule}
                 patch={patch}
+                bpm={bpm}
                 onPut={(next) => putRules(scene.rules.map((r, j) => (j === i ? next : r)))}
                 onRemove={() => void removeRule(i)}
               />
@@ -160,6 +163,7 @@ function RuleCard({
   handle,
   rule,
   patch,
+  bpm,
   onPut,
   onRemove,
 }: {
@@ -167,6 +171,7 @@ function RuleCard({
   handle: ReactNode;
   rule: Rule;
   patch: VenuePatch;
+  bpm: number | undefined;
   onPut(rule: Rule): void;
   onRemove(): void;
 }) {
@@ -233,7 +238,11 @@ function RuleCard({
             ]}
             onChange={(d) => set('direction', d || undefined)}
           />
-          <EffectPicker slot={movementEffect} onChange={(e) => set('movementEffect', e)} />
+          <EffectPicker
+            slot={movementEffect}
+            bpm={bpm}
+            onChange={(e) => set('movementEffect', e)}
+          />
           <IntensityEffectPicker
             slot={intensityEffect}
             onChange={(e) => set('intensityEffect', e)}

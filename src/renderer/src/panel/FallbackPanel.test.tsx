@@ -76,6 +76,18 @@ describe('FallbackPanel Scene buttons', () => {
     ]);
   });
 
+  it('badges the active Scene while the Speed limit slows it, naming the length', () => {
+    renderPanel({ ...PLAYBACK, limited: { 'layer-1': 2 } });
+    const badge = screen.getByText('Limited');
+    expect(screen.getByRole('button', { name: /Blue/ })).toContainElement(badge);
+    expect(badge).toHaveAttribute('title', 'Speed limit: movement Effects run at 2 beats');
+  });
+
+  it('shows no Speed limit badge while no Layer is limited', () => {
+    renderPanel();
+    expect(screen.queryByText('Limited')).toBeNull();
+  });
+
   it('toggles Scenes from their number keys', async () => {
     renderPanel();
     await userEvent.keyboard('12');

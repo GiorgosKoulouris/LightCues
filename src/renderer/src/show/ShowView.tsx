@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { ShowEdit } from '../../../shared/protocol';
 import type { Scene, Show } from '../../../shared/show';
+import { useTempo } from '../panel/useTempo';
 import { FileButtons } from '../shell/FileButtons';
 import { HistoryButtons } from '../shell/HistoryButtons';
 import { useFileCommands } from '../shell/useFileCommands';
@@ -42,6 +43,7 @@ export function ShowView({ active }: { active: boolean }) {
   const { show: state, edit, newShow, undo, redo, open, save } = useShow();
   const { venue } = useVenuePatch();
   const playback = usePlayback();
+  const tempo = useTempo();
   const midiInput = useMidiInput();
   const toast = useToast();
   const [tab, setTab] = useState<SubTab>('scenes');
@@ -152,6 +154,7 @@ export function ShowView({ active }: { active: boolean }) {
               scene={selected}
               show={show}
               patch={venue.patch}
+              bpm={tempo?.bpm}
               onPut={(scene) => change({ type: 'putScene', scene })}
               onGo={() => go(selected.id)}
               onRemove={() => void removeScene(selected.id)}

@@ -35,3 +35,11 @@
   flex: 1;
   min-width: 0;
 }
+
+/* On a line of its own, after the settings. */
+.note {
+  order: 1;
+  width: 100%;
+  color: var(--warning);
+  font-size: var(--text-sm);
+}

@@ -2,6 +2,7 @@ import { Plus, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import {
   beatsLabel,
+  beatsText,
   COLOUR_SHAPES,
   EFFECT_LENGTHS,
   EFFECT_SHAPES,
@@ -22,6 +23,7 @@ import {
   type MovementEffect,
   type Spread,
 } from '../../../shared/show';
+import { fitSpeedLimit } from '../../../shared/speed-limit';
 import { Button, IconButton } from '../ui/Button';
 import { parseNumber, TextField } from '../ui/fields';
 import { Select } from '../ui/Select';
@@ -42,12 +44,15 @@ const NEW_COLOURS: Colour[] = [{ swatch: 'Red' }, { swatch: 'Blue' }];
 const ADDED_COLOUR: Colour = { swatch: 'White' };
 
 // Picks a Rule's movement Effect, None, or leaves it to others. A new shape
-// keeps the other settings.
+// keeps the other settings. Says when the Speed limit slows the Effect at
+// `bpm`, the current Tempo.
 export function EffectPicker({
   slot,
+  bpm,
   onChange,
 }: {
   slot?: EffectSlot<MovementEffect>;
+  bpm: number | undefined;
   onChange(slot: EffectSlot<MovementEffect> | undefined): void;
 }) {
   const effect = slot === NO_EFFECT ? undefined : slot;
@@ -83,9 +88,24 @@ export function EffectPicker({
               ))}
             </div>
           </div>
+          {bpm !== undefined && <SpeedLimitNote effect={effect} bpm={bpm} />}
         </Settings>
       )}
     </div>
+  );
+}
+
+// What the Speed limit runs `effect` at, at `bpm`, while it slows it. A guide,
+// without the engine's hysteresis.
+function SpeedLimitNote({ effect, bpm }: { effect: MovementEffect; bpm: number }) {
+  const fit = fitSpeedLimit(effect, bpm);
+  if (!fit.limited) return null;
+  const size = fit.size < effect.size ? ` and ${Number(fit.size.toFixed(1))}°` : '';
+  return (
+    <p className={styles.note}>
+      Limited to {beatsText(fit.length)}
+      {size} at current Tempo
+    </p>
   );
 }
 

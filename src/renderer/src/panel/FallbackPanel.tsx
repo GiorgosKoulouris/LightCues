@@ -11,6 +11,7 @@ import {
   GrandMasterFader,
   HousePresetButton,
   Key,
+  SpeedLimitBadge,
   TapTempoButton,
 } from './controls';
 import styles from './FallbackPanel.module.css';
@@ -62,7 +63,8 @@ export function FallbackPanel({ show, playback, tempo, house }: FallbackPanelPro
               aria-pressed={isActive(playback.active, scene)}
               onClick={() => runPanelAction({ type: 'scene', index: i }, show, playback)}
             >
-              {scene.name} <Key>{i + 1}</Key>
+              {scene.name} <SpeedLimitBadge scene={scene} playback={playback} />
+              <Key>{i + 1}</Key>
             </Button>
           ))
         )}

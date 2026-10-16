@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 import type { HouseFired, TempoSource } from '../../../shared/protocol';
-import type { HousePreset, Show } from '../../../shared/show';
+import { beatsText, type HousePreset, type Scene, type Show } from '../../../shared/show';
 import { isActive } from '../show/scenes';
 import type { PlaybackState } from '../show/usePlayback';
+import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { cx } from '../ui/cx';
 import styles from './controls.module.css';
@@ -71,6 +72,19 @@ export function BaseLookButton({ show, playback, className }: ControlProps) {
       <span className={styles.name}>Base Look{baseLook && `: ${baseLook.name}`}</span>
       <Key>{SHORTCUTS.baseLook}</Key>
     </Button>
+  );
+}
+
+// On a Scene button in Perform and on the Fallback Panel, while the Scene is
+// active and the Speed limit slows it. The tooltip names the length it runs
+// at.
+export function SpeedLimitBadge({ scene, playback }: { scene: Scene; playback: PlaybackState }) {
+  const length = isActive(playback.active, scene) ? playback.limited?.[scene.layer] : undefined;
+  if (length === undefined) return null;
+  return (
+    <Badge tone="warning" title={`Speed limit: movement Effects run at ${beatsText(length)}`}>
+      Limited
+    </Badge>
   );
 }
 

@@ -406,6 +406,38 @@ describe('Scene editor', () => {
     expect(rule()?.movementEffect).toMatchObject({ length: 0.5 });
   });
 
+  it('says when the Speed limit slows a movement Effect at the current Tempo', async () => {
+    await selectWarm();
+    const tempo = (bpm: number) => engine.emit({ type: 'tempo', bpm, source: 'tap' });
+    const note = () => screen.queryByText(/at current Tempo/);
+    // A 12° Pan sweep fits 300°/s at 1/4 beat up to about 60 BPM.
+    tempo(50);
+    await userEvent.selectOptions(screen.getAllByLabelText('Movement Effect')[0]!, 'Pan sweep');
+    await userEvent.selectOptions(screen.getByLabelText('Length (beats)'), '1/4');
+    expect(note()).toBeNull();
+
+    tempo(100);
+    expect(note()).toHaveTextContent('Limited to 1/2 beat at current Tempo');
+    tempo(140);
+    expect(note()).toHaveTextContent('Limited to 1 beat at current Tempo');
+    tempo(50);
+    expect(note()).toBeNull();
+  });
+
+  it('says when the Speed limit shrinks a movement Effect at 16 beats', async () => {
+    await selectWarm();
+    engine.emit({ type: 'tempo', bpm: 200, source: 'tap' });
+    await userEvent.selectOptions(screen.getAllByLabelText('Movement Effect')[0]!, 'Ballyhoo');
+    await userEvent.selectOptions(screen.getByLabelText('Length (beats)'), '16');
+    const size = screen.getByRole('textbox', { name: 'Size (°)' });
+    await userEvent.clear(size);
+    await userEvent.type(size, '180');
+    // Its tilt peaks at 1.8 × 2π × size × 200/60/16 °/s.
+    expect(screen.getByText(/at current Tempo/)).toHaveTextContent(
+      'Limited to 16 beats and 127.3° at current Tempo',
+    );
+  });
+
   it("adds a Pulse to a Rule's intensity Effect, with depth, length and Spread, or None", async () => {
     await selectWarm();
     const rule = () => {

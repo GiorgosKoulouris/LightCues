@@ -39,6 +39,11 @@ export function beatsLabel(beats: number): string {
   return beats < 1 ? `1/${1 / beats}` : String(beats);
 }
 
+// "1/2 beat", "1 beat", "2 beats".
+export function beatsText(beats: number): string {
+  return `${beatsLabel(beats)} beat${beats > 1 ? 's' : ''}`;
+}
+
 // The largest Effect size, in degrees.
 export const MAX_EFFECT_SIZE = 180;
 

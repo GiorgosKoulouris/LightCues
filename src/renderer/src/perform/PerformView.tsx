@@ -9,6 +9,7 @@ import {
   GrandMasterFader,
   HousePresetButton,
   Key,
+  SpeedLimitBadge,
   TapTempoButton,
 } from '../panel/controls';
 import type { TempoState } from '../panel/useTempo';
@@ -162,6 +163,7 @@ function LayerSection({ group, playback }: { group: LayerGroup; playback: Playba
                 <ActiveDot on={isActive(playback.active, scene)} />
                 {scene.name}
               </span>
+              <SpeedLimitBadge scene={scene} playback={playback} />
               {key !== undefined && <Key>{key}</Key>}
             </Button>
           ))}
