@@ -27,7 +27,24 @@ const mover: FixtureProfile = {
   ],
 };
 
-// Hung 6 m up on Stage Left.
+const par: FixtureProfile = {
+  id: 'test/par',
+  manufacturer: 'Test',
+  model: 'par',
+  defaultRole: 'Wash',
+  modes: [
+    {
+      name: 'mode',
+      channels: [
+        channel('Red', { type: 'emitter', emitter: 'red' }),
+        channel('Green', { type: 'emitter', emitter: 'green' }),
+        channel('Blue', { type: 'emitter', emitter: 'blue' }),
+      ],
+    },
+  ],
+};
+
+// A mover hung 6 m up on Stage Left, and an RGB par.
 const rig: VenuePatch = {
   stage: { width: 12, depth: 9 },
   universes: [{ number: 1 }],
@@ -43,8 +60,19 @@ const rig: VenuePatch = {
       y: 4,
       height: 6,
     },
+    {
+      id: 'par',
+      name: 'Par',
+      profileId: par.id,
+      mode: 'mode',
+      universe: 1,
+      address: 11,
+      x: -3,
+      y: 1,
+      height: 0,
+    },
   ],
-  profiles: [mover],
+  profiles: [mover, par],
 };
 
 function scene(id: string, rule: Omit<Rule, 'target'>, fadeIn = 0, layer = 'l1'): Scene {
@@ -70,6 +98,15 @@ const show: Show = {
     scene('ramp', {
       intensity: 1,
       intensityEffect: { shape: 'Ramp up', depth: 1, length: 4, spread: 'In sync' },
+    }),
+    scene('red blue', {
+      intensity: 1,
+      colourEffect: {
+        shape: 'Step',
+        colours: [{ swatch: 'Red' }, { swatch: 'Blue' }],
+        length: 4,
+        spread: 'In sync',
+      },
     }),
   ],
   triggers: [],
@@ -99,6 +136,11 @@ describe('playback', () => {
       aim: () => [...p.frames().get(1)!.subarray(1, 3)],
       // The mover's intensity in the preview.
       intensity: () => p.lights().mover!.intensity,
+      // The par's red, green and blue in the preview.
+      colour: () => {
+        const { red, green, blue } = p.lights().par!;
+        return [red, green, blue];
+      },
       // The mover's strobe channel, and its rate in the preview.
       strobe: () => [p.frames().get(1)![3], p.lights().mover!.strobe],
     };
@@ -191,6 +233,20 @@ describe('playback', () => {
       p.handle({ type: 'setFreeze', on: false });
       // Beat 3.
       expect(intensity()).toBeCloseTo(0.75);
+    });
+
+    it('holds a colour Effect at its colour while on, then resumes with the beat', () => {
+      const { p, at, colour } = playback();
+      p.handle({ type: 'goScene', sceneId: 'red blue' });
+      // Beat 1 of 4: red.
+      at(0.5);
+      p.handle({ type: 'setFreeze', on: true });
+
+      at(1.5);
+      expect(colour()).toEqual([1, 0, 0]);
+      p.handle({ type: 'setFreeze', on: false });
+      // Beat 3: blue.
+      expect(colour()).toEqual([0, 0, 1]);
     });
 
     it('keeps applying Directions around the held offset', () => {

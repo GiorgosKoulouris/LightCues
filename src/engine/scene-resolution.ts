@@ -23,7 +23,14 @@ import {
   strobeHz,
   type StrobeDrive,
 } from '../shared/strobe';
-import { effectTurn, intensityScale, spreadDelay, spreadPositions } from './effects';
+import {
+  colourEffectMix,
+  effectTurn,
+  intensityScale,
+  spreadDelay,
+  spreadPositions,
+  type ColourMix,
+} from './effects';
 import { DEFAULT_BPM } from './tempo';
 import {
   DMX_CHANNELS,
@@ -189,9 +196,10 @@ function fixtureLight(channels: Channel[], output: FixtureOutput): FixtureLight 
 
 // What a Fixture is set to once the Layers are combined, and the channels of
 // its mode. A movement Effect turns a moving Fixture from its aim; an
-// intensity Effect scales the intensity, before the Grand Master. A lit
-// Fixture with a strobe channel strobes at the rate last set, at `bpm` for a
-// beat rate.
+// intensity Effect scales the intensity, before the Grand Master; a colour
+// Effect's colour shows over the plain colour, until a None or a later plain
+// colour. A lit Fixture with a strobe channel strobes at the rate last set, at
+// `bpm` for a beat rate.
 function fixtureOutput(
   show: Show,
   patch: VenuePatch,
@@ -204,6 +212,7 @@ function fixtureOutput(
 ): { channels: Channel[]; output: FixtureOutput } {
   let intensity = 0;
   let colour: ColourLevels | undefined;
+  let effectColour: EffectColour | undefined;
   let direction: Direction | undefined;
   let turn: Turn | undefined;
   let scale: number | undefined;
@@ -212,15 +221,19 @@ function fixtureOutput(
   for (const entry of entries) {
     const look = layerLook(show, patch, fixture, entry, time, beat);
     intensity = Math.max(intensity, look.intensity ?? 0);
+    effectColour = combinedEffectColour(effectColour, look, colour ?? defaultColour(show));
     colour = look.colour ?? colour;
     direction = look.direction ?? direction;
     turn = combinedTurn(turn, look);
     scale = combinedScale(scale, look);
     strobe = look.strobe ?? strobe;
   }
-  colour ??= show.defaultColour ? colourLevels(show.defaultColour) : WHITE;
+  const shown =
+    effectColour === undefined || effectColour === NO_EFFECT
+      ? (colour ?? defaultColour(show))
+      : effectColour;
   const { channels } = fixtureMode(patch, fixture);
-  const output = levelOutput(channels, intensity * (scale ?? STEADY) * grandMaster, colour);
+  const output = levelOutput(channels, intensity * (scale ?? STEADY) * grandMaster, shown);
   const hz = strobe === undefined ? 0 : strobeHz(strobe, bpm);
   if (hz > 0 && output.intensity > 0) {
     const drives = strobeDrives(channels);
@@ -385,14 +398,22 @@ function byChange(show: Show, active: ActiveScenes): ActiveScene[] {
   return show.layers.flatMap((layer) => active[layer.id] ?? []).sort((a, b) => a.since - b.since);
 }
 
+// The colour Fixtures show where no Rule sets one.
+function defaultColour(show: Show): ColourLevels {
+  return show.defaultColour ? colourLevels(show.defaultColour) : WHITE;
+}
+
 // What one Scene sets on a Fixture. An absent attribute is left to other
 // Scenes. `turn` is a moving Fixture's turn by a movement Effect, or still
 // under None; `scale` is how much an intensity Effect scales the intensity, or
-// steady under None. While a Layer crossfades, `turnFade` and `scaleFade` hold
-// them instead.
+// steady under None; `effectColour` is a colour Effect's colour, or None,
+// showing `colour`, the plain colour. While a Layer crossfades, `turnFade`,
+// `scaleFade` and `effectColourFade` hold them instead.
 interface Look {
   intensity?: number;
   colour?: ColourLevels;
+  effectColour?: EffectColour;
+  effectColourFade?: ColourFade;
   direction?: Direction;
   turn?: Turn;
   turnFade?: Fade<Turn>;
@@ -414,6 +435,14 @@ const STILL: Turn = { pan: 0, tilt: 0 };
 // The scale that leaves intensity as it is.
 const STEADY = 1;
 
+// A colour Effect's colour, or None: the plain colour shows.
+type EffectColour = ColourLevels | typeof NO_EFFECT;
+
+// A colour Effect's colour fading in. A fade cut off by the next keeps
+// fading under it, so both resolve over the Layers below when combined.
+// `plain` is the look's plain colour, which a None shows.
+type ColourFade = Fade<EffectColour | ColourFade> & { plain?: ColourLevels };
+
 // The turn once a look is combined over `below`, the turn the Layers below
 // give.
 function combinedTurn(below: Turn | undefined, { turn, turnFade }: Look): Turn | undefined {
@@ -427,6 +456,30 @@ function combinedTurn(below: Turn | undefined, { turn, turnFade }: Look): Turn |
 // give.
 function combinedScale(below: number | undefined, { scale, scaleFade }: Look): number | undefined {
   return combined(below, scale, scaleFade, STEADY, lerp);
+}
+
+// The colour Effect's colour once a look is combined over `below`, the one
+// the Layers below give. A fade from or to None is from or to the look's
+// plain colour, or else `plain`, the one the Layers below give.
+function combinedEffectColour(
+  below: EffectColour | undefined,
+  { effectColour, effectColourFade }: Look,
+  plain: ColourLevels,
+): EffectColour | undefined {
+  if (!effectColourFade) return effectColour ?? below;
+  return fadedColour(effectColourFade, below ?? NO_EFFECT, plain);
+}
+
+// Where a colour Effect's fade has got to over `below`. Either end may be a
+// fade itself, or absent for `below`.
+function fadedColour(fade: ColourFade, below: EffectColour, plain: ColourLevels): EffectColour {
+  const { from, to, p } = fade;
+  const end = (c: EffectColour | ColourFade | undefined): EffectColour =>
+    c === undefined ? below : c === NO_EFFECT || !('p' in c) ? c : fadedColour(c, below, plain);
+  const [a, b] = [end(from), end(to)];
+  if (a === NO_EFFECT && b === NO_EFFECT) return NO_EFFECT;
+  const levels = (c: EffectColour) => (c === NO_EFFECT ? (fade.plain ?? plain) : c);
+  return blend(levels(a), levels(b), p);
 }
 
 // An Effect's value once a look's `value`, or its `fade`, is combined over
@@ -453,9 +506,9 @@ function fadeBetween<T>(from: T | undefined, to: T | undefined, p: number): Fade
 // intensity fades between the two looks, an absent one counting as 0; colour
 // fades between them when both set it, or else holds the one that does. The
 // Direction is the new look's at once; `fixtureAim` times the move. A
-// movement Effect's turn and an intensity Effect's scale fade from the one
-// before, or the one below, so the size or depth fades in with the Scene. Both
-// looks' Effects keep running to `beat`.
+// movement Effect's turn, an intensity Effect's scale and a colour Effect's
+// colour fade from the one before, or the one below, so the size, depth or
+// colour fades in with the Scene. Both looks' Effects keep running to `beat`.
 // Strobe is the new look's at once, not crossfaded.
 function layerLook(
   show: Show,
@@ -482,25 +535,39 @@ function layerLook(
   if (target.direction) look.direction = target.direction;
   if (target.strobe) look.strobe = target.strobe;
   // A fade underway before is taken as over the Fixture held still and steady.
+  // A colour Effect's fade keeps fading under this one.
   const beforeTurn = before.turnFade ? combinedTurn(STILL, before) : before.turn;
   const turnFade = fadeBetween(beforeTurn, target.turn, p);
   if (turnFade) look.turnFade = turnFade;
   const beforeScale = before.scaleFade ? combinedScale(STEADY, before) : before.scale;
   const scaleFade = fadeBetween(beforeScale, target.scale, p);
   if (scaleFade) look.scaleFade = scaleFade;
+  const effectColourFade = fadeBetween<EffectColour | ColourFade>(
+    before.effectColourFade ?? before.effectColour,
+    target.effectColour,
+    p,
+  );
+  if (effectColourFade) {
+    look.effectColourFade = look.colour
+      ? { ...effectColourFade, plain: look.colour }
+      : effectColourFade;
+  }
   return look;
 }
 
-// What a Scene sets on a Fixture, its movement and intensity Effects at
-// `beat`. An intensity Effect's Spread orders every Fixture the Rule targets.
-// The colour Effect slot holds only None, so it changes nothing.
+// What a Scene sets on a Fixture, its Effects at `beat`. An intensity or
+// colour Effect's Spread orders every Fixture the Rule targets. A plain colour
+// stops the colour Effects before it, as a None does.
 function sceneLook(patch: VenuePatch, fixture: PatchedFixture, scene: Scene, beat: number): Look {
   const look: Look = {};
   const moving = isMovingFixture(patch, fixture);
   for (const rule of scene.rules) {
     if (!ruleTargets(patch, fixture, rule)) continue;
     if (rule.intensity !== undefined) look.intensity = rule.intensity;
-    if (rule.colour !== undefined) look.colour = colourLevels(rule.colour);
+    if (rule.colour !== undefined) {
+      look.colour = colourLevels(rule.colour);
+      look.effectColour = NO_EFFECT;
+    }
     if (rule.direction !== undefined) look.direction = rule.direction;
     if (rule.strobe !== undefined) look.strobe = rule.strobe;
     const effect = rule.movementEffect;
@@ -522,8 +589,20 @@ function sceneLook(patch: VenuePatch, fixture: PatchedFixture, scene: Scene, bea
       const delay = spreadDelay(spread, fixture, targeted);
       look.scale = intensityScale(intensityEffect, beat, delay, spreadPositions(spread, targeted));
     }
+    const colourEffect = rule.colourEffect;
+    if (colourEffect === NO_EFFECT) {
+      look.effectColour = NO_EFFECT;
+    } else if (colourEffect !== undefined) {
+      const targeted = patch.fixtures.filter((other) => ruleTargets(patch, other, rule));
+      const delay = spreadDelay(colourEffect.spread, fixture, targeted);
+      look.effectColour = mixLevels(colourEffectMix(colourEffect, beat, delay));
+    }
   }
   return look;
+}
+
+function mixLevels({ from, to, p }: ColourMix): ColourLevels {
+  return blend(colourLevels(from), colourLevels(to), p);
 }
 
 export function lerp(a: number, b: number, p: number): number {

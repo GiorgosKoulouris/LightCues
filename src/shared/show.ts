@@ -78,6 +78,22 @@ export interface IntensityEffect {
   spread: Spread;
 }
 
+// Colour Effects, which change a Fixture's colour to the Tempo. Step holds
+// each colour in turn, Fade fades from each to the next, and Rainbow cycles
+// the hue.
+export const COLOUR_SHAPES = ['Step', 'Fade', 'Rainbow'] as const;
+export type ColourShape = (typeof COLOUR_SHAPES)[number];
+
+// How many colours a Step or Fade runs through.
+export const MIN_EFFECT_COLOURS = 2;
+export const MAX_EFFECT_COLOURS = 4;
+
+// A Step or Fade runs through its colours over each cycle; a Rainbow takes
+// none.
+export type ColourEffect = { length: EffectLength; spread: Spread } & (
+  { shape: 'Step' | 'Fade'; colours: Colour[] } | { shape: 'Rainbow' }
+);
+
 // How fast a Fixture strobes: Off, a named rate, or once per 1, 1/2 or 1/4
 // beat of the Tempo. Off stops strobe from earlier Rules and lower Layers.
 export const STROBE_RATES = ['Off', 'Slow', 'Medium', 'Fast', 1, 0.5, 0.25] as const;
@@ -108,8 +124,9 @@ export interface Rule {
   movementEffect?: EffectSlot<MovementEffect>;
   // Scales the targeted Fixtures' intensity. None holds it steady.
   intensityEffect?: EffectSlot<IntensityEffect>;
-  // None only, until colour Effects are defined.
-  colourEffect?: typeof NO_EFFECT;
+  // Changes the targeted Fixtures' colour, in place of `colour`: a Rule sets
+  // one or the other. None stops the colour Effects below.
+  colourEffect?: EffectSlot<ColourEffect>;
   // Strobes the Fixtures targeted that have a strobe channel.
   strobe?: StrobeRate;
 }
@@ -470,8 +487,9 @@ function ruleProblems(rule: Rule): string[] {
   }
   problems.push(...slotProblems('movement', movementEffect, effectProblems));
   problems.push(...slotProblems('intensity', intensityEffect, intensityEffectProblems));
-  if (colourEffect !== undefined && colourEffect !== NO_EFFECT) {
-    problems.push('colour Effect must be None');
+  problems.push(...slotProblems('colour', colourEffect, colourEffectProblems));
+  if (colour !== undefined && colourEffect !== undefined) {
+    problems.push('a Rule sets a colour or a colour Effect, not both');
   }
   return problems;
 }
@@ -508,6 +526,28 @@ function intensityEffectProblems({ shape, depth, length, spread }: IntensityEffe
     problems.push(`"${shape}" is not an intensity Effect shape`);
   }
   if (!inRange(depth, 0, 1)) problems.push('Effect depth must be from 0 to 1');
+  return [...problems, ...timingProblems(length, spread)];
+}
+
+function colourEffectProblems(effect: ColourEffect): string[] {
+  const { shape, length, spread } = effect;
+  const problems: string[] = [];
+  if (!COLOUR_SHAPES.includes(shape)) {
+    problems.push(`"${shape}" is not a colour Effect shape`);
+  } else if (shape === 'Rainbow') {
+    if ('colours' in effect) problems.push('Rainbow takes no colours');
+  } else {
+    // Not a list counts as no colours.
+    const colours = Array.isArray(effect.colours) ? effect.colours : [];
+    if (colours.length < MIN_EFFECT_COLOURS || colours.length > MAX_EFFECT_COLOURS) {
+      problems.push(
+        `a colour Effect must have ${MIN_EFFECT_COLOURS} to ${MAX_EFFECT_COLOURS} colours`,
+      );
+    }
+    colours.forEach((colour, i) => {
+      for (const problem of colourProblems(colour)) problems.push(`colour ${i + 1}: ${problem}`);
+    });
+  }
   return [...problems, ...timingProblems(length, spread)];
 }
 

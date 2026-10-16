@@ -124,7 +124,19 @@ function unknownFields(file: ShowFile): string[] {
         if (typeof effect === 'object' && effect !== null) allow(effect, fields, `${at}${field}.`);
       };
       if (file.version >= 4) allowEffect(movementField, ['shape', 'size', 'length', 'spread']);
-      if (file.version >= 5) allowEffect('intensityEffect', ['shape', 'depth', 'length', 'spread']);
+      if (file.version >= 5) {
+        allowEffect('intensityEffect', ['shape', 'depth', 'length', 'spread']);
+        allowEffect('colourEffect', ['shape', 'colours', 'length', 'spread']);
+        // validateShow reports a list or colour of the wrong type.
+        const colours: unknown = (effects.colourEffect as { colours?: unknown } | null)?.colours;
+        if (Array.isArray(colours)) {
+          colours.forEach((colour: unknown, k) => {
+            if (typeof colour === 'object' && colour !== null) {
+              allowColour(colour as Colour, `${at}colourEffect.colours[${k}].`);
+            }
+          });
+        }
+      }
     });
   });
   file.triggers.forEach((trigger, i) => {

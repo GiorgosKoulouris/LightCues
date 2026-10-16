@@ -1,23 +1,31 @@
+import { Plus, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import {
   beatsLabel,
+  COLOUR_SHAPES,
   EFFECT_LENGTHS,
   EFFECT_SHAPES,
   EFFECT_SIZES,
   INTENSITY_SHAPES,
   isEffectSize,
+  MAX_EFFECT_COLOURS,
   MAX_EFFECT_SIZE,
+  MIN_EFFECT_COLOURS,
   NO_EFFECT,
   SPREADS,
+  type Colour,
+  type ColourEffect,
+  type ColourShape,
   type EffectLength,
   type EffectSlot,
   type IntensityEffect,
   type MovementEffect,
   type Spread,
 } from '../../../shared/show';
-import { Button } from '../ui/Button';
+import { Button, IconButton } from '../ui/Button';
 import { parseNumber, TextField } from '../ui/fields';
 import { Select } from '../ui/Select';
+import { ColourPicker } from './ColourPicker';
 import styles from './EffectPicker.module.css';
 
 // A new movement Effect's settings, besides its shape.
@@ -25,6 +33,13 @@ const NEW_EFFECT = { size: EFFECT_SIZES.Medium, length: 4, spread: 'In sync' } a
 
 // A new intensity Effect's settings, besides its shape.
 const NEW_INTENSITY_EFFECT = { depth: 1, length: 1, spread: 'In sync' } as const;
+
+// A new colour Effect's length and Spread, and a new Step or Fade's colours.
+const NEW_COLOUR_EFFECT = { length: 2, spread: 'In sync' } as const;
+const NEW_COLOURS: Colour[] = [{ swatch: 'Red' }, { swatch: 'Blue' }];
+
+// The colour added to a Step or Fade.
+const ADDED_COLOUR: Colour = { swatch: 'White' };
 
 // Picks a Rule's movement Effect, None, or leaves it to others. A new shape
 // keeps the other settings.
@@ -107,6 +122,90 @@ export function IntensityEffectPicker({
       )}
     </div>
   );
+}
+
+// Picks a Rule's colour Effect, None, or leaves it to others. A new shape
+// keeps the other settings; a Rainbow drops the colours.
+export function ColourEffectPicker({
+  slot,
+  onChange,
+}: {
+  slot?: EffectSlot<ColourEffect>;
+  onChange(slot: EffectSlot<ColourEffect> | undefined): void;
+}) {
+  const effect = slot === NO_EFFECT ? undefined : slot;
+  return (
+    <div className={styles.picker}>
+      <ShapeSelect
+        label="Colour Effect"
+        shapes={COLOUR_SHAPES}
+        slot={slot}
+        onChange={(choice) => onChange(colourSlotFor(choice, effect))}
+      />
+      {effect && (
+        <Settings<ColourEffect> label="Colour Effect" effect={effect} onChange={onChange}>
+          {effect.shape !== 'Rainbow' && (
+            <ColourList
+              colours={effect.colours}
+              onChange={(colours) => onChange({ ...effect, colours })}
+            />
+          )}
+        </Settings>
+      )}
+    </div>
+  );
+}
+
+// A Step or Fade's colours, 2 to 4.
+function ColourList({
+  colours,
+  onChange,
+}: {
+  colours: Colour[];
+  onChange(colours: Colour[]): void;
+}) {
+  return (
+    <div className={styles.colours}>
+      {colours.map((colour, i) => (
+        <div key={i} className={styles.colour}>
+          <ColourPicker
+            label={`Colour ${i + 1}`}
+            unset={null}
+            colour={colour}
+            onChange={(next) => {
+              if (next) onChange(colours.map((c, j) => (j === i ? next : c)));
+            }}
+          />
+          {colours.length > MIN_EFFECT_COLOURS && (
+            <IconButton
+              icon={<X />}
+              label={`Remove Colour ${i + 1}`}
+              onClick={() => onChange(colours.filter((_, j) => j !== i))}
+            />
+          )}
+        </div>
+      ))}
+      {colours.length < MAX_EFFECT_COLOURS && (
+        <Button icon={<Plus />} onClick={() => onChange([...colours, ADDED_COLOUR])}>
+          Add colour
+        </Button>
+      )}
+    </div>
+  );
+}
+
+// The colour Effect slot a picked option sets, keeping the length, Spread
+// and colours of `effect`.
+function colourSlotFor(
+  choice: ColourShape | typeof NO_EFFECT | '',
+  effect: ColourEffect | undefined,
+): EffectSlot<ColourEffect> | undefined {
+  if (choice === '') return undefined;
+  if (choice === NO_EFFECT) return NO_EFFECT;
+  const { length, spread } = effect ?? NEW_COLOUR_EFFECT;
+  if (choice === 'Rainbow') return { shape: choice, length, spread };
+  const colours = effect?.shape === 'Rainbow' ? NEW_COLOURS : (effect?.colours ?? NEW_COLOURS);
+  return { shape: choice, colours, length, spread };
 }
 
 // An Effect slot's shape, None, or Not set.

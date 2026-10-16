@@ -14,6 +14,7 @@ What changed in each LightCues release. The format follows [Keep a Changelog](ht
 - Movement Effect **None**: stops the movement Effect of lower Layers and earlier Rules, holding the aim still, faded in over the Scene's fade-in.
 - Effects can run in cycles of 1/4 and 1/2 beat.
 - Intensity Effects: Pulse, Ramp up, Ramp down, Square and Chase scale the intensity of a Rule's Fixtures, even intensity from other Layers. Chase lights one Spread position at a time. **None** stops the intensity Effect of lower Layers and earlier Rules.
+- Colour Effects: a Rule can step or fade through 2 to 4 colours, or run a Rainbow, in place of its colour. Spread offsets each Fixture, so Alternate with two colours gives odd and even. Fixtures with a colour wheel snap to its nearest colour. **None** stops the colour Effect of lower Layers and earlier Rules, back to the colour under it.
 
 ### Changed
 

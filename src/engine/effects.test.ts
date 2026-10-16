@@ -3,13 +3,22 @@ import { beamLanding, turnAim, type AimAngles, type Turn } from '../shared/aim';
 import type { Capability, Channel } from '../shared/fixture-profile';
 import {
   EFFECT_SHAPES,
+  type Colour,
+  type ColourEffect,
+  type ColourShape,
   type EffectShape,
   type IntensityEffect,
   type MovementEffect,
   type Spread,
 } from '../shared/show';
 import { DEFAULT_MOUNTING, type Mounting, type StagePosition } from '../shared/venue-patch';
-import { effectTurn, intensityScale, spreadDelay, spreadPositions } from './effects';
+import {
+  colourEffectMix,
+  effectTurn,
+  intensityScale,
+  spreadDelay,
+  spreadPositions,
+} from './effects';
 
 // The turn a Pan sweep of 10° over 4 beats, changed by `overrides`, gives
 // Fixture `id` at `beat`, `delay` of a cycle behind.
@@ -186,6 +195,78 @@ describe('intensityScale', () => {
 
   it('runs `delay` of a cycle behind', () => {
     expectScales(scales({ shape: 'Square' }, { delay: 1 / 4 }), [0, 1, 1, 0]);
+  });
+});
+
+describe('colourEffectMix', () => {
+  const red: Colour = { swatch: 'Red' };
+  const blue: Colour = { swatch: 'Blue' };
+  const green: Colour = { swatch: 'Green' };
+  const white: Colour = { swatch: 'White' };
+
+  // The mix an Effect over 4 beats gives at each of `QUARTERS` but the last,
+  // `delay` of a cycle behind.
+  function mixes(effect: { shape: ColourShape; colours?: Colour[] }, delay = 0) {
+    const full = { length: 4, spread: 'In sync', ...effect } as ColourEffect;
+    return QUARTERS.slice(0, 4).map((beat) => colourEffectMix(full, beat, delay));
+  }
+
+  const held = (colour: Colour) => ({ from: colour, to: colour, p: 0 });
+
+  it('steps through 2 colours, half a cycle each', () => {
+    expect(mixes({ shape: 'Step', colours: [red, blue] })).toEqual([
+      held(red),
+      held(red),
+      held(blue),
+      held(blue),
+    ]);
+  });
+
+  it('steps through 4 colours, a quarter cycle each', () => {
+    expect(mixes({ shape: 'Step', colours: [red, blue, green, white] })).toEqual([
+      held(red),
+      held(blue),
+      held(green),
+      held(white),
+    ]);
+  });
+
+  it('fades from each of 2 colours to the next, and back to the first', () => {
+    expect(mixes({ shape: 'Fade', colours: [red, blue] })).toEqual([
+      { from: red, to: blue, p: 0 },
+      { from: red, to: blue, p: 0.5 },
+      { from: blue, to: red, p: 0 },
+      { from: blue, to: red, p: 0.5 },
+    ]);
+  });
+
+  it('fades through 4 colours, a quarter cycle each', () => {
+    const effect: ColourEffect = {
+      shape: 'Fade',
+      colours: [red, blue, green, white],
+      length: 4,
+      spread: 'In sync',
+    };
+    expect(colourEffectMix(effect, 0.5, 0)).toEqual({ from: red, to: blue, p: 0.5 });
+    expect(colourEffectMix(effect, 3.25, 0)).toEqual({ from: white, to: red, p: 0.25 });
+  });
+
+  it('cycles the hue once a cycle, fully saturated, with Rainbow', () => {
+    expect(mixes({ shape: 'Rainbow' })).toEqual([
+      held({ hue: 0, saturation: 1 }),
+      held({ hue: 90, saturation: 1 }),
+      held({ hue: 180, saturation: 1 }),
+      held({ hue: 270, saturation: 1 }),
+    ]);
+  });
+
+  it('runs `delay` of a cycle behind, so Alternate with 2 colours gives odd and even', () => {
+    expect(mixes({ shape: 'Step', colours: [red, blue] }, 1 / 2)).toEqual([
+      held(blue),
+      held(blue),
+      held(red),
+      held(red),
+    ]);
   });
 });
 

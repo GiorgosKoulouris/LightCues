@@ -1,12 +1,15 @@
 import { Play, Plus, Trash2 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ROLES, type Role } from '../../../shared/fixture-profile';
 import {
   beatsLabel,
   DIRECTIONS,
   STROBE_HZ,
   STROBE_RATES,
+  type Colour,
+  type ColourEffect,
   type Direction,
+  type EffectSlot,
   type Rule,
   type Scene,
   type Show,
@@ -15,12 +18,13 @@ import {
 import type { VenuePatch } from '../../../shared/venue-patch';
 import { Button, IconButton } from '../ui/Button';
 import { Checkbox } from '../ui/Checkbox';
+import { cx } from '../ui/cx';
 import { NumberField, parseName, TextField } from '../ui/fields';
 import { Select } from '../ui/Select';
 import { useToast } from '../ui/Toast';
 import { moveItem, SortableList, useItemKeys } from '../ui/SortableList';
 import { ColourPicker } from './ColourPicker';
-import { EffectPicker, IntensityEffectPicker } from './EffectPicker';
+import { ColourEffectPicker, EffectPicker, IntensityEffectPicker } from './EffectPicker';
 import styles from './SceneEditor.module.css';
 import { parseTags } from './scenes';
 import { ZonePicker } from './ZonePicker';
@@ -166,7 +170,8 @@ function RuleCard({
   onPut(rule: Rule): void;
   onRemove(): void;
 }) {
-  const { target, intensity, colour, direction, movementEffect, intensityEffect, strobe } = rule;
+  const { target, intensity, colour, direction, strobe } = rule;
+  const { movementEffect, intensityEffect, colourEffect } = rule;
 
   // `undefined` leaves the attribute to earlier Rules.
   function set<K extends Exclude<keyof Rule, 'target'>>(key: K, value: Rule[K] | undefined) {
@@ -213,7 +218,12 @@ function RuleCard({
               </>
             )}
           </div>
-          <ColourPicker colour={colour} onChange={(c) => set('colour', c)} />
+          <RuleColour
+            colour={colour}
+            colourEffect={colourEffect}
+            onColour={(c) => set('colour', c)}
+            onColourEffect={(e) => set('colourEffect', e)}
+          />
           <Select<Direction | ''>
             label="Direction"
             value={direction ?? ''}
@@ -242,6 +252,62 @@ function RuleCard({
         </div>
       </div>
     </>
+  );
+}
+
+type ColourMode = 'colour' | 'effect';
+
+const COLOUR_MODES: { mode: ColourMode; label: string }[] = [
+  { mode: 'colour', label: 'Colour' },
+  { mode: 'effect', label: 'Colour Effect' },
+];
+
+// A Rule's colour or colour Effect: it sets one or the other. Switching
+// drops the one set. With neither set, the switch picks which is shown.
+function RuleColour({
+  colour,
+  colourEffect,
+  onColour,
+  onColourEffect,
+}: {
+  colour?: Colour;
+  colourEffect?: EffectSlot<ColourEffect>;
+  onColour(colour: Colour | undefined): void;
+  onColourEffect(slot: EffectSlot<ColourEffect> | undefined): void;
+}) {
+  // The mode last switched to, shown while neither is set.
+  const [chosen, setChosen] = useState<ColourMode>('colour');
+  const mode: ColourMode =
+    colourEffect !== undefined ? 'effect' : colour !== undefined ? 'colour' : chosen;
+
+  function pick(next: ColourMode) {
+    setChosen(next);
+    if (next === mode) return;
+    if (next === 'effect') onColour(undefined);
+    else onColourEffect(undefined);
+  }
+
+  return (
+    <div className={styles.colourSetting}>
+      <div role="group" aria-label="Colour or Colour Effect" className={styles.switch}>
+        {COLOUR_MODES.map((option) => (
+          <button
+            key={option.mode}
+            type="button"
+            aria-pressed={mode === option.mode}
+            className={cx(styles.switchOption, mode === option.mode && styles.switchPicked)}
+            onClick={() => pick(option.mode)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {mode === 'colour' ? (
+        <ColourPicker colour={colour} onChange={onColour} />
+      ) : (
+        <ColourEffectPicker slot={colourEffect} onChange={onColourEffect} />
+      )}
+    </div>
   );
 }
 

@@ -56,6 +56,25 @@ describe('validateShow', () => {
         intensityEffect: { shape: 'Pulse', depth: 1, length: 0.25, spread: 'Left→Right' },
       },
       { target: {}, intensityEffect: { shape: 'Chase', depth: 0, length: 16, spread: 'Mirrored' } },
+      {
+        target: {},
+        colourEffect: {
+          shape: 'Step',
+          colours: [{ swatch: 'Red' }, { hue: 240, saturation: 1 }],
+          length: 1,
+          spread: 'Alternate',
+        },
+      },
+      {
+        target: {},
+        colourEffect: {
+          shape: 'Fade',
+          colours: [{ swatch: 'Red' }, { swatch: 'Blue' }, { swatch: 'Green' }, { swatch: 'UV' }],
+          length: 0.5,
+          spread: 'In sync',
+        },
+      },
+      { target: {}, colourEffect: { shape: 'Rainbow', length: 16, spread: 'Left→Right' } },
       { target: {}, strobe: 'Off' },
       { target: {}, strobe: 'Fast' },
       { target: {}, strobe: 0.25 },
@@ -90,6 +109,43 @@ describe('validateShow', () => {
         target: {},
         intensityEffect: { shape: 'Square', depth: -0.1, length: 1, spread: 'In sync' },
       },
+      {
+        target: {},
+        colourEffect: { shape: 'Strobe', colours: [], length: 3, spread: 'Random' },
+      },
+      {
+        target: {},
+        colourEffect: { shape: 'Step', colours: [{ swatch: 'Red' }], length: 1, spread: 'In sync' },
+      },
+      {
+        target: {},
+        colourEffect: {
+          shape: 'Fade',
+          colours: [
+            { swatch: 'Red' },
+            { swatch: 'Teal' },
+            { hue: 360, saturation: 1 },
+            { swatch: 'Blue' },
+            { swatch: 'Green' },
+          ],
+          length: 1,
+          spread: 'In sync',
+        },
+      },
+      {
+        target: {},
+        colourEffect: { shape: 'Step', colours: 'Red', length: 1, spread: 'In sync' },
+      },
+      {
+        target: {},
+        colourEffect: { shape: 'Rainbow', colours: [], length: 1, spread: 'In sync' },
+      },
+      {
+        target: {},
+        colour: { swatch: 'Red' },
+        colourEffect: { shape: 'Rainbow', length: 1, spread: 'In sync' },
+      },
+      { target: {}, colour: { swatch: 'Red' }, colourEffect: 'None' },
     ] as unknown as Rule[];
 
     expect(validateShow(show(scene({ name: 'Verse', rules })))).toEqual([
@@ -112,12 +168,23 @@ describe('validateShow', () => {
       'Scene "Verse" Rule 8: strobe must be Off, Slow, Medium, Fast, or 1, 1/2 or 1/4 beat',
       'Scene "Verse" Rule 9: movement Effect must be None or an Effect',
       'Scene "Verse" Rule 9: intensity Effect must be None or an Effect',
-      'Scene "Verse" Rule 9: colour Effect must be None',
+      'Scene "Verse" Rule 9: colour Effect must be None or an Effect',
       'Scene "Verse" Rule 10: "Flicker" is not an intensity Effect shape',
       'Scene "Verse" Rule 10: Effect depth must be from 0 to 1',
       'Scene "Verse" Rule 10: Effect length must be 1/4, 1/2, 1, 2, 4, 8 or 16 beats',
       'Scene "Verse" Rule 10: "Random" is not a Spread',
       'Scene "Verse" Rule 11: Effect depth must be from 0 to 1',
+      'Scene "Verse" Rule 12: "Strobe" is not a colour Effect shape',
+      'Scene "Verse" Rule 12: Effect length must be 1/4, 1/2, 1, 2, 4, 8 or 16 beats',
+      'Scene "Verse" Rule 12: "Random" is not a Spread',
+      'Scene "Verse" Rule 13: a colour Effect must have 2 to 4 colours',
+      'Scene "Verse" Rule 14: a colour Effect must have 2 to 4 colours',
+      'Scene "Verse" Rule 14: colour 2: "Teal" is not a swatch',
+      'Scene "Verse" Rule 14: colour 3: hue must be from 0 to under 360',
+      'Scene "Verse" Rule 15: a colour Effect must have 2 to 4 colours',
+      'Scene "Verse" Rule 16: Rainbow takes no colours',
+      'Scene "Verse" Rule 17: a Rule sets a colour or a colour Effect, not both',
+      'Scene "Verse" Rule 18: a Rule sets a colour or a colour Effect, not both',
     ]);
   });
 

@@ -1,8 +1,15 @@
 // Effects: where a movement Effect turns a moving Fixture from its base aim,
-// in degrees, and how an intensity Effect scales its intensity, at a point in
-// the Tempo's beat count. Pure.
+// in degrees, how an intensity Effect scales its intensity, and which colours
+// a colour Effect mixes, at a point in the Tempo's beat count. Pure.
 import type { Turn } from '../shared/aim';
-import type { IntensityEffect, IntensityShape, MovementEffect, Spread } from '../shared/show';
+import type {
+  Colour,
+  ColourEffect,
+  IntensityEffect,
+  IntensityShape,
+  MovementEffect,
+  Spread,
+} from '../shared/show';
 import type { StagePosition } from '../shared/venue-patch';
 
 // The turn an Effect gives a Fixture at `beat`. `delay` is how far behind the
@@ -45,9 +52,7 @@ export function intensityScale(
   delay: number,
   positions: number,
 ): number {
-  // How far into its cycle, 0–1.
-  const phase = (((beat / length - delay) % 1) + 1) % 1;
-  return 1 - depth * (1 - fullLevel(shape, phase, positions));
+  return 1 - depth * (1 - fullLevel(shape, cyclePhase(length, beat, delay), positions));
 }
 
 // An intensity Effect's level at full depth, `phase` into its cycle.
@@ -65,6 +70,36 @@ function fullLevel(shape: IntensityShape, phase: number, positions: number): num
     case 'Chase':
       return lit(positions > 1 ? 1 / positions : 1 / 2);
   }
+}
+
+// A colour `p` (0–1) of the way from `from` to `to`.
+export interface ColourMix {
+  from: Colour;
+  to: Colour;
+  p: number;
+}
+
+// The colours a colour Effect mixes at `beat`. `delay` is as for
+// `effectTurn`. A Step holds each colour for an equal share of the cycle; a
+// Fade spends that share fading to the next, the last back to the first.
+export function colourEffectMix(effect: ColourEffect, beat: number, delay: number): ColourMix {
+  const phase = cyclePhase(effect.length, beat, delay);
+  if (effect.shape === 'Rainbow') {
+    const hue = { hue: phase * 360, saturation: 1 };
+    return { from: hue, to: hue, p: 0 };
+  }
+  const { colours } = effect;
+  const at = phase * colours.length;
+  const index = Math.floor(at);
+  const from = colours[index]!;
+  if (effect.shape === 'Step') return { from, to: from, p: 0 };
+  return { from, to: colours[(index + 1) % colours.length]!, p: at - index };
+}
+
+// How far into its cycle an Effect of `length` beats is at `beat`, `delay`
+// of a cycle behind, 0 to under 1.
+function cyclePhase(length: number, beat: number, delay: number): number {
+  return (((beat / length - delay) % 1) + 1) % 1;
 }
 
 // How many distinct delays a Spread gives the targeted Fixtures.

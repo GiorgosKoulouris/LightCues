@@ -51,6 +51,19 @@ const show: Show = {
           target: { roles: ['Wash'] },
           intensityEffect: { shape: 'Chase', depth: 0.5, length: 1, spread: 'Mirrored' },
         },
+        {
+          target: { roles: ['Wash'] },
+          colourEffect: {
+            shape: 'Step',
+            colours: [{ swatch: 'Red' }, { hue: 200, saturation: 0.5 }],
+            length: 2,
+            spread: 'Alternate',
+          },
+        },
+        {
+          target: { roles: ['Pixel/Bar'] },
+          colourEffect: { shape: 'Rainbow', length: 16, spread: 'Left→Right' },
+        },
       ],
     },
   ],
@@ -244,6 +257,8 @@ describe('.lcshow file', () => {
     saved.scenes[0].rules[1].target.zones[0].dmx = 255;
     saved.scenes[1].rules[2].movementEffect.phase = 0.5;
     saved.scenes[1].rules[8].intensityEffect.phase = 0.5;
+    saved.scenes[1].rules[9].colourEffect.phase = 0.5;
+    saved.scenes[1].rules[9].colourEffect.colours[1].value = 1;
     saved.triggers[2].velocity = 100;
     saved.housePresets[0].look = 'dim';
     saved.housePresets[1].note.velocity = 100;
@@ -259,6 +274,8 @@ describe('.lcshow file', () => {
         'unknown field "scenes[0].rules[1].target.zones[0].dmx"',
         'unknown field "scenes[1].rules[2].movementEffect.phase"',
         'unknown field "scenes[1].rules[8].intensityEffect.phase"',
+        'unknown field "scenes[1].rules[9].colourEffect.phase"',
+        'unknown field "scenes[1].rules[9].colourEffect.colours[1].value"',
         'unknown field "triggers[2].velocity"',
         'unknown field "housePresets[0].look"',
         'unknown field "housePresets[1].note.velocity"',

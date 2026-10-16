@@ -7,6 +7,8 @@ import type {
   FixtureProfile,
 } from '../shared/fixture-profile';
 import type {
+  Colour,
+  ColourEffect,
   IntensityEffect,
   MovementEffect,
   Rule,
@@ -1150,6 +1152,197 @@ describe('intensity Effects', () => {
     expect(channels(resolveFrames(s, r, play(s, ['pulse', 0]), 0, 1, 2), 4)).toEqual([
       128, 0, 0, 0,
     ]);
+  });
+});
+
+describe('colour Effects', () => {
+  const red: Colour = { swatch: 'Red' };
+  const blue: Colour = { swatch: 'Blue' };
+  const green: Colour = { swatch: 'Green' };
+  const white: Colour = { swatch: 'White' };
+  // Red and blue, 2 beats each.
+  const step = (overrides: Partial<ColourEffect> = {}): ColourEffect =>
+    ({
+      shape: 'Step',
+      colours: [red, blue],
+      length: 4,
+      spread: 'In sync',
+      ...overrides,
+    }) as ColourEffect;
+  const rig = patch([fixture({ profileId: rgb.id })], [rgb]);
+
+  // The Fixture's colour as [red, green, blue] at `beat` and `time`.
+  function colourAt(s: Show, active: ActiveScenes, beat: number, time = 0, on = rig) {
+    const { red: r, green: g, blue: b } = resolveLights(s, on, active, time, 1, beat).f1!;
+    return [r, g, b].map((level) => Math.round(level * 100) / 100);
+  }
+
+  it('steps through 2 colours over its cycle', () => {
+    const s = show(scene('cycle', [{ target: {}, intensity: 1, colourEffect: step() }]));
+    const active = play(s, ['cycle', 0]);
+
+    expect([0, 1, 2, 3, 4].map((beat) => colourAt(s, active, beat))).toEqual([
+      [1, 0, 0],
+      [1, 0, 0],
+      [0, 0, 1],
+      [0, 0, 1],
+      [1, 0, 0],
+    ]);
+    // Sent on the emitters.
+    expect(channels(resolveFrames(s, rig, active, 0, 1, 2), 4)).toEqual([255, 0, 0, 255]);
+  });
+
+  it('steps and fades through 4 colours', () => {
+    const colours = [red, blue, green, white];
+    const s = show(
+      scene('step', [{ target: {}, intensity: 1, colourEffect: step({ colours }) }]),
+      scene('fade', [{ target: {}, intensity: 1, colourEffect: step({ shape: 'Fade', colours }) }]),
+    );
+
+    const stepped = play(s, ['step', 0]);
+    expect([0, 1, 2, 3].map((beat) => colourAt(s, stepped, beat))).toEqual([
+      [1, 0, 0],
+      [0, 0, 1],
+      [0, 1, 0],
+      [1, 1, 1],
+    ]);
+    const faded = play(s, ['fade', 0]);
+    expect([0.5, 1.5, 3.5].map((beat) => colourAt(s, faded, beat))).toEqual([
+      [0.5, 0, 0.5],
+      [0, 0.5, 0.5],
+      [1, 0.5, 0.5],
+    ]);
+  });
+
+  it('cycles the hue with Rainbow', () => {
+    const s = show(
+      scene('rainbow', [
+        {
+          target: {},
+          intensity: 1,
+          colourEffect: { shape: 'Rainbow', length: 4, spread: 'In sync' },
+        },
+      ]),
+    );
+    const active = play(s, ['rainbow', 0]);
+
+    expect([0, 1, 2, 3].map((beat) => colourAt(s, active, beat))).toEqual([
+      [1, 0, 0],
+      [0.5, 1, 0],
+      [0, 1, 1],
+      [0.5, 0, 1],
+    ]);
+  });
+
+  it('gives odd and even Fixtures across the stage the 2 colours, Alternate', () => {
+    // Across the stage at x -4, -2, 2 and 4, patched out of order.
+    const at = (x: number, address: number) =>
+      fixture({ id: `x${x}`, x, address, profileId: rgb.id });
+    const line = patch([at(4, 1), at(-2, 5), at(-4, 9), at(2, 13)], [rgb]);
+    const s = show(
+      scene('cycle', [{ target: {}, intensity: 1, colourEffect: step({ spread: 'Alternate' }) }]),
+    );
+    const lights = resolveLights(s, line, play(s, ['cycle', 0]), 0, 1, 0);
+
+    expect(['x-4', 'x-2', 'x2', 'x4'].map((id) => lights[id]!.red)).toEqual([1, 0, 1, 0]);
+  });
+
+  it('takes over from a colour on another Layer, each combined by last change', () => {
+    const s = show(
+      scene('cycle', [{ target: {}, intensity: 1, colourEffect: step() }]),
+      scene('green', [{ target: {}, colour: green }], { layer: 'l2' }),
+    );
+
+    expect(colourAt(s, play(s, ['green', 0], ['cycle', 1]), 2)).toEqual([0, 0, 1]);
+    expect(colourAt(s, play(s, ['cycle', 0], ['green', 1]), 2)).toEqual([0, 1, 0]);
+  });
+
+  it("crossfades from the colour before over its Scene's fade-in", () => {
+    const s = show(
+      scene('green', [{ target: {}, intensity: 1, colour: green }]),
+      scene('cycle', [{ target: {}, colourEffect: step() }], { layer: 'l2', fadeIn: 2 }),
+      scene('slow cycle', [{ target: {}, intensity: 1, colourEffect: step() }], { fadeIn: 2 }),
+    );
+
+    // From a lower Layer's colour.
+    const over = play(s, ['green', 0], ['cycle', 10]);
+    expect([10, 11, 12].map((time) => colourAt(s, over, 2, time))).toEqual([
+      [0, 1, 0],
+      [0, 0.5, 0.5],
+      [0, 0, 1],
+    ]);
+    // From the Scene it replaces on its Layer.
+    const replacing = play(s, ['green', 0], ['slow cycle', 10]);
+    expect(colourAt(s, replacing, 2, 11)).toEqual([0, 0.5, 0.5]);
+  });
+
+  it('crossfades from where an interrupted fade had got to, over the colour below', () => {
+    const s = show(
+      scene('green', [{ target: {}, intensity: 1, colour: green }]),
+      scene('cycle', [{ target: {}, colourEffect: step() }], { layer: 'l2', fadeIn: 2 }),
+      scene('red', [{ target: {}, colour: red }], { layer: 'l2', fadeIn: 2 }),
+    );
+    const active = play(s, ['green', 0], ['cycle', 10], ['red', 11]);
+
+    // Halfway from green to the Step's blue, then on to red.
+    expect([11, 12, 13].map((time) => colourAt(s, active, 2, time))).toEqual([
+      [0, 0.5, 0.5],
+      [0.5, 0.25, 0.25],
+      [1, 0, 0],
+    ]);
+  });
+
+  it('snaps a colour-wheel Fixture to the nearest slot as it steps', () => {
+    const s = show(scene('cycle', [{ target: {}, intensity: 1, colourEffect: step() }]));
+    const r = patch([fixture({ profileId: wheel.id })], [wheel]);
+    const active = play(s, ['cycle', 0]);
+
+    expect(channels(resolveFrames(s, r, active, 0, 1, 0), 2)).toEqual([255, 14]);
+    expect(channels(resolveFrames(s, r, active, 0, 1, 2), 2)).toEqual([255, 24]);
+  });
+
+  describe('None', () => {
+    const s = show(
+      scene('red cycle', [
+        { target: {}, intensity: 1, colour: red },
+        { target: {}, colourEffect: step({ colours: [blue, green] }) },
+      ]),
+      scene('cycle', [
+        { target: {}, intensity: 1, colourEffect: step({ colours: [blue, green] }) },
+      ]),
+      scene('stop', [{ target: {}, colourEffect: 'None' }], { layer: 'l2' }),
+      scene('slow stop', [{ target: {}, colourEffect: 'None' }], { layer: 'l2', fadeIn: 2 }),
+    );
+
+    it("stops a lower Layer's colour Effect, leaving the colour set under it", () => {
+      expect(colourAt(s, play(s, ['red cycle', 0], ['stop', 1]), 0)).toEqual([1, 0, 0]);
+      // With no colour under it, the Show's default colour: White.
+      expect(colourAt(s, play(s, ['cycle', 0], ['stop', 1]), 0)).toEqual([1, 1, 1]);
+      // Changed last, the Effect wins.
+      expect(colourAt(s, play(s, ['stop', 0], ['red cycle', 1]), 0)).toEqual([0, 0, 1]);
+    });
+
+    it("stops an earlier Rule's colour Effect in its Scene", () => {
+      const own = show(
+        scene('look', [
+          { target: {}, intensity: 1, colour: red },
+          { target: {}, colourEffect: step({ colours: [blue, green] }) },
+          { target: {}, colourEffect: 'None' },
+        ]),
+      );
+
+      expect(colourAt(own, play(own, ['look', 0]), 0)).toEqual([1, 0, 0]);
+    });
+
+    it("fades to the colour under it over its Scene's fade-in", () => {
+      const active = play(s, ['red cycle', 0], ['slow stop', 10]);
+
+      expect([10, 11, 12].map((time) => colourAt(s, active, 0, time))).toEqual([
+        [0, 0, 1],
+        [0.5, 0, 0.5],
+        [1, 0, 0],
+      ]);
+    });
   });
 });
 

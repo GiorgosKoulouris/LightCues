@@ -448,6 +448,75 @@ describe('Scene editor', () => {
     expect(rule()).toEqual({ target: {}, intensity: 0.5 });
   });
 
+  it("sets a two-colour Step as a Rule's colour Effect, in place of its colour", async () => {
+    await selectWarm();
+    const rule = () => {
+      const put = edits().at(-1);
+      if (put?.type !== 'putScene') throw new Error('No Scene put');
+      return put.scene.rules[0];
+    };
+    const switcher = within(screen.getAllByRole('group', { name: 'Colour or Colour Effect' })[0]!);
+    expect(switcher.getByRole('button', { name: 'Colour' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await userEvent.selectOptions(screen.getAllByLabelText('Colour')[0]!, 'Swatch');
+    expect(rule()).toMatchObject({ colour: { swatch: 'White' } });
+
+    // Switching drops the colour.
+    await userEvent.click(switcher.getByRole('button', { name: 'Colour Effect' }));
+    expect(rule()).toEqual({ target: {}, intensity: 0.5 });
+    const effect = screen.getAllByLabelText('Colour Effect')[0]!;
+    expect(effect).toHaveValue('');
+
+    await userEvent.selectOptions(effect, 'Step');
+    expect(rule()).toEqual({
+      target: {},
+      intensity: 0.5,
+      colourEffect: {
+        shape: 'Step',
+        colours: [{ swatch: 'Red' }, { swatch: 'Blue' }],
+        length: 2,
+        spread: 'In sync',
+      },
+    });
+
+    const settings = within(screen.getByRole('group', { name: 'Colour Effect settings' }));
+    await userEvent.selectOptions(settings.getAllByLabelText('Swatch')[1]!, 'Green');
+    await userEvent.selectOptions(settings.getByLabelText('Length (beats)'), '1');
+    await userEvent.selectOptions(settings.getByLabelText('Spread'), 'Alternate');
+    expect(rule()?.colourEffect).toEqual({
+      shape: 'Step',
+      colours: [{ swatch: 'Red' }, { swatch: 'Green' }],
+      length: 1,
+      spread: 'Alternate',
+    });
+
+    // 2 to 4 colours.
+    expect(settings.queryByRole('button', { name: 'Remove Colour 1' })).toBeNull();
+    await userEvent.click(settings.getByRole('button', { name: 'Add colour' }));
+    await userEvent.click(settings.getByRole('button', { name: 'Add colour' }));
+    expect(rule()?.colourEffect).toMatchObject({ colours: { length: 4 } });
+    expect(settings.queryByRole('button', { name: 'Add colour' })).toBeNull();
+    await userEvent.click(settings.getByRole('button', { name: 'Remove Colour 1' }));
+    expect(rule()?.colourEffect).toMatchObject({
+      colours: [{ swatch: 'Green' }, { swatch: 'White' }, { swatch: 'White' }],
+    });
+
+    // Fade keeps the colours; Rainbow takes none.
+    await userEvent.selectOptions(effect, 'Fade');
+    expect(rule()?.colourEffect).toMatchObject({ shape: 'Fade', colours: { length: 3 } });
+    await userEvent.selectOptions(effect, 'Rainbow');
+    expect(rule()?.colourEffect).toEqual({ shape: 'Rainbow', length: 1, spread: 'Alternate' });
+
+    await userEvent.selectOptions(effect, 'None');
+    expect(rule()).toEqual({ target: {}, intensity: 0.5, colourEffect: 'None' });
+
+    // Switching back drops the colour Effect.
+    await userEvent.click(switcher.getByRole('button', { name: 'Colour' }));
+    expect(rule()).toEqual({ target: {}, intensity: 0.5 });
+  });
+
   it('shows an engine error as a toast', async () => {
     await selectWarm();
     rejectWith = ['Scene "Warm" has no Rules'];
