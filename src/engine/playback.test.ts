@@ -21,6 +21,7 @@ const mover: FixtureProfile = {
         channel('Dimmer', { type: 'intensity' }),
         channel('Pan', { type: 'pan', degrees: [-270, 270] }),
         channel('Tilt', { type: 'tilt', degrees: [-135, 135] }),
+        channel('Strobe', { type: 'strobe', hz: [1, 25] }),
       ],
     },
   ],
@@ -65,6 +66,7 @@ const show: Show = {
       effect: { shape: 'Pan sweep', size: 10, length: 4, spread: 'In sync' },
     }),
     scene('centre', { direction: 'Centre' }, 0, 'l2'),
+    scene('strobe', { intensity: 1, strobe: 0.25 }),
   ],
   triggers: [],
 };
@@ -79,6 +81,7 @@ describe('playback', () => {
       emit: () => {},
       now,
       beat: tempo.beat,
+      bpm: tempo.bpm,
       show: () => show,
       patch: () => rig,
     });
@@ -90,6 +93,8 @@ describe('playback', () => {
       pan: () => p.lights().mover!.aim!.pan!,
       // Pan and tilt of the mover.
       aim: () => [...p.frames().get(1)!.subarray(1, 3)],
+      // The mover's strobe channel, and its rate in the preview.
+      strobe: () => [p.frames().get(1)![3], p.lights().mover!.strobe],
     };
   }
 
@@ -210,12 +215,28 @@ describe('playback', () => {
       expect(pan()).toBeCloseTo(80);
     });
 
+    it('does not hold strobe, whose beat rate follows the Tempo', () => {
+      const { p, tempo, at, strobe } = playback();
+      p.handle({ type: 'goScene', sceneId: 'strobe' });
+      p.handle({ type: 'setFreeze', on: true });
+
+      // A 1/4 beat at 120 BPM: 8 Hz, 7/24 of the way across 1–25 Hz.
+      at(1);
+      expect(strobe()).toEqual([74, 8]);
+      // Taps 0.4 s apart: 150 BPM, so 10 Hz.
+      tempo.tap();
+      at(1.4);
+      tempo.tap();
+      expect(strobe()).toEqual([96, 10]);
+    });
+
     it('is reported with the playback, off at first', () => {
       const events: unknown[] = [];
       const p = createPlayback({
         emit: (e) => events.push(e),
         now: () => 0,
         beat: () => 0,
+        bpm: () => 120,
         show: () => show,
         patch: () => rig,
       });

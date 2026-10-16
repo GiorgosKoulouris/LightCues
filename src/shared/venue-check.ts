@@ -9,8 +9,11 @@ import {
   showHousePresets,
   type Direction,
   type HousePreset,
+  type Scene,
   type Show,
+  type StrobeRate,
 } from './show';
+import { strobeDrives } from './strobe';
 import {
   fixtureMode,
   fixtureMounting,
@@ -59,6 +62,56 @@ export function fixtureApproximatedAims(
     const approximations = aim?.approximations ?? [];
     return approximations.length > 0 ? [{ fixtureId: fixture.id, direction, approximations }] : [];
   });
+}
+
+// Why a Fixture's strobe is approximated: it has no strobe channel, so it
+// stays steady, or its strobe rate has no Hz span, so 1–20 Hz is assumed.
+export type StrobeApproximation = 'noStrobeChannel' | 'assumedHzSpan';
+
+// The Scenes that strobe a Fixture whose strobe is approximated, by id in
+// Show order.
+export interface ApproximatedStrobe {
+  fixtureId: string;
+  scenes: string[];
+  approximation: StrobeApproximation;
+}
+
+// Every Fixture whose strobe the Show only approximates, in patch order.
+export function approximatedStrobes(show: Show, patch: VenuePatch): ApproximatedStrobe[] {
+  return patch.fixtures.flatMap((fixture) => fixtureApproximatedStrobe(show, patch, fixture) ?? []);
+}
+
+// The Scenes that strobe one Fixture, if its strobe is approximated. A Scene
+// strobes it when the last of its Rules that targets it with a strobe rate
+// sets one other than Off.
+export function fixtureApproximatedStrobe(
+  show: Show,
+  patch: VenuePatch,
+  fixture: PatchedFixture,
+): ApproximatedStrobe | undefined {
+  const scenes = show.scenes.filter((scene) => {
+    const rate = sceneStrobe(patch, fixture, scene);
+    return rate !== undefined && rate !== 'Off';
+  });
+  if (scenes.length === 0) return undefined;
+  const drives = [...strobeDrives(fixtureMode(patch, fixture).channels).values()];
+  const approximated = (approximation: StrobeApproximation) => ({
+    fixtureId: fixture.id,
+    scenes: scenes.map((s) => s.id),
+    approximation,
+  });
+  if (drives.length === 0) return approximated('noStrobeChannel');
+  if (drives.some((d) => d.kind === 'rate' && d.assumed)) return approximated('assumedHzSpan');
+  return undefined;
+}
+
+function sceneStrobe(
+  patch: VenuePatch,
+  fixture: PatchedFixture,
+  scene: Scene,
+): StrobeRate | undefined {
+  return scene.rules.findLast((r) => r.strobe !== undefined && ruleTargets(patch, fixture, r))
+    ?.strobe;
 }
 
 // The Show's House Presets this Venue Patch has no house look for, in Show

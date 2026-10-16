@@ -7,7 +7,12 @@ import {
   type PatchedFixture,
   type VenuePatch,
 } from './venue-patch';
-import { approximatedAims, lookPresetsNotInShow, unsetHousePresets } from './venue-check';
+import {
+  approximatedAims,
+  approximatedStrobes,
+  lookPresetsNotInShow,
+  unsetHousePresets,
+} from './venue-check';
 
 function control(name: string, capability: Capability): Channel {
   return { kind: 'control', name, defaultValue: 0, ranges: [{ from: 0, to: 255, capability }] };
@@ -43,6 +48,15 @@ const noTiltDegrees = profile('test/no-tilt-degrees', [
 // A bar that only tilts.
 const bar = profile('test/bar', [dimmer, tilt]);
 const par = profile('test/par', [dimmer]);
+const strobe = profile('test/strobe', [dimmer, control('Strobe', { type: 'strobe', hz: [1, 25] })]);
+// A strobe range that gives no Hz span.
+const unspanned = profile('test/unspanned', [dimmer, control('Strobe', { type: 'strobe' })]);
+// A strobe range turned on, and a speed channel without a Hz span.
+const unspannedSpeed = profile('test/unspanned-speed', [
+  dimmer,
+  control('Shutter', { type: 'strobe' }),
+  control('Speed', { type: 'strobeSpeed' }),
+]);
 
 function fixture(id: string, profileId: string, overrides: Partial<PatchedFixture> = {}) {
   return {
@@ -65,7 +79,7 @@ function patch(...fixtures: PatchedFixture[]): VenuePatch {
     stage: { width: 10, depth: 8 },
     universes: [{ number: 1 }],
     fixtures: fixtures.map((f, i) => ({ ...f, address: 1 + i * 3 })),
-    profiles: [mover, bare, noTiltDegrees, bar, par],
+    profiles: [mover, bare, noTiltDegrees, bar, par, strobe, unspanned, unspannedSpeed],
   };
 }
 
@@ -152,6 +166,60 @@ describe('approximatedAims', () => {
       ['a', 'Audience'],
       ['a', 'Up'],
       ['b', 'Up'],
+    ]);
+  });
+});
+
+describe('approximatedStrobes', () => {
+  function shows(...scenes: [string, Rule[]][]): Show {
+    return {
+      ...show([]),
+      scenes: scenes.map(([id, rules]) => ({
+        id,
+        name: id,
+        tags: [],
+        layer: 'l1',
+        fadeIn: 0,
+        rules,
+      })),
+    };
+  }
+
+  it('lists the Scenes that strobe a Fixture with no strobe channel or no Hz span', () => {
+    const rig = patch(
+      fixture('par', par.id),
+      fixture('strobe', strobe.id),
+      fixture('unspanned', unspanned.id),
+      fixture('speed', unspannedSpeed.id),
+    );
+    const s = shows(
+      ['fast', [{ target: {}, strobe: 'Fast' }]],
+      ['steady', [{ target: {}, intensity: 1 }]],
+      ['beat', [{ target: {}, strobe: 0.5 }]],
+    );
+
+    expect(approximatedStrobes(s, rig)).toEqual([
+      { fixtureId: 'par', scenes: ['fast', 'beat'], approximation: 'noStrobeChannel' },
+      { fixtureId: 'unspanned', scenes: ['fast', 'beat'], approximation: 'assumedHzSpan' },
+      { fixtureId: 'speed', scenes: ['fast', 'beat'], approximation: 'assumedHzSpan' },
+    ]);
+  });
+
+  it('counts only Scenes whose Rules leave the Fixture strobing', () => {
+    const rig = patch(fixture('par', par.id), fixture('wash', par.id, { role: 'Wash' }));
+    const s = shows(
+      ['off', [{ target: {}, strobe: 'Off' }]],
+      [
+        'stopped',
+        [
+          { target: {}, strobe: 'Slow' },
+          { target: { roles: ['Wash'] }, strobe: 'Off' },
+        ],
+      ],
+    );
+
+    expect(approximatedStrobes(s, rig)).toEqual([
+      { fixtureId: 'par', scenes: ['stopped'], approximation: 'noStrobeChannel' },
     ]);
   });
 });

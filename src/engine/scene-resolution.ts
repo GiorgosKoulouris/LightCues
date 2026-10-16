@@ -12,9 +12,18 @@ import {
   type Direction,
   type Scene,
   type Show,
+  type StrobeRate,
   type Swatch,
 } from '../shared/show';
+import {
+  ASSUMED_STROBE_HZ,
+  hzSpan,
+  strobeDrives,
+  strobeHz,
+  type StrobeDrive,
+} from '../shared/strobe';
 import { effectTurn, spreadDelay } from './movement-effects';
+import { DEFAULT_BPM } from './tempo';
 import {
   DMX_CHANNELS,
   fixtureMode,
@@ -81,7 +90,17 @@ function shownAims(
 ): Record<string, ShownAim> {
   const shown: Record<string, ShownAim> = {};
   for (const fixture of patch.fixtures) {
-    const { output } = fixtureOutput(show, patch, active, fixture, time, grandMaster, beat);
+    // Strobe does not change an aim, so any Tempo will do.
+    const { output } = fixtureOutput(
+      show,
+      patch,
+      active,
+      fixture,
+      time,
+      grandMaster,
+      beat,
+      DEFAULT_BPM,
+    );
     const { aim, direction, intensity } = output;
     if (aim && direction) shown[fixture.id] = { ...aim, direction, dark: intensity === 0 };
   }
@@ -114,7 +133,8 @@ export function clamp(value: number): number {
 
 // One frame per Universe in the patch, channel 1 first, at `time` (seconds).
 // The Grand Master (0–1) scales intensity after the Layers are combined.
-// Movement Effects run at `beat`, the Tempo's beat count.
+// Movement Effects run at `beat`, the Tempo's beat count; beat strobe rates
+// at `bpm`, the Tempo.
 export function resolveFrames(
   show: Show,
   patch: VenuePatch,
@@ -122,10 +142,11 @@ export function resolveFrames(
   time: number,
   grandMaster = 1,
   beat = 0,
+  bpm = DEFAULT_BPM,
 ): Map<number, Uint8Array> {
   const frames = new Map(patch.universes.map((u) => [u.number, new Uint8Array(DMX_CHANNELS)]));
   for (const fixture of patch.fixtures) {
-    const resolved = fixtureOutput(show, patch, active, fixture, time, grandMaster, beat);
+    const resolved = fixtureOutput(show, patch, active, fixture, time, grandMaster, beat, bpm);
     const { channels, output } = resolved;
     frames.get(fixture.universe)!.set(encodeChannels(channels, output), fixture.address - 1);
   }
@@ -141,10 +162,11 @@ export function resolveLights(
   time: number,
   grandMaster = 1,
   beat = 0,
+  bpm = DEFAULT_BPM,
 ): Record<string, FixtureLight> {
   return Object.fromEntries(
     patch.fixtures.map((fixture) => {
-      const resolved = fixtureOutput(show, patch, active, fixture, time, grandMaster, beat);
+      const resolved = fixtureOutput(show, patch, active, fixture, time, grandMaster, beat, bpm);
       const { channels, output } = resolved;
       return [fixture.id, fixtureLight(channels, output)];
     }),
@@ -154,11 +176,20 @@ export function resolveLights(
 // How a Fixture set to `output` looks in the preview.
 function fixtureLight(channels: Channel[], output: FixtureOutput): FixtureLight {
   const { red, green, blue } = shownColour(channels, output);
-  return { intensity: output.intensity, red, green, blue, ...(output.aim && { aim: output.aim }) };
+  return {
+    intensity: output.intensity,
+    red,
+    green,
+    blue,
+    ...(output.aim && { aim: output.aim }),
+    ...(output.strobe && { strobe: output.strobe.hz }),
+  };
 }
 
 // What a Fixture is set to once the Layers are combined, and the channels of
-// its mode. A movement Effect turns a moving Fixture from its aim.
+// its mode. A movement Effect turns a moving Fixture from its aim. A lit
+// Fixture with a strobe channel strobes at the rate last set, at `bpm` for a
+// beat rate.
 function fixtureOutput(
   show: Show,
   patch: VenuePatch,
@@ -167,11 +198,13 @@ function fixtureOutput(
   time: number,
   grandMaster: number,
   beat: number,
+  bpm: number,
 ): { channels: Channel[]; output: FixtureOutput } {
   let intensity = 0;
   let colour: ColourLevels | undefined;
   let direction: Direction | undefined;
   let turn: Turn | undefined;
+  let strobe: StrobeRate | undefined;
   const entries = byChange(show, active);
   for (const entry of entries) {
     const look = layerLook(show, patch, fixture, entry, time, beat);
@@ -179,10 +212,16 @@ function fixtureOutput(
     colour = look.colour ?? colour;
     direction = look.direction ?? direction;
     turn = combinedTurn(turn, look);
+    strobe = look.strobe ?? strobe;
   }
   colour ??= show.defaultColour ? colourLevels(show.defaultColour) : WHITE;
   const { channels } = fixtureMode(patch, fixture);
   const output = levelOutput(channels, intensity * grandMaster, colour);
+  const hz = strobe === undefined ? 0 : strobeHz(strobe, bpm);
+  if (hz > 0 && output.intensity > 0) {
+    const drives = strobeDrives(channels);
+    if (drives.size > 0) output.strobe = { hz, drives };
+  }
   if (isMovingFixture(patch, fixture)) {
     output.direction = direction ?? show.defaultDirection ?? DEFAULT_DIRECTION;
     output.aim = fixtureAim(show, patch, fixture, channels, output.direction, entries, time, turn);
@@ -351,6 +390,7 @@ interface Look {
   direction?: Direction;
   turn?: Turn;
   turnFade?: TurnFade;
+  strobe?: StrobeRate;
 }
 
 // A turn fading `p` (0–1) of the way between two looks' turns. An absent one
@@ -377,6 +417,7 @@ function combinedTurn(below: Turn | undefined, { turn, turnFade }: Look): Turn |
 // Direction is the new look's at once; `fixtureAim` times the move. A
 // movement Effect's turn fades from the one before, or the one below, so its
 // size fades in with the Scene. Both looks' Effects keep running to `beat`.
+// Strobe is the new look's at once, not crossfaded.
 function layerLook(
   show: Show,
   patch: VenuePatch,
@@ -400,6 +441,7 @@ function layerLook(
       : (target.colour ?? before.colour);
   if (colour) look.colour = colour;
   if (target.direction) look.direction = target.direction;
+  if (target.strobe) look.strobe = target.strobe;
   // A fade underway before is taken as over the Fixture held still.
   const beforeTurn = before.turnFade ? combinedTurn(STILL, before) : before.turn;
   if (beforeTurn || target.turn) {
@@ -421,6 +463,7 @@ function sceneLook(patch: VenuePatch, fixture: PatchedFixture, scene: Scene, bea
     if (rule.intensity !== undefined) look.intensity = rule.intensity;
     if (rule.colour !== undefined) look.colour = colourLevels(rule.colour);
     if (rule.direction !== undefined) look.direction = rule.direction;
+    if (rule.strobe !== undefined) look.strobe = rule.strobe;
     if (rule.effect !== undefined && moving) {
       const targeted = patch.fixtures.filter(
         (other) => isMovingFixture(patch, other) && ruleTargets(patch, other, rule),
@@ -562,6 +605,9 @@ interface FixtureOutput {
   // A moving Fixture's Direction, and its pan and tilt.
   direction?: Direction;
   aim?: AimAngles;
+  // The strobe rate in Hz, and what it sets on each strobe channel, by
+  // channel name. Absent while steady.
+  strobe?: { hz: number; drives: Map<string, StrobeDrive> };
 }
 
 // The DMX values of a Fixture's channels, offset 0 first. A control channel
@@ -596,11 +642,13 @@ function encodeChannels(channels: Channel[], output: FixtureOutput): number[] {
 // Where a control channel is set, or undefined to leave it at its default.
 function channelPoint(
   channel: Extract<Channel, { kind: 'control' }>,
-  { intensity, colour, mix, emitterScale }: FixtureOutput,
+  { intensity, colour, mix, emitterScale, strobe }: FixtureOutput,
 ): Point | undefined {
   const { ranges } = channel;
   const slots = ranges.filter((r) => r.capability.type === 'wheelSlot');
   if (slots.length > 0) return fixed(middle(nearestSlot(slots, colour)));
+  const drive = strobe?.drives.get(channel.name);
+  if (drive) return drive.kind === 'on' ? fixed(middle(drive.range)) : ratePoint(drive, strobe!.hz);
   const open = ranges.find(
     (r) => r.capability.type === 'shutter' && r.capability.effect === 'open',
   );
@@ -630,6 +678,20 @@ function levelPoint(ranges: CapabilityRange[], level: number): Point {
   const range = ranges.find(holds) ?? ranges[0]!;
   const [a, b] = span(range);
   const t = a === b ? 0 : clamp((level - a) / (b - a));
+  return { from: range.from, to: range.to, t };
+}
+
+// The point that sets `hz` on strobe `ranges`, clamped to their Hz span. The
+// first range whose span holds `hz` is used, or else the nearest.
+function ratePoint({ ranges, assumed }: Extract<StrobeDrive, { kind: 'rate' }>, hz: number): Point {
+  const span = (range: CapabilityRange) => (assumed ? ASSUMED_STROBE_HZ : hzSpan(range)!);
+  const off = (range: CapabilityRange) => {
+    const [a, b] = span(range);
+    return Math.max(Math.min(a, b) - hz, hz - Math.max(a, b), 0);
+  };
+  const range = ranges.reduce((best, r) => (off(r) < off(best) ? r : best));
+  const [a, b] = span(range);
+  const t = a === b ? 0 : clamp((hz - a) / (b - a));
   return { from: range.from, to: range.to, t };
 }
 

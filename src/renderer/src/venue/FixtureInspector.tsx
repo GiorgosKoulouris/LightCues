@@ -3,7 +3,13 @@ import { useState } from 'react';
 import { ASSUMED_DEGREES, type Approximation } from '../../../shared/aim';
 import { ROLES, type Role } from '../../../shared/fixture-profile';
 import type { Show } from '../../../shared/show';
-import { fixtureApproximatedAims, type ApproximatedAim } from '../../../shared/venue-check';
+import { ASSUMED_STROBE_HZ } from '../../../shared/strobe';
+import {
+  fixtureApproximatedAims,
+  fixtureApproximatedStrobe,
+  type ApproximatedAim,
+  type StrobeApproximation,
+} from '../../../shared/venue-check';
 import {
   fixtureMounting,
   fixtureZone,
@@ -69,6 +75,19 @@ const ASSUMED_AXES: Partial<Record<Approximation, 'pan' | 'tilt'>> = {
   assumedTiltRange: 'tilt',
 };
 
+// Why a Fixture's strobe is approximated, for the Venue Check.
+const STROBE_APPROXIMATION_LABELS: Record<StrobeApproximation, string> = {
+  noStrobeChannel: 'it has no strobe channel, so it stays steady.',
+  assumedHzSpan: `its Profile gives no strobe rate in Hz, so ${ASSUMED_STROBE_HZ.join('–')} Hz is assumed. Add the Hz span to its Profile in the Profile editor.`,
+};
+
+// A Fixture's approximated strobe: the Scenes that strobe it, by name, and
+// why.
+interface StrobeNote {
+  scenes: string[];
+  approximation: StrobeApproximation;
+}
+
 // The select fields whose change can make a Fixture not fit, such as a wider
 // mode overlapping the next Fixture. Their errors show below them.
 type CheckedField = 'mode' | 'universe';
@@ -125,6 +144,7 @@ export function FixtureInspector({
           patch={patch}
           fixture={single}
           approximated={show ? fixtureApproximatedAims(show, patch, single) : []}
+          strobe={show && strobeNote(show, patch, single)}
           modeError={errors.mode}
           onPut={(fixture, field) => put([fixture], field)}
         />
@@ -186,18 +206,33 @@ export function FixtureInspector({
   );
 }
 
+// The Scenes that strobe a Fixture whose strobe is approximated, by name.
+function strobeNote(
+  show: Show,
+  patch: VenuePatch,
+  fixture: PatchedFixture,
+): StrobeNote | undefined {
+  const approximated = fixtureApproximatedStrobe(show, patch, fixture);
+  if (!approximated) return undefined;
+  const name = (id: string) => show.scenes.find((s) => s.id === id)?.name ?? id;
+  return { scenes: approximated.scenes.map(name), approximation: approximated.approximation };
+}
+
 // Name, mode, address, position and, for a moving Fixture, Mounting and its
-// approximated aims: the fields only one Fixture is edited in.
+// approximated aims, and an approximated strobe: the fields only one Fixture
+// is edited in.
 function SingleFields({
   patch,
   fixture,
   approximated,
+  strobe,
   modeError,
   onPut,
 }: {
   patch: VenuePatch;
   fixture: PatchedFixture;
   approximated: ApproximatedAim[];
+  strobe: StrobeNote | undefined;
   modeError: string | undefined;
   onPut(fixture: PatchedFixture, field?: CheckedField): void;
 }) {
@@ -254,6 +289,15 @@ function SingleFields({
         />
       )}
       {approximated.length > 0 && <ApproximatedAims aims={approximated} />}
+      {strobe && (
+        <section aria-label="Approximated strobe" className={styles.approximated}>
+          <h4 className={styles.legend}>Approximated strobe</h4>
+          <p>
+            Strobed by {strobe.scenes.join(', ')}:{' '}
+            {STROBE_APPROXIMATION_LABELS[strobe.approximation]}
+          </p>
+        </section>
+      )}
     </div>
   );
 }

@@ -49,6 +49,8 @@ export interface PlaybackOptions {
   now: () => number;
   // The Tempo's beat count, that movement Effects run to.
   beat: () => number;
+  // The Tempo, that beat strobe rates follow.
+  bpm: () => number;
   show: () => Show;
   patch: () => VenuePatch;
 }
@@ -69,9 +71,10 @@ interface Flash {
 // turned off there, they hold the frames from before again. The Focus Check
 // overrides the moving Fixtures on the Outputs in both modes, at full unless
 // Blackout is on. Freeze holds the beat that movement Effects run to, so they
-// keep their offsets; turned off, they jump to where the beat has got to. None
-// of this is part of the Show or the Venue Patch.
-export function createPlayback({ emit, now, beat, show, patch }: PlaybackOptions) {
+// keep their offsets; turned off, they jump to where the beat has got to.
+// Strobe runs on, at the Tempo as it is. None of this is part of the Show or
+// the Venue Patch.
+export function createPlayback({ emit, now, beat, bpm, show, patch }: PlaybackOptions) {
   let active: ActiveScenes = {};
   // By Layer id.
   const flashes = new Map<string, Flash>();
@@ -258,11 +261,12 @@ export function createPlayback({ emit, now, beat, show, patch }: PlaybackOptions
           seconds(),
           resolvedGrandMaster(),
           effectBeat(),
+          bpm(),
         );
       }
       let frames = sent;
       if (mode === 'blind' && blackout) {
-        frames = resolveFrames(show(), patch(), active, seconds(), 0, effectBeat());
+        frames = resolveFrames(show(), patch(), active, seconds(), 0, effectBeat(), bpm());
       }
       if (focusCheck === undefined) return frames;
       return focusCheckFrames(patch(), frames, focusCheck, blackout ? 0 : 1);
@@ -278,6 +282,7 @@ export function createPlayback({ emit, now, beat, show, patch }: PlaybackOptions
         seconds(),
         resolvedGrandMaster(),
         effectBeat(),
+        bpm(),
       );
       if (focusCheck === undefined) return lights;
       return focusCheckLights(patch(), lights, focusCheck, blackout ? 0 : 1);

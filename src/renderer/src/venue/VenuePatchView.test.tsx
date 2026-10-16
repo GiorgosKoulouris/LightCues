@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FixtureProfile } from '../../../shared/fixture-profile';
 import type { EngineCommand, EngineEvent, VenueEdit } from '../../../shared/protocol';
-import type { Direction, Show } from '../../../shared/show';
+import type { Direction, Rule, Show } from '../../../shared/show';
 import {
   addUniverse,
   DEFAULT_MOUNTING,
@@ -546,6 +546,66 @@ describe('Approximated aims', () => {
 
     await user.click(option('Par 1'));
     expect(warning()).not.toBeInTheDocument();
+  });
+});
+
+describe('Approximated strobe', () => {
+  // A strobe range without a Hz span.
+  const unspanned: FixtureProfile = {
+    ...par,
+    id: 'acme/unspanned',
+    model: 'Unspanned',
+    modes: [
+      {
+        name: '3ch',
+        channels: [
+          ...channels(2),
+          {
+            kind: 'control',
+            name: 'Strobe',
+            defaultValue: 0,
+            ranges: [{ from: 0, to: 255, capability: { type: 'strobe' } }],
+          },
+        ],
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    patch = {
+      ...PATCH,
+      profiles: [par, unspanned],
+      fixtures: [...PATCH.fixtures, fixture('Strobe 1', { profileId: unspanned.id, address: 100 })],
+    };
+    const strobing = (id: string, name: string, strobe: Rule['strobe']) => ({
+      ...{ id, name, tags: [], layer: 'l1', fadeIn: 0 },
+      rules: [{ target: {}, strobe }],
+    });
+    show = {
+      layers: [{ id: 'l1', name: 'Layer 1' }],
+      scenes: [strobing('s1', 'Hit', 'Fast'), strobing('s2', 'Calm', 'Off')],
+      triggers: [],
+    };
+  });
+
+  const warning = () => inspector().queryByRole('region', { name: 'Approximated strobe' });
+
+  it('names the Scenes that strobe a Fixture with no strobe channel', async () => {
+    await renderView();
+    await userEvent.click(option('Par 1'));
+
+    expect(warning()).toHaveTextContent(
+      'Strobed by Hit: it has no strobe channel, so it stays steady.',
+    );
+  });
+
+  it('says when a strobe rate has no Hz span', async () => {
+    await renderView();
+    await userEvent.click(option('Strobe 1'));
+
+    expect(warning()).toHaveTextContent(
+      'Strobed by Hit: its Profile gives no strobe rate in Hz, so 1–20 Hz is assumed.',
+    );
   });
 });
 

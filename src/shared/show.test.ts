@@ -45,6 +45,9 @@ describe('validateShow', () => {
       { target: { roles: ['Effect'] }, colour: { swatch: 'UV' } },
       { target: {}, direction: 'Audience' },
       { target: {}, effect: { shape: 'Ballyhoo', size: 25, length: 16, spread: 'Alternate' } },
+      { target: {}, strobe: 'Off' },
+      { target: {}, strobe: 'Fast' },
+      { target: {}, strobe: 0.25 },
     ];
 
     expect(validateShow(show(scene({ rules })))).toEqual([]);
@@ -65,6 +68,8 @@ describe('validateShow', () => {
       },
       { target: {}, effect: { shape: 'Figure 8', size: 0, length: 3, spread: 'Random' } },
       { target: {}, effect: { shape: 'Circle', size: 181, length: 1, spread: 'In sync' } },
+      { target: {}, strobe: 'Strobe' },
+      { target: {}, strobe: 2 },
     ] as unknown as Rule[];
 
     expect(validateShow(show(scene({ name: 'Verse', rules })))).toEqual([
@@ -83,6 +88,8 @@ describe('validateShow', () => {
       'Scene "Verse" Rule 5: Effect length must be 1, 2, 4, 8 or 16 beats',
       'Scene "Verse" Rule 5: "Random" is not a Spread',
       'Scene "Verse" Rule 6: Effect size must be over 0 and at most 180 degrees',
+      'Scene "Verse" Rule 7: strobe must be Off, Slow, Medium, Fast, or 1, 1/2 or 1/4 beat',
+      'Scene "Verse" Rule 8: strobe must be Off, Slow, Medium, Fast, or 1, 1/2 or 1/4 beat',
     ]);
   });
 

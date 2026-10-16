@@ -65,7 +65,7 @@ In **Venue Patch**:
 In **Show**, on the **Scenes** tab:
 
 1. Click **New Scene** and name it.
-2. Click **Add Rule**. Pick its Zones on the stage plans and its Roles, then set intensity, colour, Direction or an Effect. Later Rules override earlier ones.
+2. Click **Add Rule**. Pick its Zones on the stage plans and its Roles, then set intensity, colour, Direction, an Effect or strobe. Later Rules override earlier ones.
 3. Pick the Scene's Layer. A Scene replaces the one playing in its Layer. Different Layers stack.
 
 The Preview shows the result on the stage plan. Switch to **Blind** to edit without changing the real lights.

@@ -309,6 +309,26 @@ describe('Scene editor', () => {
     expect(put.scene.rules[0]).toEqual({ target: {}, intensity: 0.5 });
   });
 
+  it("sets a Rule's strobe rate, and leaves it to others when not set", async () => {
+    await selectWarm();
+    const rule = () => {
+      const put = edits().at(-1);
+      if (put?.type !== 'putScene') throw new Error('No Scene put');
+      return put.scene.rules[0];
+    };
+    const strobe = screen.getAllByRole('combobox', { name: 'Strobe' })[0]!;
+    expect(strobe).toHaveValue('');
+
+    await userEvent.selectOptions(strobe, 'Fast (12 Hz)');
+    expect(rule()).toEqual({ target: {}, intensity: 0.5, strobe: 'Fast' });
+    await userEvent.selectOptions(strobe, '1/4 beat');
+    expect(rule()).toEqual({ target: {}, intensity: 0.5, strobe: 0.25 });
+    await userEvent.selectOptions(strobe, 'Off');
+    expect(rule()).toEqual({ target: {}, intensity: 0.5, strobe: 'Off' });
+    await userEvent.selectOptions(strobe, 'Not set');
+    expect(rule()).toEqual({ target: {}, intensity: 0.5 });
+  });
+
   it("sets a Rule's movement Effect: shape, size with quick picks, length and Spread", async () => {
     await selectWarm();
     const rule = () => {

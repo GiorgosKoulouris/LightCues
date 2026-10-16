@@ -66,6 +66,26 @@ describe('Preview', () => {
     expect(beam()).toBeNull();
   });
 
+  it('blinks a strobing Fixture at its rate, no faster than 4 Hz', () => {
+    const blinking = () =>
+      [...document.querySelectorAll<SVGElement>('[style*="animation-duration"]')].map(
+        (element) => element.style.animationDuration,
+      );
+
+    show({ intensity: 1, ...red, aim: { pan: 0, tilt: 45 } });
+    expect(blinking()).toEqual([]);
+
+    // Its marker in both views and its front beam; with an aim, its beam
+    // top-down too.
+    engine.emit({ type: 'preview', lights: { m1: { intensity: 1, ...red, strobe: 2 } } });
+    expect(blinking()).toEqual(['0.5s', '0.5s', '0.5s']);
+    engine.emit({
+      type: 'preview',
+      lights: { m1: { intensity: 1, ...red, aim: { pan: 0, tilt: 45 }, strobe: 12 } },
+    });
+    expect(blinking()).toEqual(['0.25s', '0.25s', '0.25s', '0.25s']);
+  });
+
   it('draws Fixture markers the same size on screen as the stage plan', () => {
     // jsdom lays nothing out. 680 px wide less the label room is 600 px. The
     // 10 m wide stage shows 10 m wide top-down, 12 m (1 m margins) in the

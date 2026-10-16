@@ -39,6 +39,8 @@ const show: Show = {
           target: { roles: ['Spot/Beam'] },
           effect: { shape: 'Circle', size: 12, length: 4, spread: 'Left→Right' },
         },
+        { target: { roles: ['Strobe'] }, strobe: 'Fast' },
+        { target: { roles: ['Spot/Beam'] }, strobe: 0.25 },
       ],
     },
   ],
@@ -57,10 +59,16 @@ const show: Show = {
   ],
 };
 
-// `show` as version 4 had it, without House Presets.
+// `show` as version 4 had it, without House Presets or strobe.
 function withoutHousePresets({ housePresets, ...rest }: Show): Show {
   void housePresets;
-  return rest;
+  return {
+    ...rest,
+    scenes: rest.scenes.map((scene) => ({
+      ...scene,
+      rules: scene.rules.filter((rule) => rule.strobe === undefined),
+    })),
+  };
 }
 
 // `show` as an older version had it, without Directions or movement Effects.
@@ -126,12 +134,12 @@ describe('.lcshow file', () => {
     );
   });
 
-  it('loads a version 4 file, which has no House Presets', () => {
+  it('loads a version 4 file, which has no House Presets or strobe', () => {
     const v4 = withoutHousePresets(show);
 
     expect(loadShowFile(JSON.stringify({ version: 4, ...v4 }))).toEqual(v4);
     expect(() => loadShowFile(JSON.stringify({ version: 4, ...show }))).toThrow(
-      'Invalid Show:\nunknown field "housePresets"',
+      'Invalid Show:\nunknown field "housePresets"\nunknown field "scenes[1].rules[3].strobe"\nunknown field "scenes[1].rules[4].strobe"',
     );
   });
 

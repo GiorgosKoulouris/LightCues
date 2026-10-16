@@ -174,6 +174,7 @@ export function createEngine({
     emit,
     now,
     beat: tempo.beat,
+    bpm: tempo.bpm,
     show: show.show,
     patch: venue.patch,
   });

@@ -12,6 +12,7 @@ import {
 import { StageGrid, stageView } from '../venue/StagePlan';
 import { BeamLines, lightColour } from './BeamLines';
 import styles from './Preview.module.css';
+import { strobeBlink } from './strobeBlink';
 import { usePreview } from './usePreview';
 
 const MARGIN = 1;
@@ -23,7 +24,8 @@ const MIN_VIEW_HEIGHT = 4;
 const DARK: FixtureLight = { intensity: 0, red: 0, green: 0, blue: 0 };
 
 // The engine's resolved look, top-down and from the audience. In Monitor it is
-// what the rig shows; in Blind, what it would show.
+// what the rig shows; in Blind, what it would show. A strobing Fixture
+// flashes.
 export function Preview({ patch }: { patch: VenuePatch }) {
   const lights = usePreview();
   const light = (fixture: PatchedFixture) => lights[fixture.id] ?? DARK;
@@ -118,6 +120,7 @@ function FrontElevation({ patch, light }: ViewProps) {
                 points={beam(patch, fixture)}
                 fill={lightColour(shown)}
                 fillOpacity={0.55 * shown.intensity}
+                {...strobeBlink(shown)}
               />
             )}
             <g transform={atPixels(fixture.x, -fixture.height, scale)}>
@@ -136,7 +139,12 @@ function FixtureMarker({ light }: { light: FixtureLight }) {
   return (
     <>
       <circle r={FIXTURE_MARKER_RADIUS} className={styles.body} strokeWidth={1.5} />
-      <circle r={FIXTURE_MARKER_RADIUS} fill={lightColour(light)} fillOpacity={light.intensity} />
+      <circle
+        r={FIXTURE_MARKER_RADIUS}
+        fill={lightColour(light)}
+        fillOpacity={light.intensity}
+        {...strobeBlink(light)}
+      />
     </>
   );
 }

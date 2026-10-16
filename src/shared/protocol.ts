@@ -133,6 +133,8 @@ export interface FixtureLight {
   green: number;
   blue: number;
   aim?: AimAngles;
+  // The strobe rate in Hz, while it strobes.
+  strobe?: number;
 }
 
 // The active Scene id per Layer id. A Layer without an entry is clear.

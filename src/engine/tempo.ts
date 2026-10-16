@@ -1,6 +1,6 @@
 import type { EngineEvent, TempoSource } from '../shared/protocol';
 
-const DEFAULT_BPM = 120;
+export const DEFAULT_BPM = 120;
 // MIDI Clock sends 24 ticks per beat.
 const TICKS_PER_BEAT = 24;
 // The clock's Tempo is averaged over this many beats of ticks.

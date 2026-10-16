@@ -54,6 +54,14 @@ export interface MovementEffect {
   spread: Spread;
 }
 
+// How fast a Fixture strobes: Off, a named rate, or once per 1, 1/2 or 1/4
+// beat of the Tempo. Off stops strobe from earlier Rules and lower Layers.
+export const STROBE_RATES = ['Off', 'Slow', 'Medium', 'Fast', 1, 0.5, 0.25] as const;
+export type StrobeRate = (typeof STROBE_RATES)[number];
+
+// The named strobe rates, in Hz.
+export const STROBE_HZ = { Slow: 2, Medium: 6, Fast: 12 } as const;
+
 // The Fixtures a Rule applies to: those in one of `zones` with one of
 // `roles`. An absent list means every Zone or every Role.
 export interface RuleTarget {
@@ -72,6 +80,8 @@ export interface Rule {
   direction?: Direction;
   // Moves the moving Fixtures targeted around their aim.
   effect?: MovementEffect;
+  // Strobes the Fixtures targeted that have a strobe channel.
+  strobe?: StrobeRate;
 }
 
 // A slot that holds at most one active Scene.
@@ -405,7 +415,7 @@ function hasScene(show: Show, id: string): boolean {
   return show.scenes.some((s) => s.id === id);
 }
 
-function ruleProblems({ target, intensity, colour, direction, effect }: Rule): string[] {
+function ruleProblems({ target, intensity, colour, direction, effect, strobe }: Rule): string[] {
   const problems: string[] = [];
   const { zones, roles } = target;
   if (zones?.length === 0) problems.push('Zone list is empty');
@@ -424,6 +434,9 @@ function ruleProblems({ target, intensity, colour, direction, effect }: Rule): s
   if (colour !== undefined) problems.push(...colourProblems(colour));
   if (direction !== undefined) problems.push(...directionProblems(direction));
   if (effect !== undefined) problems.push(...effectProblems(effect));
+  if (strobe !== undefined && !STROBE_RATES.includes(strobe)) {
+    problems.push('strobe must be Off, Slow, Medium, Fast, or 1, 1/2 or 1/4 beat');
+  }
   return problems;
 }
 

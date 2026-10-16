@@ -2,6 +2,7 @@ import { beamLanding } from '../../../shared/aim';
 import type { FixtureLight } from '../../../shared/protocol';
 import { fixtureMounting, type VenuePatch } from '../../../shared/venue-patch';
 import type { View } from '../venue/pixelScale';
+import { strobeBlink } from './strobeBlink';
 
 // The width of a beam line, in metres.
 const BEAM_LINE_WIDTH = 0.08;
@@ -17,7 +18,7 @@ interface Point {
 // Top-down, a line from each lit moving Fixture to where its beam lands, in
 // its colour, faded by its intensity. A beam that leaves `view` is cut at its
 // edge and ends in an arrow. Nothing for a dark Fixture or one without an
-// aim. `lights` is by Fixture id.
+// aim. A strobing Fixture's beam flashes. `lights` is by Fixture id.
 export function BeamLines({
   patch,
   lights,
@@ -43,7 +44,7 @@ export function BeamLines({
     const arrow = cut ? arrowHead(from, end) : undefined;
     const lineEnd = arrow?.base ?? end;
     return (
-      <g key={fixture.id}>
+      <g key={fixture.id} {...strobeBlink(light)}>
         <line
           data-testid={`beam-${fixture.id}`}
           x1={from.x}

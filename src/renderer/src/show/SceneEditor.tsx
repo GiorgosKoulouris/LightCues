@@ -1,7 +1,16 @@
 import { Play, Plus, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { ROLES, type Role } from '../../../shared/fixture-profile';
-import { DIRECTIONS, type Direction, type Rule, type Scene, type Show } from '../../../shared/show';
+import {
+  DIRECTIONS,
+  STROBE_HZ,
+  STROBE_RATES,
+  type Direction,
+  type Rule,
+  type Scene,
+  type Show,
+  type StrobeRate,
+} from '../../../shared/show';
 import type { VenuePatch } from '../../../shared/venue-patch';
 import { Button, IconButton } from '../ui/Button';
 import { Checkbox } from '../ui/Checkbox';
@@ -17,6 +26,18 @@ import { ZonePicker } from './ZonePicker';
 
 // Arrow Up/Down step of the fade-in, in seconds.
 const FADE_STEP = 0.5;
+
+// The Strobe picker's options; '' leaves strobe to earlier Rules.
+const STROBE_OPTIONS = [
+  { value: '', label: 'Not set' },
+  ...STROBE_RATES.map((rate) => ({ value: String(rate), label: strobeLabel(rate) })),
+];
+
+function strobeLabel(rate: StrobeRate): string {
+  if (rate === 'Off') return rate;
+  if (typeof rate === 'string') return `${rate} (${STROBE_HZ[rate]} Hz)`;
+  return rate === 1 ? '1 beat' : `1/${1 / rate} beat`;
+}
 
 interface SceneEditorProps {
   scene: Scene;
@@ -144,7 +165,7 @@ function RuleCard({
   onPut(rule: Rule): void;
   onRemove(): void;
 }) {
-  const { target, intensity, colour, direction, effect } = rule;
+  const { target, intensity, colour, direction, effect, strobe } = rule;
 
   // `undefined` leaves the attribute to earlier Rules.
   function set<K extends Exclude<keyof Rule, 'target'>>(key: K, value: Rule[K] | undefined) {
@@ -202,6 +223,17 @@ function RuleCard({
             onChange={(d) => set('direction', d || undefined)}
           />
           <EffectPicker effect={effect} onChange={(e) => set('effect', e)} />
+          <Select
+            label="Strobe"
+            value={strobe === undefined ? '' : String(strobe)}
+            options={STROBE_OPTIONS}
+            onChange={(value) =>
+              set(
+                'strobe',
+                STROBE_RATES.find((rate) => String(rate) === value),
+              )
+            }
+          />
         </div>
       </div>
     </>

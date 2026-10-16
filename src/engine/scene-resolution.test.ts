@@ -931,3 +931,194 @@ describe('movement Effects', () => {
     expect(resolveLights(s, r, playOn(r, s, ['sweep', 0]), 0, 1, 1).par).not.toHaveProperty('aim');
   });
 });
+
+describe('strobe', () => {
+  const range = (from: number, to: number, capability: Capability): CapabilityRange => ({
+    from,
+    to,
+    capability,
+  });
+  const control = (name: string, ranges: CapabilityRange[]): Channel => ({
+    kind: 'control',
+    name,
+    defaultValue: 0,
+    ranges,
+  });
+  const open = { type: 'shutter', effect: 'open' } as const;
+
+  // Like the Smart Beam: a Shutter and a Ring Strobe, each 1–25 Hz.
+  const beam = profile('test/beam', [
+    channel('Dimmer', { type: 'intensity' }),
+    control('Shutter', [
+      range(0, 31, { type: 'shutter', effect: 'closed' }),
+      range(32, 63, open),
+      range(64, 95, { type: 'strobe', hz: [1, 25] }),
+      range(96, 127, open),
+    ]),
+    control('Ring Strobe', [range(0, 0, open), range(1, 255, { type: 'strobe', hz: [1, 25] })]),
+  ]);
+  // A strobe range with no Hz span.
+  const unspanned = profile('test/unspanned', [
+    channel('Dimmer', { type: 'intensity' }),
+    control('Strobe', [range(0, 9, open), range(10, 255, { type: 'strobe' })]),
+  ]);
+  // A narrow 4–10 Hz span.
+  const narrow = profile('test/narrow', [
+    channel('Dimmer', { type: 'intensity' }),
+    control('Strobe', [range(0, 9, open), range(10, 255, { type: 'strobe', hz: [4, 10] })]),
+  ]);
+  // The strobe range turns strobe on; a speed channel sets the rate.
+  const speed = profile('test/speed', [
+    channel('Dimmer', { type: 'intensity' }),
+    control('Shutter', [range(0, 127, open), range(128, 255, { type: 'strobe' })]),
+    channel('Speed', { type: 'strobeSpeed', hz: [0.5, 15] }),
+  ]);
+
+  // The first channels of one Fixture of `p`, the Scenes played in order.
+  function strobeOn(
+    p: FixtureProfile,
+    s: Show,
+    steps: [string, number][],
+    { grandMaster = 1, bpm = 120 } = {},
+  ): number[] {
+    const rig = patch([fixture({ profileId: p.id })], [p]);
+    const frames = resolveFrames(s, rig, playOn(rig, s, ...steps), 10, grandMaster, 0, bpm);
+    return channels(frames, p.modes[0]!.channels.length);
+  }
+
+  // One Fixture of `p` lit by one Rule with `strobe`.
+  function strobing(p: FixtureProfile, strobe: Rule['strobe'], options = {}): number[] {
+    const s = show(scene('s', [{ target: {}, intensity: 1, strobe }]));
+    return strobeOn(p, s, [['s', 0]], options);
+  }
+
+  it('drives every strobe channel at the rate across its Hz span', () => {
+    // 6 Hz is 5/24 of the way across 1–25 Hz.
+    expect(strobing(beam, 'Medium')).toEqual([255, 70, 54]);
+    expect(strobing(beam, 'Fast')).toEqual([255, 78, 117]);
+  });
+
+  it('keeps the shutter open when Off or not set', () => {
+    expect(strobing(beam, 'Off')).toEqual([255, 47, 0]);
+    expect(strobing(beam, undefined)).toEqual([255, 47, 0]);
+  });
+
+  it('takes a strobe range without a span as 1–20 Hz', () => {
+    expect(strobing(unspanned, 'Slow')).toEqual([255, 23]);
+    expect(strobing(unspanned, 'Fast')).toEqual([255, 152]);
+  });
+
+  it('clamps the rate to the span, above and below', () => {
+    expect(strobing(narrow, 'Slow')).toEqual([255, 10]);
+    expect(strobing(narrow, 'Medium')).toEqual([255, 92]);
+    expect(strobing(narrow, 'Fast')).toEqual([255, 255]);
+  });
+
+  it('converts a beat rate to Hz from the Tempo', () => {
+    // A 1/4 beat at 120 BPM is 8 Hz; at 60 BPM, 4 Hz.
+    expect(strobing(narrow, 0.25)).toEqual([255, 173]);
+    expect(strobing(narrow, 0.25, { bpm: 60 })).toEqual([255, 10]);
+    // One beat at 480 BPM is 8 Hz.
+    expect(strobing(narrow, 1, { bpm: 480 })).toEqual([255, 173]);
+  });
+
+  it('sets the rate on a strobe speed channel when the strobe range is elsewhere', () => {
+    // 6 Hz is 11/29 of the way across 0.5–15 Hz.
+    expect(strobing(speed, 'Medium')).toEqual([255, 191, 97]);
+    expect(strobing(speed, 'Off')).toEqual([255, 63, 0]);
+  });
+
+  it('sets the rate on a strobe range without a span when the speed range shares its channel', () => {
+    const shared = profile('test/shared', [
+      channel('Dimmer', { type: 'intensity' }),
+      control('Strobe', [
+        range(0, 127, { type: 'strobe' }),
+        range(128, 255, { type: 'strobeSpeed', hz: [1, 20] }),
+      ]),
+    ]);
+
+    // 1–20 Hz assumed across the strobe range: 2 Hz is 1/19 of the way.
+    expect(strobing(shared, 'Slow')).toEqual([255, 7]);
+  });
+
+  it('lets later Rules and higher Layers override it, Off included', () => {
+    const s = show(
+      scene('fast', [
+        { target: {}, intensity: 1, strobe: 'Fast' },
+        { target: {}, colour: { swatch: 'Red' } },
+      ]),
+      scene('stop', [
+        { target: {}, intensity: 1, strobe: 'Medium' },
+        { target: {}, strobe: 'Off' },
+      ]),
+      scene('dim', [{ target: {}, intensity: 0.5 }], { layer: 'l2' }),
+      scene('off', [{ target: {}, strobe: 'Off' }], { layer: 'l2' }),
+    );
+
+    expect(strobeOn(narrow, s, [['fast', 0]])[1]).toBe(255);
+    expect(strobeOn(narrow, s, [['stop', 0]])[1]).toBe(4);
+    expect(
+      strobeOn(narrow, s, [
+        ['fast', 0],
+        ['dim', 1],
+      ])[1],
+    ).toBe(255);
+    expect(
+      strobeOn(narrow, s, [
+        ['fast', 0],
+        ['off', 1],
+      ])[1],
+    ).toBe(4);
+    expect(
+      strobeOn(narrow, s, [
+        ['off', 0],
+        ['fast', 1],
+      ])[1],
+    ).toBe(255);
+  });
+
+  it('snaps on and off at Scene start, not crossfaded', () => {
+    const s = show(
+      scene('steady', [{ target: {}, intensity: 1 }]),
+      scene('fast', [{ target: {}, intensity: 1, strobe: 'Fast' }], { fadeIn: 100 }),
+      scene('calm', [{ target: {}, intensity: 1 }], { fadeIn: 100 }),
+    );
+
+    expect(
+      strobeOn(narrow, s, [
+        ['steady', 0],
+        ['fast', 5],
+      ])[1],
+    ).toBe(255);
+    expect(
+      strobeOn(narrow, s, [
+        ['fast', 0],
+        ['calm', 5],
+      ])[1],
+    ).toBe(4);
+  });
+
+  it('gives dark on Blackout or at intensity 0', () => {
+    expect(strobing(narrow, 'Fast', { grandMaster: 0 })).toEqual([0, 4]);
+    const s = show(scene('s', [{ target: {}, intensity: 0, strobe: 'Fast' }]));
+    expect(strobeOn(narrow, s, [['s', 0]])).toEqual([0, 4]);
+  });
+
+  it('leaves a Fixture with no strobe channel steady', () => {
+    expect(strobing(dimmer, 'Fast')).toEqual([255]);
+  });
+
+  it('shows the rate in the preview, only on a lit Fixture that can strobe', () => {
+    const lights = (p: FixtureProfile, intensity: number, strobe: Rule['strobe']) => {
+      const s = show(scene('s', [{ target: {}, intensity, strobe }]));
+      const rig = patch([fixture({ profileId: p.id })], [p]);
+      return resolveLights(s, rig, play(s, ['s', 0]), 0, 1, 0, 60).f1!;
+    };
+
+    expect(lights(narrow, 1, 'Fast').strobe).toBe(12);
+    expect(lights(narrow, 1, 0.5).strobe).toBe(2);
+    expect(lights(narrow, 1, 'Off')).not.toHaveProperty('strobe');
+    expect(lights(narrow, 0, 'Fast')).not.toHaveProperty('strobe');
+    expect(lights(dimmer, 1, 'Fast')).not.toHaveProperty('strobe');
+  });
+});
