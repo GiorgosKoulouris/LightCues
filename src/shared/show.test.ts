@@ -44,7 +44,13 @@ describe('validateShow', () => {
       },
       { target: { roles: ['Effect'] }, colour: { swatch: 'UV' } },
       { target: {}, direction: 'Audience' },
-      { target: {}, effect: { shape: 'Ballyhoo', size: 25, length: 16, spread: 'Alternate' } },
+      {
+        target: {},
+        movementEffect: { shape: 'Ballyhoo', size: 25, length: 16, spread: 'Alternate' },
+      },
+      { target: {}, movementEffect: { shape: 'Circle', size: 5, length: 0.25, spread: 'In sync' } },
+      { target: {}, movementEffect: { shape: 'Circle', size: 5, length: 0.5, spread: 'In sync' } },
+      { target: {}, movementEffect: 'None', intensityEffect: 'None', colourEffect: 'None' },
       { target: {}, strobe: 'Off' },
       { target: {}, strobe: 'Fast' },
       { target: {}, strobe: 0.25 },
@@ -66,10 +72,11 @@ describe('validateShow', () => {
         colour: { swatch: 'Teal' },
         direction: 'Sideways',
       },
-      { target: {}, effect: { shape: 'Figure 8', size: 0, length: 3, spread: 'Random' } },
-      { target: {}, effect: { shape: 'Circle', size: 181, length: 1, spread: 'In sync' } },
+      { target: {}, movementEffect: { shape: 'Figure 8', size: 0, length: 3, spread: 'Random' } },
+      { target: {}, movementEffect: { shape: 'Circle', size: 181, length: 1, spread: 'In sync' } },
       { target: {}, strobe: 'Strobe' },
       { target: {}, strobe: 2 },
+      { target: {}, movementEffect: 'Off', intensityEffect: 'Pulse', colourEffect: null },
     ] as unknown as Rule[];
 
     expect(validateShow(show(scene({ name: 'Verse', rules })))).toEqual([
@@ -85,11 +92,14 @@ describe('validateShow', () => {
       'Scene "Verse" Rule 4: "Sideways" is not a Direction',
       'Scene "Verse" Rule 5: "Figure 8" is not a movement Effect shape',
       'Scene "Verse" Rule 5: Effect size must be over 0 and at most 180 degrees',
-      'Scene "Verse" Rule 5: Effect length must be 1, 2, 4, 8 or 16 beats',
+      'Scene "Verse" Rule 5: Effect length must be 1/4, 1/2, 1, 2, 4, 8 or 16 beats',
       'Scene "Verse" Rule 5: "Random" is not a Spread',
       'Scene "Verse" Rule 6: Effect size must be over 0 and at most 180 degrees',
       'Scene "Verse" Rule 7: strobe must be Off, Slow, Medium, Fast, or 1, 1/2 or 1/4 beat',
       'Scene "Verse" Rule 8: strobe must be Off, Slow, Medium, Fast, or 1, 1/2 or 1/4 beat',
+      'Scene "Verse" Rule 9: movement Effect must be None or an Effect',
+      'Scene "Verse" Rule 9: intensity Effect must be None',
+      'Scene "Verse" Rule 9: colour Effect must be None',
     ]);
   });
 

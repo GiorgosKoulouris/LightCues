@@ -2,6 +2,7 @@ import { Play, Plus, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { ROLES, type Role } from '../../../shared/fixture-profile';
 import {
+  beatsLabel,
   DIRECTIONS,
   STROBE_HZ,
   STROBE_RATES,
@@ -36,7 +37,7 @@ const STROBE_OPTIONS = [
 function strobeLabel(rate: StrobeRate): string {
   if (rate === 'Off') return rate;
   if (typeof rate === 'string') return `${rate} (${STROBE_HZ[rate]} Hz)`;
-  return rate === 1 ? '1 beat' : `1/${1 / rate} beat`;
+  return `${beatsLabel(rate)} beat`;
 }
 
 interface SceneEditorProps {
@@ -165,7 +166,7 @@ function RuleCard({
   onPut(rule: Rule): void;
   onRemove(): void;
 }) {
-  const { target, intensity, colour, direction, effect, strobe } = rule;
+  const { target, intensity, colour, direction, movementEffect, strobe } = rule;
 
   // `undefined` leaves the attribute to earlier Rules.
   function set<K extends Exclude<keyof Rule, 'target'>>(key: K, value: Rule[K] | undefined) {
@@ -222,7 +223,7 @@ function RuleCard({
             ]}
             onChange={(d) => set('direction', d || undefined)}
           />
-          <EffectPicker effect={effect} onChange={(e) => set('effect', e)} />
+          <EffectPicker slot={movementEffect} onChange={(e) => set('movementEffect', e)} />
           <Select
             label="Strobe"
             value={strobe === undefined ? '' : String(strobe)}

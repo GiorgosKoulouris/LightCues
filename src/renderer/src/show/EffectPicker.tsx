@@ -1,11 +1,14 @@
 import {
+  beatsLabel,
   EFFECT_LENGTHS,
   EFFECT_SHAPES,
   EFFECT_SIZES,
   isEffectSize,
   MAX_EFFECT_SIZE,
+  NO_EFFECT,
   SPREADS,
   type EffectShape,
+  type EffectSlot,
   type MovementEffect,
   type Spread,
 } from '../../../shared/show';
@@ -17,25 +20,27 @@ import styles from './EffectPicker.module.css';
 // A new movement Effect's settings, besides its shape.
 const NEW_EFFECT = { size: EFFECT_SIZES.Medium, length: 4, spread: 'In sync' } as const;
 
-// Picks a Rule's movement Effect, or none. A new shape keeps the other
-// settings.
+// Picks a Rule's movement Effect, None, or leaves it to others. A new shape
+// keeps the other settings.
 export function EffectPicker({
-  effect,
+  slot,
   onChange,
 }: {
-  effect?: MovementEffect;
-  onChange(effect: MovementEffect | undefined): void;
+  slot?: EffectSlot<MovementEffect>;
+  onChange(slot: EffectSlot<MovementEffect> | undefined): void;
 }) {
+  const effect = slot === NO_EFFECT ? undefined : slot;
   return (
     <div className={styles.picker}>
-      <Select<EffectShape | ''>
+      <Select<EffectShape | typeof NO_EFFECT | ''>
         label="Movement Effect"
-        value={effect?.shape ?? ''}
+        value={slot === NO_EFFECT ? NO_EFFECT : (effect?.shape ?? '')}
         options={[
           { value: '', label: 'Not set' },
+          { value: NO_EFFECT, label: 'None' },
           ...EFFECT_SHAPES.map((shape) => ({ value: shape, label: shape })),
         ]}
-        onChange={(shape) => onChange(shape ? { ...NEW_EFFECT, ...effect, shape } : undefined)}
+        onChange={(choice) => onChange(slotFor(choice, effect))}
       />
       {effect && (
         <>
@@ -66,7 +71,7 @@ export function EffectPicker({
             value={String(effect.length)}
             options={EFFECT_LENGTHS.map((length) => ({
               value: String(length),
-              label: String(length),
+              label: beatsLabel(length),
             }))}
             onChange={(text) => {
               const length = EFFECT_LENGTHS.find((l) => String(l) === text);
@@ -83,6 +88,16 @@ export function EffectPicker({
       )}
     </div>
   );
+}
+
+// The slot a picked option sets: unset, None, or an Effect of that shape.
+function slotFor(
+  choice: EffectShape | typeof NO_EFFECT | '',
+  effect: MovementEffect | undefined,
+): EffectSlot<MovementEffect> | undefined {
+  if (choice === '') return undefined;
+  if (choice === NO_EFFECT) return NO_EFFECT;
+  return { ...NEW_EFFECT, ...effect, shape: choice };
 }
 
 function parseSize(text: string) {

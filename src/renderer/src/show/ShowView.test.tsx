@@ -344,7 +344,7 @@ describe('Scene editor', () => {
     expect(rule()).toEqual({
       target: {},
       intensity: 0.5,
-      effect: { shape: 'Circle', size: 12, length: 4, spread: 'In sync' },
+      movementEffect: { shape: 'Circle', size: 12, length: 4, spread: 'In sync' },
     });
 
     const sizes = within(screen.getByRole('group', { name: 'Quick sizes' }));
@@ -353,20 +353,25 @@ describe('Scene editor', () => {
       'true',
     );
     await userEvent.click(sizes.getByRole('button', { name: 'Large 25°' }));
-    expect(rule()?.effect?.size).toBe(25);
+    expect(rule()?.movementEffect).toMatchObject({ size: 25 });
     const size = screen.getByRole('textbox', { name: 'Size (°)' });
     await userEvent.clear(size);
     await userEvent.type(size, '7.5');
-    expect(rule()?.effect?.size).toBe(7.5);
+    expect(rule()?.movementEffect).toMatchObject({ size: 7.5 });
 
     await userEvent.selectOptions(screen.getByLabelText('Length (beats)'), '16');
-    expect(rule()?.effect?.length).toBe(16);
+    expect(rule()?.movementEffect).toMatchObject({ length: 16 });
     await userEvent.selectOptions(screen.getByLabelText('Spread'), 'Mirrored');
-    expect(rule()?.effect).toEqual({ shape: 'Circle', size: 7.5, length: 16, spread: 'Mirrored' });
+    expect(rule()?.movementEffect).toEqual({
+      shape: 'Circle',
+      size: 7.5,
+      length: 16,
+      spread: 'Mirrored',
+    });
 
     // A new shape keeps the rest.
     await userEvent.selectOptions(effect, 'Ballyhoo');
-    expect(rule()?.effect).toEqual({
+    expect(rule()?.movementEffect).toEqual({
       shape: 'Ballyhoo',
       size: 7.5,
       length: 16,
@@ -374,6 +379,31 @@ describe('Scene editor', () => {
     });
     await userEvent.selectOptions(effect, 'Not set');
     expect(rule()).toEqual({ target: {}, intensity: 0.5 });
+  });
+
+  it("sets a Rule's movement Effect to None, and its length to 1/4 beat", async () => {
+    await selectWarm();
+    const rule = () => {
+      const put = edits().at(-1);
+      if (put?.type !== 'putScene') throw new Error('No Scene put');
+      return put.scene.rules[0];
+    };
+    const effect = screen.getAllByLabelText('Movement Effect')[0]!;
+
+    await userEvent.selectOptions(effect, 'None');
+    expect(rule()).toEqual({ target: {}, intensity: 0.5, movementEffect: 'None' });
+    expect(screen.queryByLabelText('Length (beats)')).toBeNull();
+
+    await userEvent.selectOptions(effect, 'Pan sweep');
+    await userEvent.selectOptions(screen.getByLabelText('Length (beats)'), '1/4');
+    expect(rule()?.movementEffect).toEqual({
+      shape: 'Pan sweep',
+      size: 12,
+      length: 0.25,
+      spread: 'In sync',
+    });
+    await userEvent.selectOptions(screen.getByLabelText('Length (beats)'), '1/2');
+    expect(rule()?.movementEffect).toMatchObject({ length: 0.5 });
   });
 
   it('shows an engine error as a toast', async () => {

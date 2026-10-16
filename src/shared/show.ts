@@ -30,9 +30,14 @@ export const DEFAULT_DIRECTION: Direction = 'Down';
 export const EFFECT_SHAPES = ['Circle', 'Pan sweep', 'Tilt sweep', 'Ballyhoo'] as const;
 export type EffectShape = (typeof EFFECT_SHAPES)[number];
 
-// Beats per cycle.
-export const EFFECT_LENGTHS = [1, 2, 4, 8, 16] as const;
+// Beats per cycle, for every kind of Effect.
+export const EFFECT_LENGTHS = [0.25, 0.5, 1, 2, 4, 8, 16] as const;
 export type EffectLength = (typeof EFFECT_LENGTHS)[number];
+
+// A number of beats as shown: 1/4, 1/2, 1, 2 and so on.
+export function beatsLabel(beats: number): string {
+  return beats < 1 ? `1/${1 / beats}` : String(beats);
+}
 
 // The largest Effect size, in degrees.
 export const MAX_EFFECT_SIZE = 180;
@@ -45,6 +50,11 @@ export const EFFECT_SIZES = { Small: 5, Medium: 12, Large: 25 } as const;
 // out; Alternate every other Fixture across.
 export const SPREADS = ['In sync', 'Left→Right', 'Mirrored', 'Alternate'] as const;
 export type Spread = (typeof SPREADS)[number];
+
+// An Effect slot set to None stops the Effect of that kind from earlier Rules
+// and lower Layers.
+export const NO_EFFECT = 'None';
+export type EffectSlot<E> = E | typeof NO_EFFECT;
 
 export interface MovementEffect {
   shape: EffectShape;
@@ -70,7 +80,8 @@ export interface RuleTarget {
 }
 
 // One part of a Scene. An absent setting leaves the attribute to earlier
-// Rules and other Scenes.
+// Rules and other Scenes. A Rule has an Effect slot per kind: movement,
+// intensity and colour.
 export interface Rule {
   target: RuleTarget;
   // 0–1.
@@ -78,8 +89,12 @@ export interface Rule {
   colour?: Colour;
   // Aims the moving Fixtures targeted.
   direction?: Direction;
-  // Moves the moving Fixtures targeted around their aim.
-  effect?: MovementEffect;
+  // Moves the moving Fixtures targeted around their aim. None holds them
+  // still.
+  movementEffect?: EffectSlot<MovementEffect>;
+  // None only, until intensity and colour Effects are defined.
+  intensityEffect?: typeof NO_EFFECT;
+  colourEffect?: typeof NO_EFFECT;
   // Strobes the Fixtures targeted that have a strobe channel.
   strobe?: StrobeRate;
 }
@@ -415,7 +430,9 @@ function hasScene(show: Show, id: string): boolean {
   return show.scenes.some((s) => s.id === id);
 }
 
-function ruleProblems({ target, intensity, colour, direction, effect, strobe }: Rule): string[] {
+function ruleProblems(rule: Rule): string[] {
+  const { target, intensity, colour, direction, strobe } = rule;
+  const { movementEffect, intensityEffect, colourEffect } = rule;
   const problems: string[] = [];
   const { zones, roles } = target;
   if (zones?.length === 0) problems.push('Zone list is empty');
@@ -433,9 +450,21 @@ function ruleProblems({ target, intensity, colour, direction, effect, strobe }: 
   }
   if (colour !== undefined) problems.push(...colourProblems(colour));
   if (direction !== undefined) problems.push(...directionProblems(direction));
-  if (effect !== undefined) problems.push(...effectProblems(effect));
   if (strobe !== undefined && !STROBE_RATES.includes(strobe)) {
     problems.push('strobe must be Off, Slow, Medium, Fast, or 1, 1/2 or 1/4 beat');
+  }
+  if (movementEffect !== undefined && movementEffect !== NO_EFFECT) {
+    if (typeof movementEffect === 'object' && movementEffect !== null) {
+      problems.push(...effectProblems(movementEffect));
+    } else {
+      problems.push('movement Effect must be None or an Effect');
+    }
+  }
+  if (intensityEffect !== undefined && intensityEffect !== NO_EFFECT) {
+    problems.push('intensity Effect must be None');
+  }
+  if (colourEffect !== undefined && colourEffect !== NO_EFFECT) {
+    problems.push('colour Effect must be None');
   }
   return problems;
 }
@@ -453,7 +482,9 @@ function effectProblems({ shape, size, length, spread }: MovementEffect): string
     problems.push(`Effect size must be over 0 and at most ${MAX_EFFECT_SIZE} degrees`);
   }
   if (!EFFECT_LENGTHS.includes(length)) {
-    const lengths = EFFECT_LENGTHS.join(', ').replace(/, (\d+)$/, ' or $1');
+    const lengths = EFFECT_LENGTHS.map(beatsLabel)
+      .join(', ')
+      .replace(/, (\d+)$/, ' or $1');
     problems.push(`Effect length must be ${lengths} beats`);
   }
   if (!SPREADS.includes(spread)) problems.push(`"${spread}" is not a Spread`);

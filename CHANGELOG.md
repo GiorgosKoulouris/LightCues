@@ -11,10 +11,12 @@ What changed in each LightCues release. The format follows [Keep a Changelog](ht
 - House looks: in the Venue Patch's **House** tab, set what each House Preset of the Show does in this venue, with the rig showing it as you edit. A House Preset with no look is marked "Not set up in this venue". Looks for House Presets the Show lacks are kept, and can be removed.
 - Fire House Presets from their MIDI note, from the new House section in Perform, or from the Fallback Panel with Shift+1–8. The House Lights fade to the look over the House Preset's fade; the last one fired is highlighted. **Startup** in Perform fades back to the Startup look. Opening a Venue Patch goes to its Startup look; opening a Show keeps the House Lights as they are.
 - Strobe: a Rule can strobe the Fixtures it targets, Slow, Medium or Fast, or once per 1, 1/2 or 1/4 beat of the Tempo. Off stops strobe from earlier Rules and lower Layers. The preview flashes strobing Fixtures, and the Fixture inspector lists the Scenes that strobe a Fixture with no strobe channel, or whose strobe rate is unknown.
+- Movement Effect **None**: stops the movement Effect of lower Layers and earlier Rules, holding the aim still, faded in over the Scene's fade-in.
+- Effects can run in cycles of 1/4 and 1/2 beat.
 
 ### Changed
 
-- Venue Patches and Shows saved by this version do not open in older versions of LightCues, as they can hold House Lights, House Presets and strobe. Older files still open.
+- Venue Patches and Shows saved by this version do not open in older versions of LightCues, as they can hold House Lights, House Presets, strobe and the new Effect settings. Older files still open.
 
 ## [0.1.1] - 2026-10-12
 

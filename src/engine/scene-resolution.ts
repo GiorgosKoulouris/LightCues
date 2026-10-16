@@ -7,6 +7,7 @@ import type { CapabilityRange, Channel, Emitter } from '../shared/fixture-profil
 import type { FixtureLight } from '../shared/protocol';
 import {
   DEFAULT_DIRECTION,
+  NO_EFFECT,
   ruleTargets,
   type Colour,
   type Direction,
@@ -382,8 +383,8 @@ function byChange(show: Show, active: ActiveScenes): ActiveScene[] {
 }
 
 // What one Scene sets on a Fixture. An absent attribute is left to other
-// Scenes. `turn` is a moving Fixture's turn by a movement Effect. While a
-// Layer crossfades, `turnFade` holds its turn instead.
+// Scenes. `turn` is a moving Fixture's turn by a movement Effect, or still
+// under None. While a Layer crossfades, `turnFade` holds its turn instead.
 interface Look {
   intensity?: number;
   colour?: ColourLevels;
@@ -454,7 +455,8 @@ function layerLook(
   return look;
 }
 
-// What a Scene sets on a Fixture, its movement Effect at `beat`.
+// What a Scene sets on a Fixture, its movement Effect at `beat`. The
+// intensity and colour Effect slots hold only None, so they change nothing.
 function sceneLook(patch: VenuePatch, fixture: PatchedFixture, scene: Scene, beat: number): Look {
   const look: Look = {};
   const moving = isMovingFixture(patch, fixture);
@@ -464,12 +466,15 @@ function sceneLook(patch: VenuePatch, fixture: PatchedFixture, scene: Scene, bea
     if (rule.colour !== undefined) look.colour = colourLevels(rule.colour);
     if (rule.direction !== undefined) look.direction = rule.direction;
     if (rule.strobe !== undefined) look.strobe = rule.strobe;
-    if (rule.effect !== undefined && moving) {
+    const effect = rule.movementEffect;
+    if (effect === NO_EFFECT && moving) {
+      look.turn = STILL;
+    } else if (effect !== undefined && effect !== NO_EFFECT && moving) {
       const targeted = patch.fixtures.filter(
         (other) => isMovingFixture(patch, other) && ruleTargets(patch, other, rule),
       );
-      const delay = spreadDelay(rule.effect.spread, fixture, targeted);
-      look.turn = effectTurn(rule.effect, beat, delay, fixture.id);
+      const delay = spreadDelay(effect.spread, fixture, targeted);
+      look.turn = effectTurn(effect, beat, delay, fixture.id);
     }
   }
   return look;

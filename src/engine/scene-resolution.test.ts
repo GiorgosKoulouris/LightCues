@@ -699,7 +699,7 @@ describe('movement Effects', () => {
   }
 
   it('sweeps pan around the base aim over its length in beats', () => {
-    const s = show(scene('sweep', [{ target: {}, direction: 'Cross', effect: effect() }]));
+    const s = show(scene('sweep', [{ target: {}, direction: 'Cross', movementEffect: effect() }]));
     const active = playOn(rig, s, ['sweep', 0]);
 
     expect([0, 1, 2, 3, 4].map((beat) => aimAtBeat(s, active, beat))).toEqual([
@@ -712,8 +712,12 @@ describe('movement Effects', () => {
   });
   it('sweeps tilt, and circles with tilt a quarter cycle ahead of pan', () => {
     const s = show(
-      scene('tilt', [{ target: {}, direction: 'Cross', effect: effect({ shape: 'Tilt sweep' }) }]),
-      scene('circle', [{ target: {}, direction: 'Cross', effect: effect({ shape: 'Circle' }) }]),
+      scene('tilt', [
+        { target: {}, direction: 'Cross', movementEffect: effect({ shape: 'Tilt sweep' }) },
+      ]),
+      scene('circle', [
+        { target: {}, direction: 'Cross', movementEffect: effect({ shape: 'Circle' }) },
+      ]),
     );
     const at = (id: string) => [0, 1, 2, 3].map((b) => aimAtBeat(s, playOn(rig, s, [id, 0]), b));
 
@@ -733,7 +737,7 @@ describe('movement Effects', () => {
 
   it('wanders smoothly with Ballyhoo, within its size, the same each time for a Fixture', () => {
     const ballyhoo = effect({ shape: 'Ballyhoo', size: 20, length: 8 });
-    const s = show(scene('wander', [{ target: {}, direction: 'Cross', effect: ballyhoo }]));
+    const s = show(scene('wander', [{ target: {}, direction: 'Cross', movementEffect: ballyhoo }]));
     const twin = fixture({ id: 'twin', profileId: mover.id, x: 3, y: 4, height: 6, address: 4 });
     const both = patch([hung, twin], [mover]);
     const active = playOn(both, s, ['wander', 0]);
@@ -764,7 +768,9 @@ describe('movement Effects', () => {
   it('clamps the turned aim to the Fixture range', () => {
     // Down is tilt 0 of ±135°; Up is out of reach, at the end of the range.
     const s = show(
-      scene('up', [{ target: {}, direction: 'Up', effect: effect({ shape: 'Tilt sweep' }) }]),
+      scene('up', [
+        { target: {}, direction: 'Up', movementEffect: effect({ shape: 'Tilt sweep' }) },
+      ]),
     );
     const active = playOn(rig, s, ['up', 0]);
     const tilts = [1, 3].map((beat) => Math.abs(aimAtBeat(s, active, beat)[1]!));
@@ -788,7 +794,7 @@ describe('movement Effects', () => {
       },
     });
     const both = patch([hung, inverted], [mover]);
-    const s = show(scene('sweep', [{ target: {}, direction: 'Down', effect: effect() }]));
+    const s = show(scene('sweep', [{ target: {}, direction: 'Down', movementEffect: effect() }]));
     const active = playOn(both, s, ['sweep', 0]);
 
     expect(aimAtBeat(s, active, 1, 0, both, 'mover')[0]).toBe(10);
@@ -804,7 +810,9 @@ describe('movement Effects', () => {
     // at: the sine of its phase.
     function phases(spread: Spread): Record<string, number> {
       const s = show(
-        scene('sweep', [{ target: {}, direction: 'Down', effect: effect({ size: 20, spread }) }]),
+        scene('sweep', [
+          { target: {}, direction: 'Down', movementEffect: effect({ size: 20, spread }) },
+        ]),
       );
       const lights = resolveLights(s, line, playOn(line, s, ['sweep', 0]), 0, 1, 1);
       return Object.fromEntries(
@@ -836,7 +844,7 @@ describe('movement Effects', () => {
         scene('sweep', [
           {
             target: { zones: [{ row: 'Midstage', column: 'Stage Left', level: 'Overhead' }] },
-            effect: effect({ size: 20, spread: 'Left→Right' }),
+            movementEffect: effect({ size: 20, spread: 'Left→Right' }),
           },
         ]),
       );
@@ -850,8 +858,10 @@ describe('movement Effects', () => {
   it('runs around a Direction from another Layer, each combined by last change', () => {
     const s = show(
       scene('cross', [{ target: {}, direction: 'Cross' }]),
-      scene('sweep', [{ target: {}, effect: effect() }], { layer: 'l2' }),
-      scene('tilt', [{ target: {}, direction: 'Cross', effect: effect({ shape: 'Tilt sweep' }) }]),
+      scene('sweep', [{ target: {}, movementEffect: effect() }], { layer: 'l2' }),
+      scene('tilt', [
+        { target: {}, direction: 'Cross', movementEffect: effect({ shape: 'Tilt sweep' }) },
+      ]),
     );
 
     // The Effect runs around Cross, set on the other Layer.
@@ -869,7 +879,7 @@ describe('movement Effects', () => {
   it("fades an Effect's size in with its Scene, and out with the one it replaces", () => {
     const s = show(
       scene('cross', [{ target: {}, direction: 'Cross' }]),
-      scene('sweep', [{ target: {}, direction: 'Cross', effect: effect() }], { fadeIn: 2 }),
+      scene('sweep', [{ target: {}, direction: 'Cross', movementEffect: effect() }], { fadeIn: 2 }),
     );
     const fadingIn = playOn(rig, s, ['cross', 0], ['sweep', 10]);
     const fadingOut = playOn(rig, s, ['sweep', 0], ['cross', 10]);
@@ -884,7 +894,7 @@ describe('movement Effects', () => {
 
   it('moves between Directions from the aim shown, turning it once', () => {
     const s = show(
-      scene('sweep', [{ target: {}, effect: effect() }], { layer: 'l2' }),
+      scene('sweep', [{ target: {}, movementEffect: effect() }], { layer: 'l2' }),
       scene('down', [{ target: {}, intensity: 1, direction: 'Down' }]),
       scene('cross', [{ target: {}, intensity: 1, direction: 'Cross' }], { fadeIn: 2 }),
     );
@@ -899,8 +909,8 @@ describe('movement Effects', () => {
 
   it('fades an Effect in from the one it takes over from on another Layer', () => {
     const s = show(
-      scene('sweep', [{ target: {}, direction: 'Cross', effect: effect() }]),
-      scene('tilt', [{ target: {}, effect: effect({ shape: 'Tilt sweep' }) }], {
+      scene('sweep', [{ target: {}, direction: 'Cross', movementEffect: effect() }]),
+      scene('tilt', [{ target: {}, movementEffect: effect({ shape: 'Tilt sweep' }) }], {
         layer: 'l2',
         fadeIn: 2,
       }),
@@ -922,10 +932,58 @@ describe('movement Effects', () => {
     ]);
   });
 
+  it('runs cycles of 1/2 and 1/4 beat', () => {
+    const s = show(
+      scene('half', [{ target: {}, direction: 'Cross', movementEffect: effect({ length: 0.5 }) }]),
+      scene('quarter', [
+        { target: {}, direction: 'Cross', movementEffect: effect({ length: 0.25 }) },
+      ]),
+    );
+    const pans = (id: string, step: number) =>
+      [0, 1, 2, 3, 4].map((i) => aimAtBeat(s, playOn(rig, s, [id, 0]), i * step)[0]);
+
+    expect(pans('half', 1 / 8)).toEqual([90, 100, 90, 80, 90]);
+    expect(pans('quarter', 1 / 16)).toEqual([90, 100, 90, 80, 90]);
+  });
+
+  describe('None', () => {
+    const s = show(
+      scene('sweep', [{ target: {}, direction: 'Cross', movementEffect: effect() }]),
+      scene('still', [{ target: {}, movementEffect: 'None' }], { layer: 'l2' }),
+      scene('slow still', [{ target: {}, movementEffect: 'None' }], { layer: 'l2', fadeIn: 2 }),
+      scene('lit', [{ target: {}, intensity: 1 }], { layer: 'l2' }),
+    );
+
+    it("stops a lower Layer's movement Effect, leaving its Direction", () => {
+      expect(aimAtBeat(s, playOn(rig, s, ['sweep', 0], ['still', 1]), 1)).toEqual([90, 45]);
+      // A Scene that leaves the slot alone keeps it running.
+      expect(aimAtBeat(s, playOn(rig, s, ['sweep', 0], ['lit', 1]), 1)).toEqual([100, 45]);
+      // Changed last, the Effect wins.
+      expect(aimAtBeat(s, playOn(rig, s, ['still', 0], ['sweep', 1]), 1)).toEqual([100, 45]);
+    });
+
+    it("stops an earlier Rule's movement Effect in its Scene", () => {
+      const own = show(
+        scene('sweep', [
+          { target: {}, direction: 'Cross', movementEffect: effect() },
+          { target: {}, movementEffect: 'None' },
+        ]),
+      );
+
+      expect(aimAtBeat(own, playOn(rig, own, ['sweep', 0]), 1)).toEqual([90, 45]);
+    });
+
+    it("stills the turn over its Scene's fade-in", () => {
+      const active = playOn(rig, s, ['sweep', 0], ['slow still', 10]);
+
+      expect([10, 11, 12].map((time) => aimAtBeat(s, active, 1, time)[0])).toEqual([100, 95, 90]);
+    });
+  });
+
   it('leaves Fixtures without pan or tilt alone', () => {
     const par = fixture({ id: 'par', address: 4 });
     const r = patch([hung, par], [mover, dimmer]);
-    const s = show(scene('sweep', [{ target: {}, intensity: 1, effect: effect() }]));
+    const s = show(scene('sweep', [{ target: {}, intensity: 1, movementEffect: effect() }]));
 
     expect(channels(resolveFrames(s, r, playOn(r, s, ['sweep', 0]), 0, 1, 1), 4)[3]).toBe(255);
     expect(resolveLights(s, r, playOn(r, s, ['sweep', 0]), 0, 1, 1).par).not.toHaveProperty('aim');

@@ -69,10 +69,10 @@ A reusable look or effect that targets Zones rather than specific Fixtures. Seve
 _Avoid_: Cue, preset
 
 **Rule**:
-One part of a Scene: a target (Zones × Roles) and the settings applied to it (intensity, colour, Direction, effect, strobe). Later Rules in a Scene override earlier ones.
+One part of a Scene: a target (Zones × Roles) and the settings applied to it (intensity, colour, Direction, Effects, strobe). Later Rules in a Scene override earlier ones.
 
 **Effect**:
-A time-varying change within a Rule, timed in beats of the Tempo. A movement Effect (Circle, Pan sweep, Tilt sweep, Ballyhoo) runs around a base Direction, which may come from another Scene; its size is in degrees and its length in beats. Sequences over time are not Effects: the DAW sequences Scenes through Triggers. A spatial Effect is ordered by Fixture positions on stage (e.g. a left-to-right wave).
+A time-varying change within a Rule, timed in beats of the Tempo. There are three kinds: movement, intensity and colour, and a Rule has one slot for each. A slot left unset leaves that kind to earlier Rules and lower Layers; set to None, it stops their Effect of that kind (a movement None holds the aim still, faded in like any Effect). Every Effect's length is 1/4, 1/2, 1, 2, 4, 8 or 16 beats. A movement Effect (Circle, Pan sweep, Tilt sweep, Ballyhoo) runs around a base Direction, which may come from another Scene; its size is in degrees. Sequences over time are not Effects: the DAW sequences Scenes through Triggers. A spatial Effect is ordered by Fixture positions on stage (e.g. a left-to-right wave).
 _Avoid_: Chase (a kind of Effect), FX
 
 **Strobe**:

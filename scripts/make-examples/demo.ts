@@ -219,7 +219,7 @@ export function demoShow(): Show {
         {
           target: HEADS,
           direction: 'Centre',
-          effect: { shape: 'Circle', size: 25, length: 4, spread: 'In sync' },
+          movementEffect: { shape: 'Circle', size: 25, length: 4, spread: 'In sync' },
         },
       ],
     },
@@ -232,7 +232,7 @@ export function demoShow(): Show {
         {
           target: HEADS,
           direction: 'Audience',
-          effect: { shape: 'Tilt sweep', size: 12, length: 2, spread: 'Left→Right' },
+          movementEffect: { shape: 'Tilt sweep', size: 12, length: 2, spread: 'Left→Right' },
         },
       ],
     },

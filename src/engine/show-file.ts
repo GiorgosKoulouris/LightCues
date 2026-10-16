@@ -1,9 +1,10 @@
-import { validateShow, type Colour, type Show } from '../shared/show';
+import { validateShow, type Colour, type Rule, type Show } from '../shared/show';
 
 // The .lcshow file: a Show as versioned JSON. Version 2 added the default
 // colour, version 3 the Fallback Panel's Scene buttons, version 4 Rule
 // Directions, movement Effects and the Default Direction and version 5 House
-// Presets and strobe; older files load without them.
+// Presets, strobe and Effect slots; older files load without them. Version 5
+// renamed a Rule's `effect` to `movementEffect`.
 
 const VERSION = 5;
 const VERSIONS = [1, 2, 3, 4, VERSION];
@@ -32,8 +33,24 @@ export function loadShowFile(json: string): Show {
   if (show.housePresets !== undefined && !Array.isArray(show.housePresets)) {
     throw new Error('Invalid Show: housePresets must be a list');
   }
-  throwIfInvalid(checkMalformed(() => [...unknownFields(file as ShowFile), ...validateShow(show)]));
-  return show;
+  let upgraded = show;
+  throwIfInvalid(
+    checkMalformed(() => {
+      upgraded = version < 5 ? withMovementEffects(show) : show;
+      return [...unknownFields(file as ShowFile), ...validateShow(upgraded)];
+    }),
+  );
+  return upgraded;
+}
+
+// A Show from a file before version 5, its Rules' `effect` as `movementEffect`.
+function withMovementEffects(show: Show): Show {
+  const upgrade = ({ effect, ...rule }: Rule & { effect?: Rule['movementEffect'] }): Rule =>
+    effect === undefined ? rule : { ...rule, movementEffect: effect };
+  return {
+    ...show,
+    scenes: show.scenes.map((scene) => ({ ...scene, rules: scene.rules.map(upgrade) })),
+  };
 }
 
 function throwIfInvalid(errors: string[]): void {
@@ -81,8 +98,12 @@ function unknownFields(file: ShowFile): string[] {
     ['housePresets'],
   ];
   allow(file, added.slice(0, file.version).flat(), '');
-  // The Rule fields each version added, besides the target and colour.
-  const ruleFields = [['intensity'], [], [], ['direction', 'effect'], ['strobe']];
+  // The Rule fields of each version, besides the target and colour.
+  const ruleFields =
+    file.version >= 5
+      ? ['intensity', 'direction', 'strobe', 'movementEffect', 'intensityEffect', 'colourEffect']
+      : [['intensity'], [], [], ['direction', 'effect']].slice(0, file.version).flat();
+  const movementField = file.version < 5 ? 'effect' : 'movementEffect';
   if (file.version !== 1 && file.defaultColour !== undefined) {
     allowColour(file.defaultColour, 'defaultColour.');
   }
@@ -91,14 +112,15 @@ function unknownFields(file: ShowFile): string[] {
     allow(scene, ['id', 'name', 'tags', 'layer', 'fadeIn', 'rules'], `scenes[${i}].`);
     scene.rules.forEach(({ target, colour, ...rest }, j) => {
       const at = `scenes[${i}].rules[${j}].`;
-      allow(rest, ruleFields.slice(0, file.version).flat(), at);
+      allow(rest, ruleFields, at);
       allow(target, ['zones', 'roles'], `${at}target.`);
       target.zones?.forEach((zone, k) => {
         allow(zone, ['row', 'column', 'level'], `${at}target.zones[${k}].`);
       });
       if (colour !== undefined) allowColour(colour, `${at}colour.`);
-      if (rest.effect !== undefined && file.version >= 4) {
-        allow(rest.effect, ['shape', 'size', 'length', 'spread'], `${at}effect.`);
+      const movement: unknown = (rest as Record<string, unknown>)[movementField];
+      if (typeof movement === 'object' && movement !== null && file.version >= 4) {
+        allow(movement, ['shape', 'size', 'length', 'spread'], `${at}${movementField}.`);
       }
     });
   });

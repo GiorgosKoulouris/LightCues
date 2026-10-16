@@ -63,7 +63,7 @@ const show: Show = {
     scene('sweep', {
       intensity: 1,
       direction: 'Cross',
-      effect: { shape: 'Pan sweep', size: 10, length: 4, spread: 'In sync' },
+      movementEffect: { shape: 'Pan sweep', size: 10, length: 4, spread: 'In sync' },
     }),
     scene('centre', { direction: 'Centre' }, 0, 'l2'),
     scene('strobe', { intensity: 1, strobe: 0.25 }),
