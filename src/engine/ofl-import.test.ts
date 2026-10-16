@@ -770,6 +770,30 @@ describe('importOflFixture', () => {
     ]);
   });
 
+  it('reports once that a fixture with cyan, magenta or yellow and no red, green or blue may be CMY', () => {
+    const { profile, unsupported } = importOflFixture(
+      colourFixture(['Cyan', 'Magenta', 'Yellow']),
+      'Generic',
+    );
+
+    expect(profile.modes[0]!.channels.slice(0, 3)).toEqual([
+      emitterChannel('Cyan', 'cyan', 0),
+      emitterChannel('Magenta', 'magenta', 0),
+      emitterChannel('Yellow', 'yellow', 0),
+    ]);
+    expect(unsupported).toEqual([
+      { feature: 'Cyan/Magenta/Yellow may be subtractive (CMY); driven as additive emitters' },
+    ]);
+  });
+
+  it.each([
+    ['RGB and CMY', ['Red', 'Green', 'Blue', 'Cyan', 'Magenta', 'Yellow']],
+    ['RGB', ['Red', 'Green', 'Blue']],
+    ['no colour', []],
+  ])('does not report CMY for a fixture with %s', (_, colours) => {
+    expect(importOflFixture(colourFixture(colours), 'Generic').unsupported).toEqual([]);
+  });
+
   it.each([
     [['Dimmer'], 'Wash'],
     [['Color Changer'], 'Wash'],
@@ -801,6 +825,20 @@ describe('importOflFixture', () => {
     expect(profile.defaultRole).toBe(role);
   });
 });
+
+// A fixture with a dimmer and one ColorIntensity channel per colour.
+function colourFixture(colours: string[]) {
+  const colourChannels = Object.fromEntries(
+    colours.map((color) => [color, { capability: { type: 'ColorIntensity', color } }]),
+  );
+  return {
+    name: 'Colour Head',
+    categories: ['Color Changer'],
+    meta,
+    availableChannels: { ...colourChannels, Dimmer: { capability: { type: 'Intensity' } } },
+    modes: [{ name: 'Full', channels: [...colours, 'Dimmer'] }],
+  };
+}
 
 // Channel names, '-' for an unused slot.
 function channelNames(channels: Channel[]): string[] {

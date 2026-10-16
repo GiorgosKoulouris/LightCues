@@ -24,6 +24,7 @@ What changed in each LightCues release. The format follows [Keep a Changelog](ht
 - A "dark" brightness in Open Fixture Library files now imports as 5%. Re-import the Fixture Profile and apply it again to pick this up.
 - GDTF channels whose meaning depends on another channel now import the meaning that applies at that channel's default. Re-import the Fixture Profile and apply it again to pick this up.
 - The fixture import report names the value each channel it cannot drive is held at. In the Profile editor, a channel with an unsupported range shows "held at default" by its default value, as that is what LightCues sends there. Re-import the Fixture Profile to see the held values in the report.
+- The fixture import report warns when an Open Fixture Library file has cyan, magenta or yellow but no red, green or blue, as it may be a CMY fixture that mixes colour subtractively. LightCues still drives cyan, magenta and yellow as additive emitters. Re-import the Fixture Profile to see the warning.
 
 ## [0.1.1] - 2026-10-12
 

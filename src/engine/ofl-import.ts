@@ -98,6 +98,11 @@ export function importOflFixture(json: unknown, manufacturer: string): FixtureIm
       channels.set(modeKey, imported);
     }
   }
+  if (mayBeCmy(channels.values())) {
+    report.add({
+      feature: 'Cyan/Magenta/Yellow may be subtractive (CMY); driven as additive emitters',
+    });
+  }
 
   const modes: FixtureMode[] = [];
   for (const mode of fixture.modes) {
@@ -505,6 +510,20 @@ const EMITTERS: Record<string, Emitter> = {
   Indigo: 'indigo',
   UV: 'uv',
 };
+
+// OFL writes CMY flags as ColorIntensity Cyan/Magenta/Yellow, like additive
+// LEDs. Cyan, magenta or yellow with no red, green or blue may be CMY.
+function mayBeCmy(channels: Iterable<Channel>): boolean {
+  const emitters = new Set<Emitter>();
+  for (const channel of channels) {
+    if (channel.kind !== 'control') continue;
+    for (const { capability } of channel.ranges) {
+      if (capability.type === 'emitter') emitters.add(capability.emitter);
+    }
+  }
+  const has = (colours: Emitter[]) => colours.some((emitter) => emitters.has(emitter));
+  return has(['cyan', 'magenta', 'yellow']) && !has(['red', 'green', 'blue']);
+}
 
 // An OFL DMX value (a number at `resolution` bytes, or a percentage like
 // '50%') scaled to the channel's full `bytes` resolution.
