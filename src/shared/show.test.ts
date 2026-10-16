@@ -51,6 +51,11 @@ describe('validateShow', () => {
       { target: {}, movementEffect: { shape: 'Circle', size: 5, length: 0.25, spread: 'In sync' } },
       { target: {}, movementEffect: { shape: 'Circle', size: 5, length: 0.5, spread: 'In sync' } },
       { target: {}, movementEffect: 'None', intensityEffect: 'None', colourEffect: 'None' },
+      {
+        target: {},
+        intensityEffect: { shape: 'Pulse', depth: 1, length: 0.25, spread: 'Left→Right' },
+      },
+      { target: {}, intensityEffect: { shape: 'Chase', depth: 0, length: 16, spread: 'Mirrored' } },
       { target: {}, strobe: 'Off' },
       { target: {}, strobe: 'Fast' },
       { target: {}, strobe: 0.25 },
@@ -77,6 +82,14 @@ describe('validateShow', () => {
       { target: {}, strobe: 'Strobe' },
       { target: {}, strobe: 2 },
       { target: {}, movementEffect: 'Off', intensityEffect: 'Pulse', colourEffect: null },
+      {
+        target: {},
+        intensityEffect: { shape: 'Flicker', depth: 1.5, length: 3, spread: 'Random' },
+      },
+      {
+        target: {},
+        intensityEffect: { shape: 'Square', depth: -0.1, length: 1, spread: 'In sync' },
+      },
     ] as unknown as Rule[];
 
     expect(validateShow(show(scene({ name: 'Verse', rules })))).toEqual([
@@ -98,8 +111,13 @@ describe('validateShow', () => {
       'Scene "Verse" Rule 7: strobe must be Off, Slow, Medium, Fast, or 1, 1/2 or 1/4 beat',
       'Scene "Verse" Rule 8: strobe must be Off, Slow, Medium, Fast, or 1, 1/2 or 1/4 beat',
       'Scene "Verse" Rule 9: movement Effect must be None or an Effect',
-      'Scene "Verse" Rule 9: intensity Effect must be None',
+      'Scene "Verse" Rule 9: intensity Effect must be None or an Effect',
       'Scene "Verse" Rule 9: colour Effect must be None',
+      'Scene "Verse" Rule 10: "Flicker" is not an intensity Effect shape',
+      'Scene "Verse" Rule 10: Effect depth must be from 0 to 1',
+      'Scene "Verse" Rule 10: Effect length must be 1/4, 1/2, 1, 2, 4, 8 or 16 beats',
+      'Scene "Verse" Rule 10: "Random" is not a Spread',
+      'Scene "Verse" Rule 11: Effect depth must be from 0 to 1',
     ]);
   });
 

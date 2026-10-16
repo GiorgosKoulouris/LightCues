@@ -70,7 +70,7 @@ interface Flash {
 // is turned off. It reaches the Outputs in Blind too, as a safety control;
 // turned off there, they hold the frames from before again. The Focus Check
 // overrides the moving Fixtures on the Outputs in both modes, at full unless
-// Blackout is on. Freeze holds the beat that movement Effects run to, so they
+// Blackout is on. Freeze holds the beat that Effects run to, so they
 // keep their offsets; turned off, they jump to where the beat has got to.
 // Strobe runs on, at the Tempo as it is. None of this is part of the Show or
 // the Venue Patch.
@@ -81,7 +81,7 @@ export function createPlayback({ emit, now, beat, bpm, show, patch }: PlaybackOp
   let mode: PlaybackMode = 'monitor';
   let grandMaster = 1;
   let blackout = false;
-  // The beat movement Effects hold while Freeze is on.
+  // The beat Effects hold while Freeze is on.
   let frozenBeat: number | undefined;
   let focusCheck: Direction | undefined;
   let sent = new Map<number, Uint8Array>();

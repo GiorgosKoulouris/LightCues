@@ -1,7 +1,8 @@
-// Movement Effects: where a moving Fixture is turned from its base aim, in
-// degrees, at a point in the Tempo's beat count. Pure.
+// Effects: where a movement Effect turns a moving Fixture from its base aim,
+// in degrees, and how an intensity Effect scales its intensity, at a point in
+// the Tempo's beat count. Pure.
 import type { Turn } from '../shared/aim';
-import type { MovementEffect, Spread } from '../shared/show';
+import type { IntensityEffect, IntensityShape, MovementEffect, Spread } from '../shared/show';
 import type { StagePosition } from '../shared/venue-patch';
 
 // The turn an Effect gives a Fixture at `beat`. `delay` is how far behind the
@@ -32,6 +33,43 @@ export function effectTurn(
       };
     }
   }
+}
+
+// How much an intensity Effect scales a Fixture's intensity at `beat`, 0–1.
+// `delay` is as for `effectTurn`. `positions` is how many Spread positions the
+// targeted Fixtures take: a Chase lights 1/`positions` of each cycle, and with
+// one position is a Square.
+export function intensityScale(
+  { shape, depth, length }: IntensityEffect,
+  beat: number,
+  delay: number,
+  positions: number,
+): number {
+  // How far into its cycle, 0–1.
+  const phase = (((beat / length - delay) % 1) + 1) % 1;
+  return 1 - depth * (1 - fullLevel(shape, phase, positions));
+}
+
+// An intensity Effect's level at full depth, `phase` into its cycle.
+function fullLevel(shape: IntensityShape, phase: number, positions: number): number {
+  const lit = (share: number) => (phase < share ? 1 : 0);
+  switch (shape) {
+    case 'Pulse':
+      return (1 + Math.cos(2 * Math.PI * phase)) / 2;
+    case 'Ramp up':
+      return phase;
+    case 'Ramp down':
+      return 1 - phase;
+    case 'Square':
+      return lit(1 / 2);
+    case 'Chase':
+      return lit(positions > 1 ? 1 / positions : 1 / 2);
+  }
+}
+
+// How many distinct delays a Spread gives the targeted Fixtures.
+export function spreadPositions(spread: Spread, targeted: StagePosition[]): number {
+  return new Set(targeted.map((fixture) => spreadDelay(spread, fixture, targeted))).size;
 }
 
 // How far behind the cycle a Fixture runs under a Spread, 0–1, among the

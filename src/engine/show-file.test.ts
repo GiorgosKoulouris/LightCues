@@ -47,6 +47,10 @@ const show: Show = {
           target: { roles: ['Effect'] },
           movementEffect: { shape: 'Pan sweep', size: 5, length: 0.25, spread: 'In sync' },
         },
+        {
+          target: { roles: ['Wash'] },
+          intensityEffect: { shape: 'Chase', depth: 0.5, length: 1, spread: 'Mirrored' },
+        },
       ],
     },
   ],
@@ -239,6 +243,7 @@ describe('.lcshow file', () => {
     saved.scenes[0].rules[1].fixtureId = 'par-1';
     saved.scenes[0].rules[1].target.zones[0].dmx = 255;
     saved.scenes[1].rules[2].movementEffect.phase = 0.5;
+    saved.scenes[1].rules[8].intensityEffect.phase = 0.5;
     saved.triggers[2].velocity = 100;
     saved.housePresets[0].look = 'dim';
     saved.housePresets[1].note.velocity = 100;
@@ -253,6 +258,7 @@ describe('.lcshow file', () => {
         'unknown field "scenes[0].rules[1].fixtureId"',
         'unknown field "scenes[0].rules[1].target.zones[0].dmx"',
         'unknown field "scenes[1].rules[2].movementEffect.phase"',
+        'unknown field "scenes[1].rules[8].intensityEffect.phase"',
         'unknown field "triggers[2].velocity"',
         'unknown field "housePresets[0].look"',
         'unknown field "housePresets[1].note.velocity"',

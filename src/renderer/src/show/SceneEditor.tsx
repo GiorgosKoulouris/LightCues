@@ -20,7 +20,7 @@ import { Select } from '../ui/Select';
 import { useToast } from '../ui/Toast';
 import { moveItem, SortableList, useItemKeys } from '../ui/SortableList';
 import { ColourPicker } from './ColourPicker';
-import { EffectPicker } from './EffectPicker';
+import { EffectPicker, IntensityEffectPicker } from './EffectPicker';
 import styles from './SceneEditor.module.css';
 import { parseTags } from './scenes';
 import { ZonePicker } from './ZonePicker';
@@ -166,7 +166,7 @@ function RuleCard({
   onPut(rule: Rule): void;
   onRemove(): void;
 }) {
-  const { target, intensity, colour, direction, movementEffect, strobe } = rule;
+  const { target, intensity, colour, direction, movementEffect, intensityEffect, strobe } = rule;
 
   // `undefined` leaves the attribute to earlier Rules.
   function set<K extends Exclude<keyof Rule, 'target'>>(key: K, value: Rule[K] | undefined) {
@@ -224,6 +224,10 @@ function RuleCard({
             onChange={(d) => set('direction', d || undefined)}
           />
           <EffectPicker slot={movementEffect} onChange={(e) => set('movementEffect', e)} />
+          <IntensityEffectPicker
+            slot={intensityEffect}
+            onChange={(e) => set('intensityEffect', e)}
+          />
           <Select
             label="Strobe"
             value={strobe === undefined ? '' : String(strobe)}

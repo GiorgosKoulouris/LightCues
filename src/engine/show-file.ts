@@ -118,10 +118,13 @@ function unknownFields(file: ShowFile): string[] {
         allow(zone, ['row', 'column', 'level'], `${at}target.zones[${k}].`);
       });
       if (colour !== undefined) allowColour(colour, `${at}colour.`);
-      const movement: unknown = (rest as Record<string, unknown>)[movementField];
-      if (typeof movement === 'object' && movement !== null && file.version >= 4) {
-        allow(movement, ['shape', 'size', 'length', 'spread'], `${at}${movementField}.`);
-      }
+      const effects = rest as Record<string, unknown>;
+      const allowEffect = (field: string, fields: string[]) => {
+        const effect = effects[field];
+        if (typeof effect === 'object' && effect !== null) allow(effect, fields, `${at}${field}.`);
+      };
+      if (file.version >= 4) allowEffect(movementField, ['shape', 'size', 'length', 'spread']);
+      if (file.version >= 5) allowEffect('intensityEffect', ['shape', 'depth', 'length', 'spread']);
     });
   });
   file.triggers.forEach((trigger, i) => {

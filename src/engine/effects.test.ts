@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { beamLanding, turnAim, type AimAngles, type Turn } from '../shared/aim';
 import type { Capability, Channel } from '../shared/fixture-profile';
-import { EFFECT_SHAPES, type EffectShape, type MovementEffect, type Spread } from '../shared/show';
+import {
+  EFFECT_SHAPES,
+  type EffectShape,
+  type IntensityEffect,
+  type MovementEffect,
+  type Spread,
+} from '../shared/show';
 import { DEFAULT_MOUNTING, type Mounting, type StagePosition } from '../shared/venue-patch';
-import { effectTurn, spreadDelay } from './movement-effects';
+import { effectTurn, intensityScale, spreadDelay, spreadPositions } from './effects';
 
 // The turn a Pan sweep of 10° over 4 beats, changed by `overrides`, gives
 // Fixture `id` at `beat`, `delay` of a cycle behind.
@@ -122,6 +128,81 @@ describe('effectTurn', () => {
       const { pan, tilt } = turn({ shape }, 1);
       expectTurn(turn({ shape }, 2, { delay: 0.25 }), pan, tilt);
     }
+  });
+});
+
+describe('intensityScale', () => {
+  // The scale an intensity Effect over 4 beats, changed by `overrides`, gives
+  // at each of `QUARTERS` but the last, `delay` of a cycle behind, among
+  // `positions` Spread positions.
+  function scales(overrides: Partial<IntensityEffect>, { delay = 0, positions = 1 } = {}) {
+    const effect: IntensityEffect = {
+      shape: 'Pulse',
+      depth: 1,
+      length: 4,
+      spread: 'In sync',
+      ...overrides,
+    };
+    return QUARTERS.slice(0, 4).map((beat) => intensityScale(effect, beat, delay, positions));
+  }
+
+  function expectScales(actual: number[], expected: number[]) {
+    actual.forEach((scale, i) => expect(scale).toBeCloseTo(expected[i]!, 6));
+  }
+
+  it('pulses as a sine, full on the beat and dark half a cycle on', () => {
+    expectScales(scales({ shape: 'Pulse' }), [1, 0.5, 0, 0.5]);
+  });
+
+  it('ramps up from dark, and down from full', () => {
+    expectScales(scales({ shape: 'Ramp up' }), [0, 0.25, 0.5, 0.75]);
+    expectScales(scales({ shape: 'Ramp down' }), [1, 0.75, 0.5, 0.25]);
+  });
+
+  it('is full for the first half of a Square cycle, dark for the second', () => {
+    expectScales(scales({ shape: 'Square' }), [1, 1, 0, 0]);
+  });
+
+  it('repeats every cycle', () => {
+    const effect: IntensityEffect = { shape: 'Ramp up', depth: 1, length: 4, spread: 'In sync' };
+    expect(intensityScale(effect, 5, 0, 1)).toBeCloseTo(intensityScale(effect, 1, 0, 1), 6);
+  });
+
+  it('dips by its depth: to 0 at 1, to half at 0.5, not at all at 0', () => {
+    expectScales(scales({ depth: 0.5 }), [1, 0.75, 0.5, 0.75]);
+    expectScales(scales({ depth: 0 }), [1, 1, 1, 1]);
+  });
+
+  it('chases one of N positions at a time, lit 1/N of the cycle', () => {
+    const chase = { shape: 'Chase', spread: 'Left→Right' } as const;
+    expectScales(scales(chase, { positions: 4 }), [1, 0, 0, 0]);
+    expectScales(scales(chase, { positions: 4, delay: 1 / 4 }), [0, 1, 0, 0]);
+    expectScales(scales(chase, { positions: 2, delay: 1 / 2 }), [0, 0, 1, 1]);
+  });
+
+  it('chases as a Square with one position', () => {
+    expectScales(scales({ shape: 'Chase' }, { positions: 1 }), [1, 1, 0, 0]);
+  });
+
+  it('runs `delay` of a cycle behind', () => {
+    expectScales(scales({ shape: 'Square' }, { delay: 1 / 4 }), [0, 1, 1, 0]);
+  });
+});
+
+describe('spreadPositions', () => {
+  // Fixtures at x -4, -2, 2 and 4.
+  const line = [-4, -2, 2, 4].map((x) => ({ x, y: 4, height: 6 }));
+
+  it('counts the distinct delays a Spread gives the Fixtures', () => {
+    expect(spreadPositions('In sync', line)).toBe(1);
+    expect(spreadPositions('Left→Right', line)).toBe(4);
+    expect(spreadPositions('Mirrored', line)).toBe(2);
+    expect(spreadPositions('Alternate', line)).toBe(2);
+  });
+
+  it('counts Fixtures at the same place once', () => {
+    expect(spreadPositions('Left→Right', [line[0]!, line[0]!])).toBe(1);
+    expect(spreadPositions('Alternate', [line[0]!])).toBe(1);
   });
 });
 

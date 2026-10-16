@@ -64,6 +64,20 @@ export interface MovementEffect {
   spread: Spread;
 }
 
+// Intensity Effects, which scale a Fixture's intensity to the Tempo. Pulse is
+// a sine, full on the beat; Square is half on, half off; Chase lights one
+// Spread position at a time.
+export const INTENSITY_SHAPES = ['Pulse', 'Ramp up', 'Ramp down', 'Square', 'Chase'] as const;
+export type IntensityShape = (typeof INTENSITY_SHAPES)[number];
+
+export interface IntensityEffect {
+  shape: IntensityShape;
+  // How far it dips, 0–1: to 0 at 1, to half at 0.5.
+  depth: number;
+  length: EffectLength;
+  spread: Spread;
+}
+
 // How fast a Fixture strobes: Off, a named rate, or once per 1, 1/2 or 1/4
 // beat of the Tempo. Off stops strobe from earlier Rules and lower Layers.
 export const STROBE_RATES = ['Off', 'Slow', 'Medium', 'Fast', 1, 0.5, 0.25] as const;
@@ -92,8 +106,9 @@ export interface Rule {
   // Moves the moving Fixtures targeted around their aim. None holds them
   // still.
   movementEffect?: EffectSlot<MovementEffect>;
-  // None only, until intensity and colour Effects are defined.
-  intensityEffect?: typeof NO_EFFECT;
+  // Scales the targeted Fixtures' intensity. None holds it steady.
+  intensityEffect?: EffectSlot<IntensityEffect>;
+  // None only, until colour Effects are defined.
   colourEffect?: typeof NO_EFFECT;
   // Strobes the Fixtures targeted that have a strobe channel.
   strobe?: StrobeRate;
@@ -453,16 +468,8 @@ function ruleProblems(rule: Rule): string[] {
   if (strobe !== undefined && !STROBE_RATES.includes(strobe)) {
     problems.push('strobe must be Off, Slow, Medium, Fast, or 1, 1/2 or 1/4 beat');
   }
-  if (movementEffect !== undefined && movementEffect !== NO_EFFECT) {
-    if (typeof movementEffect === 'object' && movementEffect !== null) {
-      problems.push(...effectProblems(movementEffect));
-    } else {
-      problems.push('movement Effect must be None or an Effect');
-    }
-  }
-  if (intensityEffect !== undefined && intensityEffect !== NO_EFFECT) {
-    problems.push('intensity Effect must be None');
-  }
+  problems.push(...slotProblems('movement', movementEffect, effectProblems));
+  problems.push(...slotProblems('intensity', intensityEffect, intensityEffectProblems));
   if (colourEffect !== undefined && colourEffect !== NO_EFFECT) {
     problems.push('colour Effect must be None');
   }
@@ -475,12 +482,38 @@ export function isEffectSize(size: number): boolean {
   return inRange(size, 0, MAX_EFFECT_SIZE) && size > 0;
 }
 
+// The problems with an Effect slot of `kind`: unset, None, or an Effect.
+function slotProblems<E extends object>(
+  kind: string,
+  slot: EffectSlot<E> | undefined,
+  problems: (effect: E) => string[],
+): string[] {
+  if (slot === undefined || slot === NO_EFFECT) return [];
+  if (typeof slot === 'object' && slot !== null) return problems(slot);
+  return [`${kind} Effect must be None or an Effect`];
+}
+
 function effectProblems({ shape, size, length, spread }: MovementEffect): string[] {
   const problems: string[] = [];
   if (!EFFECT_SHAPES.includes(shape)) problems.push(`"${shape}" is not a movement Effect shape`);
   if (!isEffectSize(size)) {
     problems.push(`Effect size must be over 0 and at most ${MAX_EFFECT_SIZE} degrees`);
   }
+  return [...problems, ...timingProblems(length, spread)];
+}
+
+function intensityEffectProblems({ shape, depth, length, spread }: IntensityEffect): string[] {
+  const problems: string[] = [];
+  if (!INTENSITY_SHAPES.includes(shape)) {
+    problems.push(`"${shape}" is not an intensity Effect shape`);
+  }
+  if (!inRange(depth, 0, 1)) problems.push('Effect depth must be from 0 to 1');
+  return [...problems, ...timingProblems(length, spread)];
+}
+
+// The problems with an Effect's length and Spread, for every kind.
+function timingProblems(length: EffectLength, spread: Spread): string[] {
+  const problems: string[] = [];
   if (!EFFECT_LENGTHS.includes(length)) {
     const lengths = EFFECT_LENGTHS.map(beatsLabel)
       .join(', ')

@@ -13,6 +13,7 @@ What changed in each LightCues release. The format follows [Keep a Changelog](ht
 - Strobe: a Rule can strobe the Fixtures it targets, Slow, Medium or Fast, or once per 1, 1/2 or 1/4 beat of the Tempo. Off stops strobe from earlier Rules and lower Layers. The preview flashes strobing Fixtures, and the Fixture inspector lists the Scenes that strobe a Fixture with no strobe channel, or whose strobe rate is unknown.
 - Movement Effect **None**: stops the movement Effect of lower Layers and earlier Rules, holding the aim still, faded in over the Scene's fade-in.
 - Effects can run in cycles of 1/4 and 1/2 beat.
+- Intensity Effects: Pulse, Ramp up, Ramp down, Square and Chase scale the intensity of a Rule's Fixtures, even intensity from other Layers. Chase lights one Spread position at a time. **None** stops the intensity Effect of lower Layers and earlier Rules.
 
 ### Changed
 

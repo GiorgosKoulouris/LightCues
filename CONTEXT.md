@@ -72,8 +72,8 @@ _Avoid_: Cue, preset
 One part of a Scene: a target (Zones × Roles) and the settings applied to it (intensity, colour, Direction, Effects, strobe). Later Rules in a Scene override earlier ones.
 
 **Effect**:
-A time-varying change within a Rule, timed in beats of the Tempo. There are three kinds: movement, intensity and colour, and a Rule has one slot for each. A slot left unset leaves that kind to earlier Rules and lower Layers; set to None, it stops their Effect of that kind (a movement None holds the aim still, faded in like any Effect). Every Effect's length is 1/4, 1/2, 1, 2, 4, 8 or 16 beats. A movement Effect (Circle, Pan sweep, Tilt sweep, Ballyhoo) runs around a base Direction, which may come from another Scene; its size is in degrees. Sequences over time are not Effects: the DAW sequences Scenes through Triggers. A spatial Effect is ordered by Fixture positions on stage (e.g. a left-to-right wave).
-_Avoid_: Chase (a kind of Effect), FX
+A time-varying change within a Rule, timed in beats of the Tempo. There are three kinds: movement, intensity and colour, and a Rule has one slot for each. A slot left unset leaves that kind to earlier Rules and lower Layers; set to None, it stops their Effect of that kind (a movement None holds the aim still, faded in like any Effect). Every Effect's length is 1/4, 1/2, 1, 2, 4, 8 or 16 beats. A movement Effect (Circle, Pan sweep, Tilt sweep, Ballyhoo) runs around a base Direction, which may come from another Scene; its size is in degrees. An intensity Effect (Pulse, Ramp up, Ramp down, Square, Chase) scales the intensity a Fixture gets, which may come from another Scene, by up to its depth (0–1); Chase lights one Spread position at a time. Size and depth fade in with the Scene. Sequences over time are not Effects: the DAW sequences Scenes through Triggers. A spatial Effect is ordered by Fixture positions on stage (e.g. a left-to-right wave).
+_Avoid_: Chase (for an Effect in general; Chase is one intensity Effect), FX
 
 **Strobe**:
 A Rule setting that makes the targeted Fixtures with a strobe channel flash: Off, Slow (2 Hz), Medium (6 Hz), Fast (12 Hz), or once per 1, 1/2 or 1/4 beat of the Tempo. Only the rate is sent; each Fixture times its own flashes, so they are not locked to the beat. Off stops strobe from earlier Rules and lower Layers. It snaps on and off at Scene start, and Freeze does not stop it. Not an Effect.
@@ -107,7 +107,7 @@ The beats per minute that Effects run to. Taken from the MIDI Input's MIDI Clock
 _Avoid_: BPM, speed
 
 **Freeze**:
-Stops every movement Effect where it is, until turned off; they then jump to where the beat has got to. Directions and fades still apply. It holds the beat Effects run to, so a Scene started while frozen holds its Effect where that beat puts it. Not saved, off on launch, and kept when a Show is replaced, like Blackout.
+Stops every Effect where it is, until turned off; they then jump to where the beat has got to. Directions and fades still apply. It holds the beat Effects run to, so a Scene started while frozen holds its Effect where that beat puts it. Not saved, off on launch, and kept when a Show is replaced, like Blackout.
 
 **Layer**:
 A slot that holds at most one active Scene. Activating a Scene replaces the active Scene in its Layer; different Layers stack.

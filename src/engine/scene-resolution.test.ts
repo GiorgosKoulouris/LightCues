@@ -6,7 +6,15 @@ import type {
   Emitter,
   FixtureProfile,
 } from '../shared/fixture-profile';
-import type { MovementEffect, Rule, Scene, Show, Spread, Swatch } from '../shared/show';
+import type {
+  IntensityEffect,
+  MovementEffect,
+  Rule,
+  Scene,
+  Show,
+  Spread,
+  Swatch,
+} from '../shared/show';
 import type { PatchedFixture, VenuePatch } from '../shared/venue-patch';
 import {
   activate,
@@ -987,6 +995,161 @@ describe('movement Effects', () => {
 
     expect(channels(resolveFrames(s, r, playOn(r, s, ['sweep', 0]), 0, 1, 1), 4)[3]).toBe(255);
     expect(resolveLights(s, r, playOn(r, s, ['sweep', 0]), 0, 1, 1).par).not.toHaveProperty('aim');
+  });
+});
+
+describe('intensity Effects', () => {
+  const effect = (overrides: Partial<IntensityEffect> = {}): IntensityEffect => ({
+    shape: 'Square',
+    depth: 1,
+    length: 4,
+    spread: 'In sync',
+    ...overrides,
+  });
+  const rig = patch([fixture({})]);
+
+  // The Fixture's intensity at `beat` of the Tempo and `time`.
+  function intensityAt(s: Show, active: ActiveScenes, beat: number, time = 0, grandMaster = 1) {
+    return resolveLights(s, rig, active, time, grandMaster, beat).f1!.intensity;
+  }
+
+  it('scales the intensity over its cycle', () => {
+    const s = show(scene('pulse', [{ target: {}, intensity: 0.8, intensityEffect: effect() }]));
+    const active = play(s, ['pulse', 0]);
+
+    expect([0, 1, 2, 3, 4].map((beat) => intensityAt(s, active, beat))).toEqual([
+      0.8, 0.8, 0, 0, 0.8,
+    ]);
+    // Sent on the dimmer.
+    expect(channels(resolveFrames(s, rig, active, 0, 1, 2), 1)).toEqual([0]);
+  });
+
+  it('dips by its depth', () => {
+    const s = show(
+      scene('half', [{ target: {}, intensity: 0.8, intensityEffect: effect({ depth: 0.5 }) }]),
+      scene('none', [{ target: {}, intensity: 0.8, intensityEffect: effect({ depth: 0 }) }]),
+    );
+
+    expect(intensityAt(s, play(s, ['half', 0]), 2)).toBeCloseTo(0.4);
+    expect(intensityAt(s, play(s, ['none', 0]), 2)).toBeCloseTo(0.8);
+  });
+
+  it("scales a lower Layer's intensity, each combined by last change", () => {
+    const s = show(
+      scene('lit', [{ target: {}, intensity: 0.8 }]),
+      scene('pulse', [{ target: {}, intensityEffect: effect() }], { layer: 'l2' }),
+      scene('bright', [{ target: {}, intensity: 1 }]),
+    );
+
+    expect(intensityAt(s, play(s, ['lit', 0], ['pulse', 1]), 2)).toBe(0);
+    expect(intensityAt(s, play(s, ['pulse', 0], ['lit', 1]), 2)).toBe(0);
+    expect(intensityAt(s, play(s, ['lit', 0], ['pulse', 1]), 1)).toBeCloseTo(0.8);
+    // A Scene changed later that leaves the slot alone keeps it running, over
+    // its intensity too.
+    expect(intensityAt(s, play(s, ['lit', 0], ['pulse', 1], ['bright', 2]), 2)).toBe(0);
+  });
+
+  it("fades its depth in with its Scene's fade-in", () => {
+    const s = show(
+      scene('lit', [{ target: {}, intensity: 0.8 }]),
+      scene('pulse', [{ target: {}, intensityEffect: effect() }], { layer: 'l2', fadeIn: 2 }),
+    );
+    const active = play(s, ['lit', 0], ['pulse', 10]);
+
+    expect([10, 11, 12].map((time) => intensityAt(s, active, 2, time))).toEqual([0.8, 0.4, 0]);
+  });
+
+  describe('None', () => {
+    const s = show(
+      scene('lit', [{ target: {}, intensity: 0.8, intensityEffect: effect() }]),
+      scene('steady', [{ target: {}, intensityEffect: 'None' }], { layer: 'l2' }),
+      scene('slow steady', [{ target: {}, intensityEffect: 'None' }], { layer: 'l2', fadeIn: 2 }),
+    );
+
+    it("stops a lower Layer's intensity Effect", () => {
+      expect(intensityAt(s, play(s, ['lit', 0], ['steady', 1]), 2)).toBeCloseTo(0.8);
+      // Changed last, the Effect wins.
+      expect(intensityAt(s, play(s, ['steady', 0], ['lit', 1]), 2)).toBe(0);
+    });
+
+    it("stops an earlier Rule's intensity Effect in its Scene", () => {
+      const own = show(
+        scene('lit', [
+          { target: {}, intensity: 0.8, intensityEffect: effect() },
+          { target: {}, intensityEffect: 'None' },
+        ]),
+      );
+
+      expect(intensityAt(own, play(own, ['lit', 0]), 2)).toBeCloseTo(0.8);
+    });
+
+    it("steadies the intensity over its Scene's fade-in", () => {
+      const active = play(s, ['lit', 0], ['slow steady', 10]);
+
+      expect([10, 11, 12].map((time) => intensityAt(s, active, 2, time))).toEqual([0, 0.4, 0.8]);
+    });
+  });
+
+  describe('Chase', () => {
+    // Dimmers across the stage, at x -4, -2, 2 and 4.
+    const at = (x: number, address: number) => fixture({ id: `x${x}`, x, address });
+    const line = patch([at(4, 1), at(-2, 2), at(-4, 3), at(2, 4)]);
+    // The Fixtures lit at each beat, by x.
+    function litAt(spread: Spread, beats: number[]): string[][] {
+      const s = show(
+        scene('chase', [
+          { target: {}, intensity: 1, intensityEffect: effect({ shape: 'Chase', spread }) },
+        ]),
+      );
+      const active = play(s, ['chase', 0]);
+      return beats.map((beat) => {
+        const lights = resolveLights(s, line, active, 0, 1, beat);
+        return ['x-4', 'x-2', 'x2', 'x4'].filter((id) => lights[id]!.intensity > 0);
+      });
+    }
+
+    it('lights one of 4 positions at a time, Left→Right', () => {
+      expect(litAt('Left→Right', [0.5, 1.5, 2.5, 3.5])).toEqual([['x-4'], ['x-2'], ['x2'], ['x4']]);
+    });
+
+    it('lights the centre pair, then the outer pair, Mirrored', () => {
+      expect(litAt('Mirrored', [1, 3])).toEqual([
+        ['x-2', 'x2'],
+        ['x-4', 'x4'],
+      ]);
+    });
+
+    it('is a Square In sync', () => {
+      expect(litAt('In sync', [1, 3])).toEqual([['x-4', 'x-2', 'x2', 'x4'], []]);
+    });
+  });
+
+  it('applies the Grand Master and Blackout after it', () => {
+    const s = show(
+      scene('pulse', [{ target: {}, intensity: 0.8, intensityEffect: effect({ depth: 0.5 }) }]),
+    );
+    const active = play(s, ['pulse', 0]);
+
+    expect(intensityAt(s, active, 2, 0, 0.5)).toBeCloseTo(0.2);
+    expect(intensityAt(s, active, 0, 0, 0)).toBe(0);
+  });
+
+  it('scales the emitters of a Fixture without a dimmer', () => {
+    const s = show(
+      scene('pulse', [
+        {
+          target: {},
+          intensity: 1,
+          colour: { swatch: 'Red' },
+          intensityEffect: effect({ depth: 0.5 }),
+        },
+      ]),
+    );
+    const r = patch([fixture({ profileId: rgbw.id })], [rgbw]);
+
+    expect(channels(resolveFrames(s, r, play(s, ['pulse', 0]), 0, 1, 2), 4)).toEqual([
+      128, 0, 0, 0,
+    ]);
   });
 });
 

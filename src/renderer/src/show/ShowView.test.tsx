@@ -406,6 +406,48 @@ describe('Scene editor', () => {
     expect(rule()?.movementEffect).toMatchObject({ length: 0.5 });
   });
 
+  it("adds a Pulse to a Rule's intensity Effect, with depth, length and Spread, or None", async () => {
+    await selectWarm();
+    const rule = () => {
+      const put = edits().at(-1);
+      if (put?.type !== 'putScene') throw new Error('No Scene put');
+      return put.scene.rules[0];
+    };
+    const effect = screen.getAllByLabelText('Intensity Effect')[0]!;
+    expect(effect).toHaveValue('');
+
+    await userEvent.selectOptions(effect, 'Pulse');
+    expect(rule()).toEqual({
+      target: {},
+      intensity: 0.5,
+      intensityEffect: { shape: 'Pulse', depth: 1, length: 1, spread: 'In sync' },
+    });
+
+    const settings = within(screen.getByRole('group', { name: 'Intensity Effect settings' }));
+    const depth = settings.getByRole('textbox', { name: 'Depth (%)' });
+    await userEvent.clear(depth);
+    await userEvent.type(depth, '50');
+    expect(rule()?.intensityEffect).toMatchObject({ depth: 0.5 });
+    await userEvent.selectOptions(settings.getByLabelText('Length (beats)'), '1/2');
+    await userEvent.selectOptions(settings.getByLabelText('Spread'), 'Left→Right');
+    expect(rule()?.intensityEffect).toEqual({
+      shape: 'Pulse',
+      depth: 0.5,
+      length: 0.5,
+      spread: 'Left→Right',
+    });
+
+    // A new shape keeps the rest.
+    await userEvent.selectOptions(effect, 'Chase');
+    expect(rule()?.intensityEffect).toMatchObject({ shape: 'Chase', depth: 0.5 });
+
+    await userEvent.selectOptions(effect, 'None');
+    expect(rule()).toEqual({ target: {}, intensity: 0.5, intensityEffect: 'None' });
+    expect(screen.queryByRole('group', { name: 'Intensity Effect settings' })).toBeNull();
+    await userEvent.selectOptions(effect, 'Not set');
+    expect(rule()).toEqual({ target: {}, intensity: 0.5 });
+  });
+
   it('shows an engine error as a toast', async () => {
     await selectWarm();
     rejectWith = ['Scene "Warm" has no Rules'];
