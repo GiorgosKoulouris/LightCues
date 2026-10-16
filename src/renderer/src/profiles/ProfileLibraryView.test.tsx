@@ -335,6 +335,28 @@ describe('Profile editor fields', () => {
     expect(defaultValue).toHaveValue('0');
   });
 
+  it('sets a pan/tilt speed span on a range', async () => {
+    await renderView();
+    const user = userEvent.setup();
+    await user.click(option('Acme Par'));
+    await user.selectOptions(
+      editor().getByRole('combobox', { name: 'Capability of channel 1 range 1' }),
+      'panTiltSpeed',
+    );
+    const speed = (end: string) =>
+      editor().getByRole('textbox', { name: `Speed of channel 1 range 1, ${end}` });
+    await user.type(speed('start'), '1');
+    // Clearing the end would drop the span, so type over it.
+    await user.tripleClick(speed('end'));
+    await user.keyboard('0');
+    await user.click(editor().getByRole('button', { name: 'Save' }));
+
+    const channel = sent('saveProfile')[0]?.profile.modes[0]?.channels[0];
+    expect(channel).toMatchObject({
+      ranges: [{ from: 0, to: 255, capability: { type: 'panTiltSpeed', speed: [1, 0] } }],
+    });
+  });
+
   it('shows modes as tabs and channel numbers in the table', async () => {
     await renderView();
     const user = userEvent.setup();

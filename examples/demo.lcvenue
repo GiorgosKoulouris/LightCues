@@ -1553,8 +1553,11 @@
                   "from": 0,
                   "to": 255,
                   "capability": {
-                    "type": "unsupported",
-                    "feature": "PanTiltSpeed"
+                    "type": "panTiltSpeed",
+                    "speed": [
+                      1,
+                      0
+                    ]
                   }
                 }
               ]

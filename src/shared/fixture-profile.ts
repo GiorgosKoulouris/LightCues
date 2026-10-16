@@ -44,6 +44,8 @@ export type Capability =
   | { type: 'wheelSlot'; slot: WheelSlot }
   | { type: 'pan'; degrees?: Span }
   | { type: 'tilt'; degrees?: Span }
+  // `speed` is relative: 0 is the slowest and 1 the fastest. Nothing drives it.
+  | { type: 'panTiltSpeed'; speed?: Span }
   | { type: 'shutter'; effect: 'open' | 'closed' }
   | { type: 'strobe'; hz?: Span; assumed?: true }
   | { type: 'strobeSpeed'; hz?: Span; assumed?: true }

@@ -27,6 +27,9 @@ interface OflCapability {
   speed?: string;
   speedStart?: string;
   speedEnd?: string;
+  duration?: string;
+  durationStart?: string;
+  durationEnd?: string;
   wheel?: string;
   slotNumber?: number;
   angle?: string;
@@ -351,6 +354,21 @@ function importCapability(cap: OflCapability, context: CapabilityContext): Capab
       pair(cap.speedStart ?? cap.speed, cap.speedEnd ?? cap.speed, unit('Hz'), ASSUMED_SPEEDS),
       'speed not in Hz',
     );
+  const relativeSpeed = (): Span | undefined => {
+    if (cap.durationStart === undefined && cap.duration === undefined) {
+      return span(
+        pair(cap.speedStart ?? cap.speed, cap.speedEnd ?? cap.speed, relative, RELATIVE_SPEEDS),
+        'speed not relative',
+      );
+    }
+    const ms = span(
+      pair(cap.durationStart ?? cap.duration, cap.durationEnd ?? cap.duration, milliseconds),
+      'duration not in ms or s',
+    );
+    // The shorter time is the faster end.
+    if (!ms || ms[0] === ms[1]) return undefined;
+    return ms[0] < ms[1] ? [1, 0] : [0, 1];
+  };
   const degrees = () =>
     span(
       pair(cap.angleStart ?? cap.angle, cap.angleEnd ?? cap.angle, unit('deg')),
@@ -383,6 +401,8 @@ function importCapability(cap: OflCapability, context: CapabilityContext): Capab
       return { type: 'pan', degrees: degrees() };
     case 'Tilt':
       return { type: 'tilt', degrees: degrees() };
+    case 'PanTiltSpeed':
+      return { type: 'panTiltSpeed', speed: relativeSpeed() };
     case 'WheelSlot':
       return importWheelSlot(cap, context);
   }
@@ -432,6 +452,13 @@ const ASSUMED_SPEEDS: ReadonlyMap<string, number> = new Map([
   ['fast', ASSUMED_STROBE_HZ[1]],
 ]);
 
+// Speed words as a relative speed, 0 slowest to 1 fastest.
+const RELATIVE_SPEEDS: ReadonlyMap<string, number> = new Map([
+  ['stop', 0],
+  ['slow', 0],
+  ['fast', 1],
+]);
+
 const NO_WORDS: ReadonlyMap<string, number> = new Map();
 
 // Brightness words with no fixed fraction of full output, at an assumed one.
@@ -441,11 +468,26 @@ function unit(suffix: string) {
   return (value: string) => (value.endsWith(suffix) ? parseFloat(value) : undefined);
 }
 
+function percent(value: string): number | undefined {
+  return value.endsWith('%') ? parseFloat(value) / 100 : undefined;
+}
+
+// A percentage of full speed, as a fraction. OFL allows any percentage.
+function relative(value: string): number | undefined {
+  const fraction = percent(value);
+  return fraction !== undefined && fraction >= 0 && fraction <= 1 ? fraction : undefined;
+}
+
+function milliseconds(value: string): number | undefined {
+  if (value.endsWith('ms')) return parseFloat(value);
+  return value.endsWith('s') ? parseFloat(value) * 1000 : undefined;
+}
+
 // Brightness as a fraction of full output. Lumens have no fixed fraction.
 function brightness(value: string): number | undefined {
   if (value === 'off') return 0;
   if (value === 'bright') return 1;
-  return value.endsWith('%') ? parseFloat(value) / 100 : undefined;
+  return percent(value);
 }
 
 const EMITTERS: Record<string, Emitter> = {

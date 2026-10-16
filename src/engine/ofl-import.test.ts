@@ -609,6 +609,101 @@ describe('importOflFixture', () => {
     expect(unsupported).toEqual([]);
   });
 
+  it('imports pan/tilt speed as a relative speed, 0 slowest to 1 fastest, in file order', () => {
+    const speeds: [string, Record<string, string>][] = [
+      ['Fast to slow', { speedStart: 'fast', speedEnd: 'slow' }],
+      ['Stop to fast', { speedStart: 'stop', speedEnd: 'fast' }],
+      ['Percent up', { speedStart: '10%', speedEnd: '90%' }],
+      ['Percent down', { speedStart: '100%', speedEnd: '0%' }],
+      ['Ms down', { durationStart: '100ms', durationEnd: '2000ms' }],
+      ['Ms up', { durationStart: '2000ms', durationEnd: '100ms' }],
+      ['S down', { durationStart: '0.5s', durationEnd: '25s' }],
+      ['S up', { durationStart: '25s', durationEnd: '0.5s' }],
+      ['Mixed up', { durationStart: '25s', durationEnd: '500ms' }],
+      ['Equal', { durationStart: '2s', durationEnd: '2000ms' }],
+    ];
+    const { profile, unsupported } = importOflFixture(
+      {
+        name: 'Speedy Head',
+        categories: ['Moving Head'],
+        meta,
+        availableChannels: Object.fromEntries(
+          speeds.map(([name, cap]) => [name, { capability: { type: 'PanTiltSpeed', ...cap } }]),
+        ),
+        modes: [{ name: 'All', channels: speeds.map(([name]) => name) }],
+      },
+      'Generic',
+    );
+
+    expect(
+      profile.modes[0]!.channels.map((c) => c.kind === 'control' && c.ranges[0]!.capability),
+    ).toEqual([
+      { type: 'panTiltSpeed', speed: [1, 0] },
+      { type: 'panTiltSpeed', speed: [0, 1] },
+      { type: 'panTiltSpeed', speed: [0.1, 0.9] },
+      { type: 'panTiltSpeed', speed: [1, 0] },
+      { type: 'panTiltSpeed', speed: [1, 0] },
+      { type: 'panTiltSpeed', speed: [0, 1] },
+      { type: 'panTiltSpeed', speed: [1, 0] },
+      { type: 'panTiltSpeed', speed: [0, 1] },
+      { type: 'panTiltSpeed', speed: [0, 1] },
+      { type: 'panTiltSpeed', speed: undefined },
+    ]);
+    expect(unsupported).toEqual([]);
+  });
+
+  it('reports pan/tilt speeds with no relative speed, and keeps other ranges unsupported', () => {
+    const { profile, unsupported } = importOflFixture(
+      {
+        name: 'Smart Head',
+        categories: ['Moving Head'],
+        meta,
+        availableChannels: {
+          Hz: { capability: { type: 'PanTiltSpeed', speedStart: '1Hz', speedEnd: '10Hz' } },
+          Reverse: {
+            capability: { type: 'PanTiltSpeed', speedStart: 'fast reverse', speedEnd: 'slow' },
+          },
+          Over: { capability: { type: 'PanTiltSpeed', speedStart: '-50%', speedEnd: '150%' } },
+          Words: {
+            capability: { type: 'PanTiltSpeed', durationStart: 'short', durationEnd: 'long' },
+          },
+          'Pan/Tilt Speed': {
+            capabilities: [
+              { dmxRange: [0, 225], type: 'PanTiltSpeed', speedStart: 'fast', speedEnd: 'slow' },
+              { dmxRange: [226, 235], type: 'Maintenance' },
+              { dmxRange: [236, 245], type: 'Maintenance' },
+              { dmxRange: [246, 255], type: 'NoFunction' },
+            ],
+          },
+        },
+        modes: [{ name: '4ch', channels: ['Hz', 'Reverse', 'Over', 'Words', 'Pan/Tilt Speed'] }],
+      },
+      'Generic',
+    );
+
+    expect(
+      profile.modes[0]!.channels.flatMap((c) =>
+        c.kind === 'control' ? c.ranges.map((r) => r.capability) : [],
+      ),
+    ).toEqual([
+      { type: 'panTiltSpeed', speed: undefined },
+      { type: 'panTiltSpeed', speed: undefined },
+      { type: 'panTiltSpeed', speed: undefined },
+      { type: 'panTiltSpeed', speed: undefined },
+      { type: 'panTiltSpeed', speed: [1, 0] },
+      { type: 'unsupported', feature: 'Maintenance' },
+      { type: 'unsupported', feature: 'Maintenance' },
+      { type: 'none' },
+    ]);
+    expect(unsupported).toEqual([
+      { channel: 'Hz', feature: 'PanTiltSpeed speed not relative' },
+      { channel: 'Reverse', feature: 'PanTiltSpeed speed not relative' },
+      { channel: 'Over', feature: 'PanTiltSpeed speed not relative' },
+      { channel: 'Words', feature: 'PanTiltSpeed duration not in ms or s' },
+      { channel: 'Pan/Tilt Speed', feature: 'Maintenance' },
+    ]);
+  });
+
   it('reports values it cannot place in its units', () => {
     const { profile, unsupported } = importOflFixture(
       {

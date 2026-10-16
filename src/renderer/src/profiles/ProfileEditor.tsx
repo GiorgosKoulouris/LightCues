@@ -435,6 +435,7 @@ const CAPABILITY_TYPES: Capability['type'][] = [
   'wheelSlot',
   'pan',
   'tilt',
+  'panTiltSpeed',
   'shutter',
   'strobe',
   'strobeSpeed',
@@ -540,6 +541,15 @@ function CapabilityFields({ name, capability, onChange }: CapabilityProps) {
           unit="°"
           span={capability.degrees}
           onChange={(degrees) => onChange({ ...capability, degrees })}
+        />
+      );
+    case 'panTiltSpeed':
+      return (
+        <SpanInput
+          label={`Speed of ${name}`}
+          unit="0 slow – 1 fast"
+          span={capability.speed}
+          onChange={(speed) => onChange({ ...capability, speed })}
         />
       );
     case 'shutter':
